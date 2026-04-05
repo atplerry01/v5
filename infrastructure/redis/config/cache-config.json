@@ -1,0 +1,7 @@
+{
+  "namespaces": [
+    "projection:economic.ledger.transaction",
+    "projection:identity.access.identity",
+    "projection:operational.global.incident"
+  ]
+}

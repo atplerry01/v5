@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.CoreSystem.Reconciliation.ReconciliationException;
+
+public sealed record ReconciliationExceptionStateChangedEvent;

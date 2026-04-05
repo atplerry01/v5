@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.StructuralSystem.Structure.StructureRegistry;
+
+public sealed record StructureRegistryUpdatedEvent;

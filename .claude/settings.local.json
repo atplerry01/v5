@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Bash(git -C /c/projects/dev/v5 log --oneline -3)",
+      "Bash(rm -f infrastructure/.gitkeep)",
+      "Bash(mkdir -p infrastructure/postgres/migrations infrastructure/kafka/topics/economic/ledger/transaction infrastructure/redis/config infrastructure/opa/policies infrastructure/minio/buckets)",
+      "Bash(find /c/projects/dev/v5 -type f -name \"*.cs\" -exec grep -l \"EnsureInvariant\\\\|Invariant\\(\\)\" {} \\\\;)",
+      "Bash(bash /tmp/bc_list.sh)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}

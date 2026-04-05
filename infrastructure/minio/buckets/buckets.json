@@ -1,0 +1,7 @@
+{
+  "buckets": [
+    "documents",
+    "evidence",
+    "audit"
+  ]
+}

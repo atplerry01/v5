@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.EconomicSystem.Transaction.Limit;
+
+public sealed record LimitStateChangedEvent;

@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Subscription.SubscriptionAccount;
+
+public sealed record SubscriptionAccountCreatedEvent;

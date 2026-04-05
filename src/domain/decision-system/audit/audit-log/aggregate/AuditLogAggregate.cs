@@ -1,0 +1,23 @@
+namespace Whycespace.Domain.DecisionSystem.Audit.AuditLog;
+
+public sealed class AuditLogAggregate
+{
+    public static AuditLogAggregate Create()
+    {
+        var aggregate = new AuditLogAggregate();
+        aggregate.ValidateBeforeChange();
+        aggregate.EnsureInvariants();
+        // POLICY HOOK (to be enforced by runtime)
+        return aggregate;
+    }
+
+    private void EnsureInvariants()
+    {
+        // Domain invariant checks enforced BEFORE any event is raised
+    }
+
+    private void ValidateBeforeChange()
+    {
+        // Pre-change validation gate
+    }
+}

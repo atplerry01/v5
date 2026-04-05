@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.CoreSystem.Financialcontrol.VarianceControl;
+
+public sealed record VarianceControlStateChangedEvent;
