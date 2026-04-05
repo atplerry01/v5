@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/src/shared/">
+    <Project Path="src/shared/Whycespace.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/domain/">
+    <Project Path="src/domain/Whycespace.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/engines/">
+    <Project Path="src/engines/Whycespace.Engines.csproj" />
+  </Folder>
+  <Folder Name="/src/systems/">
+    <Project Path="src/systems/Whycespace.Systems.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/">
+    <Project Path="src/runtime/Whycespace.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/src/projections/">
+    <Project Path="src/projections/Whycespace.Projections.csproj" />
+  </Folder>
+  <Folder Name="/src/platform/">
+    <Project Path="src/platform/api/Whycespace.Api.csproj" />
+    <Project Path="src/platform/host/Whycespace.Host.csproj" />
+  </Folder>
+</Solution>

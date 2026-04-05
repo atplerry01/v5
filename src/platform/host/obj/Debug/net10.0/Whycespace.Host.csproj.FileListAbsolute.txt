@@ -74,3 +74,10 @@ C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Engines.pdb
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Systems.pdb
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Projections.pdb
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Domain.pdb
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Microsoft.OpenApi.dll
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Api.dll
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Api.pdb
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Host.staticwebassets.runtime.json

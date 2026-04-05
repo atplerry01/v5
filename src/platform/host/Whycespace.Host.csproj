@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\api\Whycespace.Api.csproj" />
     <ProjectReference Include="..\..\shared\Whycespace.Shared.csproj" />
     <ProjectReference Include="..\..\runtime\Whycespace.Runtime.csproj" />
     <ProjectReference Include="..\..\engines\Whycespace.Engines.csproj" />

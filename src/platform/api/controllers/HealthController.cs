@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Whyce.Platform.Host.Health;
+using Whyce.Platform.Api.Health;
 using Whyce.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Controllers;
+namespace Whyce.Platform.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[ApiExplorerSettings(GroupName = "platform.infrastructure.health")]
 public sealed class HealthController : ControllerBase
 {
     private readonly HealthAggregator _healthAggregator;

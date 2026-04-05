@@ -1,3 +1,4 @@
+using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Events.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
 
@@ -17,6 +18,9 @@ public sealed class TodoProjectionHandler :
 
     public async Task HandleAsync(TodoCreatedEventSchema e)
     {
+        var existing = await _redis.GetAsync<TodoReadModel>($"todo:{e.AggregateId}");
+        if (existing is not null) return;
+
         await _redis.SetAsync($"todo:{e.AggregateId}", new TodoReadModel
         {
             Id = e.AggregateId,
@@ -40,11 +44,4 @@ public sealed class TodoProjectionHandler :
 
         await _redis.SetAsync($"todo:{e.AggregateId}", existing with { IsCompleted = true });
     }
-}
-
-public sealed record TodoReadModel
-{
-    public Guid Id { get; init; }
-    public string Title { get; init; } = string.Empty;
-    public bool IsCompleted { get; init; }
 }

@@ -1,6 +1,6 @@
 using Whyce.Shared.Contracts.Infrastructure.Health;
 
-namespace Whyce.Platform.Host.Health;
+namespace Whyce.Platform.Api.Health;
 
 public sealed class HealthAggregator
 {

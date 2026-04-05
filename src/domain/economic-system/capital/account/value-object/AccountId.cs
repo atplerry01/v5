@@ -12,7 +12,5 @@ public readonly record struct AccountId
         Value = value;
     }
 
-    public static AccountId Generate() => new(Guid.NewGuid());
-
     public static AccountId From(Guid value) => new(value);
 }

@@ -1,0 +1,6 @@
+namespace Whyce.Shared.Kernel.Domain;
+
+public interface IIdGenerator
+{
+    Guid Generate(string seed);
+}
