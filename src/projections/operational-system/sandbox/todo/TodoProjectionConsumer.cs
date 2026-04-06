@@ -27,6 +27,11 @@ public sealed class TodoProjectionConsumer : IEventConsumer
             case TodoCompletedEventSchema completed:
                 await _handler.HandleAsync(completed);
                 break;
+
+            default:
+                throw new InvalidOperationException(
+                    $"TodoProjectionConsumer received unmatched event type: {@event.GetType().Name}. " +
+                    $"All events dispatched to this consumer MUST be handled.");
         }
     }
 }

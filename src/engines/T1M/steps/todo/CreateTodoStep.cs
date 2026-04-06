@@ -29,7 +29,8 @@ public sealed class CreateTodoStep : IWorkflowStep
         var todoId = _idGenerator.Generate($"todo:{intent.UserId}:{intent.Title}");
         var command = new CreateTodoCommand(todoId, intent.Title);
 
-        var result = await _dispatcher.DispatchAsync(command);
+        var route = new DomainRoute("operational", "sandbox", "todo");
+        var result = await _dispatcher.DispatchAsync(command, route);
 
         if (!result.IsSuccess)
         {

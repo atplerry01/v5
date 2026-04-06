@@ -3,6 +3,7 @@ using Whyce.Engines.T0U.WhyceId.Engine;
 using Whyce.Engines.T0U.WhycePolicy.Command;
 using Whyce.Engines.T0U.WhycePolicy.Engine;
 using Whyce.Runtime.Middleware;
+using Whyce.Shared.Contracts.Infrastructure.Policy;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Runtime.Middleware.Policy;
@@ -13,9 +14,10 @@ namespace Whyce.Runtime.Middleware.Policy;
 ///
 /// Mandatory Flow (T0U Constitutional):
 /// 1. WhyceId → resolve identity (AuthenticateIdentity)
-/// 2. WhycePolicy → evaluate compliance (Evaluate)
-/// 3. Inject identity + policy decision into context
-/// 4. Deny → halt, Allow → proceed
+/// 2. OPA → evaluate external policy (IPolicyEvaluator)
+/// 3. WhycePolicy → evaluate constitutional compliance (Evaluate)
+/// 4. Inject identity + policy decision into context
+/// 5. Deny → halt, Allow → proceed
 ///
 /// Non-bypassable: No request without WhyceId. No execution without WhycePolicy.
 /// </summary>
@@ -23,11 +25,13 @@ public sealed class PolicyMiddleware : IMiddleware
 {
     private readonly WhyceIdEngine _whyceIdEngine;
     private readonly WhycePolicyEngine _whycePolicyEngine;
+    private readonly IPolicyEvaluator _policyEvaluator;
 
-    public PolicyMiddleware(WhyceIdEngine whyceIdEngine, WhycePolicyEngine whycePolicyEngine)
+    public PolicyMiddleware(WhyceIdEngine whyceIdEngine, WhycePolicyEngine whycePolicyEngine, IPolicyEvaluator policyEvaluator)
     {
         _whyceIdEngine = whyceIdEngine;
         _whycePolicyEngine = whycePolicyEngine;
+        _policyEvaluator = policyEvaluator;
     }
 
     public async Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
@@ -51,7 +55,26 @@ public sealed class PolicyMiddleware : IMiddleware
         context.Roles = authResult.Identity.Roles;
         context.TrustScore = authResult.Identity.TrustScore;
 
-        // Step 3: Evaluate policy via WhycePolicyEngine (T0U)
+        // Step 3: Evaluate external policy via OPA (IPolicyEvaluator)
+        var policyPath = $"{context.Classification}.{context.Context}.{context.Domain}";
+        var opaContext = new PolicyContext(
+            context.CorrelationId,
+            context.TenantId,
+            context.ActorId,
+            command.GetType().Name,
+            authResult.Identity.Roles,
+            context.Classification,
+            context.Context,
+            context.Domain);
+
+        var opaDecision = await _policyEvaluator.EvaluateAsync(policyPath, command, opaContext);
+        if (!opaDecision.IsAllowed)
+        {
+            return CommandResult.Failure(
+                $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.");
+        }
+
+        // Step 4: Evaluate constitutional policy via WhycePolicyEngine (T0U)
         var evaluateCommand = new EvaluatePolicyCommand(
             PolicyName: context.PolicyId,
             IdentityId: authResult.Identity.IdentityId,

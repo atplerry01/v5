@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.operational.sandbox.todo.commands",
+    "whyce.operational.sandbox.todo.events",
+    "whyce.operational.sandbox.todo.retry",
+    "whyce.operational.sandbox.todo.deadletter"
+  ]
+}

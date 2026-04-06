@@ -29,6 +29,12 @@ TOPICS=(
   "whyce.operational.global.incident.events"
   "whyce.operational.global.incident.retry"
   "whyce.operational.global.incident.deadletter"
+
+  # operational > sandbox > todo
+  "whyce.operational.sandbox.todo.commands"
+  "whyce.operational.sandbox.todo.events"
+  "whyce.operational.sandbox.todo.retry"
+  "whyce.operational.sandbox.todo.deadletter"
 )
 
 for TOPIC in "${TOPICS[@]}"; do

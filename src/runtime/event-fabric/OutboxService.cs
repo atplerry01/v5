@@ -17,9 +17,9 @@ public sealed class OutboxService
         _outbox = outbox;
     }
 
-    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> domainEvents)
+    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> domainEvents, string topic)
     {
         if (domainEvents.Count == 0) return;
-        await _outbox.EnqueueAsync(correlationId, domainEvents);
+        await _outbox.EnqueueAsync(correlationId, domainEvents, topic);
     }
 }

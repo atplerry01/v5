@@ -15,4 +15,8 @@ public sealed record PolicyContext(
     Guid CorrelationId,
     string TenantId,
     string ActorId,
-    string CommandType);
+    string CommandType,
+    string[] Roles,
+    string Classification,
+    string Context,
+    string Domain);

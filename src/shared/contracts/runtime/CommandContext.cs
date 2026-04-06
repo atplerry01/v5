@@ -19,6 +19,11 @@ public sealed record CommandContext
     public required string PolicyId { get; init; }
     public bool RuntimeOrigin { get; set; }
 
+    // Domain routing metadata — used for canonical Kafka topic resolution
+    public required string Classification { get; init; }
+    public required string Context { get; init; }
+    public required string Domain { get; init; }
+
     // --- T0U Identity (write-once, locked after PolicyMiddleware) ---
 
     private string? _identityId;

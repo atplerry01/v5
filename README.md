@@ -34,4 +34,18 @@ T2E performs domain-aligned command execution.
 Domain aggregates enforce invariants and raise events.
 Runtime persists, anchors, publishes, projects, and returns the final result upward to Systems and then Platform API.
 
-Add failure + compensation flow to Todo workflow
+## TODO
+- Add failure + compensation flow to Todo workflow
+- fix domain entity scattered in code base
+- program.cs file too large lets break it down
+- upgrade todo to trello/kaban style to accomodate lifecycle/workflow
+
+- multistep workflow calling different domain services using todo/incident as case study
+
+- upgrade runtime
+- 1m RPS upgrade
+
+- clean domain model
+- fix project dependency
+- connection string in code
+

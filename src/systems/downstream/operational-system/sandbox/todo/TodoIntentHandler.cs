@@ -6,6 +6,8 @@ namespace Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
 
 public sealed class TodoIntentHandler : ITodoIntentHandler
 {
+    private static readonly DomainRoute TodoRoute = new("operational", "sandbox", "todo");
+
     private readonly IWorkflowDispatcher _workflowDispatcher;
 
     public TodoIntentHandler(IWorkflowDispatcher workflowDispatcher)
@@ -17,7 +19,8 @@ public sealed class TodoIntentHandler : ITodoIntentHandler
     {
         var result = await _workflowDispatcher.StartWorkflowAsync(
             TodoLifecycleWorkflow.CreateWorkflowName,
-            intent);
+            intent,
+            TodoRoute);
 
         if (!result.IsSuccess)
         {

@@ -9,8 +9,7 @@ namespace Whyce.Runtime.EventFabric;
 /// The fabric is an ORCHESTRATOR ONLY. It delegates to:
 /// - EventStoreService (persistence)
 /// - ChainAnchorService (immutable ledger)
-/// - ProjectionDispatcher (read model updates)
-/// - OutboxService (external distribution)
+/// - OutboxService (Kafka relay — projections consume from Kafka ONLY)
 /// </summary>
 public interface IEventFabric
 {

@@ -44,17 +44,19 @@ public sealed class TodoController : ControllerBase
         return Ok(readModel);
     }
 
+    private static readonly DomainRoute TodoRoute = new("operational", "sandbox", "todo");
+
     [HttpPost("update")]
     public async Task<IActionResult> Update([FromBody] UpdateTodoCommand cmd)
     {
-        var result = await _dispatcher.DispatchAsync(cmd);
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
         return result.IsSuccess ? Ok(result) : BadRequest(result.Error);
     }
 
     [HttpPost("complete")]
     public async Task<IActionResult> Complete([FromBody] CompleteTodoCommand cmd)
     {
-        var result = await _dispatcher.DispatchAsync(cmd);
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
         return result.IsSuccess ? Ok(result) : BadRequest(result.Error);
     }
 }

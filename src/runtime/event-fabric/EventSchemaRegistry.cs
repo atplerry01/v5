@@ -15,6 +15,7 @@ namespace Whyce.Runtime.EventFabric;
 public sealed class EventSchemaRegistry
 {
     private readonly ConcurrentDictionary<string, EventSchemaEntry> _schemas = new();
+    private readonly ConcurrentDictionary<string, Func<object, object>> _payloadMappers = new();
     private bool _locked;
 
     /// <summary>
@@ -40,6 +41,29 @@ public sealed class EventSchemaRegistry
     public void Register(string eventTypeName)
     {
         Register(eventTypeName, EventVersion.Default);
+    }
+
+    /// <summary>
+    /// Registers a payload mapper that converts a domain event to its shared schema contract.
+    /// Used by EventFabric to map Payload before dispatching to projections.
+    /// </summary>
+    public void RegisterPayloadMapper(string eventTypeName, Func<object, object> mapper)
+    {
+        if (_locked)
+            throw new InvalidOperationException("EventSchemaRegistry is locked. Cannot register after build.");
+
+        _payloadMappers[eventTypeName] = mapper;
+    }
+
+    /// <summary>
+    /// Maps a domain event to its shared schema contract.
+    /// If no mapper is registered, returns the original event unchanged.
+    /// </summary>
+    public object MapPayload(string eventTypeName, object domainEvent)
+    {
+        return _payloadMappers.TryGetValue(eventTypeName, out var mapper)
+            ? mapper(domainEvent)
+            : domainEvent;
     }
 
     /// <summary>

@@ -30,6 +30,11 @@ public sealed record EventEnvelope
     public required DateTimeOffset Timestamp { get; init; }
     public int SequenceNumber { get; init; }
 
+    // Domain routing metadata — used by TopicNameResolver for canonical Kafka topic resolution
+    public string Classification { get; init; } = string.Empty;
+    public string Context { get; init; } = string.Empty;
+    public string Domain { get; init; } = string.Empty;
+
     public static Guid GenerateDeterministicId(Guid correlationId, string eventType, int sequenceNumber)
     {
         var input = $"{correlationId}:{eventType}:{sequenceNumber}";

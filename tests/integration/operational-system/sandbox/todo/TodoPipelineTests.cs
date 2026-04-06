@@ -49,10 +49,14 @@ public sealed class TodoPipelineTests
     {
         CorrelationId = Guid.NewGuid(),
         CausationId = Guid.NewGuid(),
+        CommandId = Guid.NewGuid(),
         TenantId = "test-tenant",
         ActorId = "test-actor",
         AggregateId = aggregateId,
-        PolicyId = "whyce-policy-default"
+        PolicyId = "whyce-policy-default",
+        Classification = "operational",
+        Context = "sandbox",
+        Domain = "todo"
     };
 
     [Fact]
@@ -115,10 +119,14 @@ public sealed class TodoPipelineTests
         {
             CorrelationId = Guid.Empty, // Invalid
             CausationId = Guid.NewGuid(),
+            CommandId = Guid.NewGuid(),
             TenantId = "t",
             ActorId = "a",
             AggregateId = Guid.NewGuid(),
-            PolicyId = "p"
+            PolicyId = "p",
+            Classification = "operational",
+            Context = "sandbox",
+            Domain = "todo"
         };
 
         var result = await dispatcher.DispatchAsync(
@@ -315,11 +323,11 @@ internal sealed class InMemoryChainAnchor : IChainAnchor
 
 internal sealed class InMemoryOutbox : IOutbox
 {
-    public List<(Guid CorrelationId, IReadOnlyList<object> Events)> EnqueuedBatches { get; } = new();
+    public List<(Guid CorrelationId, IReadOnlyList<object> Events, string Topic)> EnqueuedBatches { get; } = new();
 
-    public Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events)
+    public Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic)
     {
-        EnqueuedBatches.Add((correlationId, events));
+        EnqueuedBatches.Add((correlationId, events, topic));
         return Task.CompletedTask;
     }
 }
@@ -381,16 +389,16 @@ internal sealed class TestRedisClient : IRedisClient
 internal sealed class ProjectionWiredOutbox : IOutbox
 {
     private readonly IEventConsumer _consumer;
-    public List<(Guid CorrelationId, IReadOnlyList<object> Events)> DeliveredBatches { get; } = new();
+    public List<(Guid CorrelationId, IReadOnlyList<object> Events, string Topic)> DeliveredBatches { get; } = new();
 
     public ProjectionWiredOutbox(IEventConsumer consumer)
     {
         _consumer = consumer;
     }
 
-    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events)
+    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic)
     {
-        DeliveredBatches.Add((correlationId, events));
+        DeliveredBatches.Add((correlationId, events, topic));
         foreach (var e in events)
         {
             var schema = MapToSchema(e);
@@ -420,7 +428,7 @@ internal sealed class InMemoryIdempotencyStore : IIdempotencyStore
 
 internal sealed class NoOpDispatcher : ISystemIntentDispatcher
 {
-    public Task<CommandResult> DispatchAsync(object command) =>
+    public Task<CommandResult> DispatchAsync(object command, DomainRoute route) =>
         Task.FromResult(CommandResult.Failure("NoOp — should not reach dispatcher"));
 }
 

@@ -21,7 +21,7 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         _idGenerator = idGenerator;
     }
 
-    public async Task<CommandResult> DispatchAsync(object command)
+    public async Task<CommandResult> DispatchAsync(object command, DomainRoute route)
     {
         var commandType = command.GetType();
 
@@ -42,7 +42,10 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             TenantId = "default",
             ActorId = "system",
             AggregateId = aggregateId,
-            PolicyId = "whyce-policy-default"
+            PolicyId = "whyce-policy-default",
+            Classification = route.Classification,
+            Context = route.Context,
+            Domain = route.Domain
         };
 
         return await _controlPlane.ExecuteAsync(command, context);

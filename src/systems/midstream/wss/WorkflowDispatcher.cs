@@ -19,13 +19,13 @@ public sealed class WorkflowDispatcher : IWorkflowDispatcher
         _clock = clock;
     }
 
-    public async Task<WorkflowResult> StartWorkflowAsync(string workflowName, object payload)
+    public async Task<WorkflowResult> StartWorkflowAsync(string workflowName, object payload, DomainRoute route)
     {
         var timestamp = _clock.UtcNow.Ticks.ToString();
         var workflowId = _idGenerator.Generate($"workflow:{workflowName}:{timestamp}");
 
         var command = new WorkflowStartCommand(workflowId, workflowName, payload);
-        var result = await _dispatcher.DispatchAsync(command);
+        var result = await _dispatcher.DispatchAsync(command, route);
 
         return result.IsSuccess
             ? WorkflowResult.Success(result.EmittedEvents, result.Output)

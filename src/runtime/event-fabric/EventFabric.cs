@@ -1,5 +1,4 @@
 using Whyce.Runtime.Deterministic;
-using Whyce.Runtime.Projection;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
 
@@ -14,34 +13,34 @@ namespace Whyce.Runtime.EventFabric;
 ///   1. Wrap events into deterministic EventEnvelopes (with versioning)
 ///   2. EventStoreService.Append (persist — source of truth)
 ///   3. ChainAnchorService.Anchor (immutable audit trail)
-///   4. ProjectionDispatcher.Dispatch (read model updates)
-///   5. OutboxService.Enqueue (bridge to external systems)
+///   4. OutboxService.Enqueue (Kafka relay — projections consume from Kafka ONLY)
 ///
 /// The fabric contains NO persistence, chain, or messaging logic itself.
 /// It is a pure orchestrator that enforces the strict ordering of post-execution stages.
+/// Projections are triggered exclusively by Kafka consumers — no direct dispatch.
 /// </summary>
 public sealed class EventFabric : IEventFabric
 {
     private readonly EventStoreService _eventStoreService;
     private readonly ChainAnchorService _chainAnchorService;
-    private readonly IProjectionDispatcher _projectionDispatcher;
     private readonly OutboxService _outboxService;
     private readonly EventSchemaRegistry _schemaRegistry;
+    private readonly TopicNameResolver _topicNameResolver;
     private readonly IClock _clock;
 
     public EventFabric(
         EventStoreService eventStoreService,
         ChainAnchorService chainAnchorService,
-        IProjectionDispatcher projectionDispatcher,
         OutboxService outboxService,
         EventSchemaRegistry schemaRegistry,
+        TopicNameResolver topicNameResolver,
         IClock clock)
     {
         _eventStoreService = eventStoreService;
         _chainAnchorService = chainAnchorService;
-        _projectionDispatcher = projectionDispatcher;
         _outboxService = outboxService;
         _schemaRegistry = schemaRegistry;
+        _topicNameResolver = topicNameResolver;
         _clock = clock;
     }
 
@@ -70,13 +69,19 @@ public sealed class EventFabric : IEventFabric
                 EventName = schema.EventName,
                 EventVersion = schema.Version,
                 SchemaHash = schema.SchemaHash,
-                Payload = domainEvent,
+                Payload = _schemaRegistry.MapPayload(eventTypeName, domainEvent),
                 ExecutionHash = executionHash,
                 PolicyHash = policyHash,
                 Timestamp = _clock.UtcNow,
-                SequenceNumber = i
+                SequenceNumber = i,
+                Classification = context.Classification,
+                Context = context.Context,
+                Domain = context.Domain
             });
         }
+
+        // Step 1b: Resolve canonical Kafka topic from envelope routing metadata
+        var topic = _topicNameResolver.Resolve(envelopes[0], "events");
 
         // Step 2: Persist to EventStore (source of truth)
         await _eventStoreService.AppendAsync(context.AggregateId, domainEvents);
@@ -84,10 +89,7 @@ public sealed class EventFabric : IEventFabric
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
         await _chainAnchorService.AnchorAsync(context.CorrelationId, domainEvents, policyHash);
 
-        // Step 4: Dispatch to Projection system
-        await _projectionDispatcher.DispatchAsync(envelopes);
-
-        // Step 5: Enqueue to Outbox (bridge to external systems)
-        await _outboxService.EnqueueAsync(context.CorrelationId, domainEvents);
+        // Step 4: Enqueue to Outbox with resolved topic (Kafka relay → consumer → projection)
+        await _outboxService.EnqueueAsync(context.CorrelationId, domainEvents, topic);
     }
 }

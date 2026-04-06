@@ -80,4 +80,4 @@ C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Swashbuckle.AspNetCore.Sw
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Api.dll
 C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Api.pdb
-C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\Whycespace.Host.staticwebassets.runtime.json
+C:\projects\dev\v5\src\platform\host\bin\Debug\net10.0\appsettings.json
