@@ -1,40 +1,47 @@
-using Whyce.Runtime.Pipeline;
-using Whyce.Shared.Contracts.Infrastructure.Chain;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whyce.Runtime.EventFabric;
+using Whyce.Runtime.Middleware;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Runtime.ControlPlane;
 
+/// <summary>
+/// Runtime Control Plane — SINGLE ENTRY POINT for all command execution.
+/// ControlPlane → EventFabric is SINGLE and NON-BYPASSABLE.
+///
+/// T0U HARDENING — Defense-in-depth policy enforcement:
+/// After middleware pipeline completes, the control plane VERIFIES that
+/// PolicyDecisionAllowed == true before dispatching and before EventFabric.
+/// This guards against middleware misconfiguration where PolicyMiddleware is missing.
+///
+/// Execution Model:
+///   ControlPlane
+///     → Middleware Pipeline (locked order)
+///     → Policy Guard (defense-in-depth)
+///     → Dispatcher → Engine
+///     → EventFabric (orchestrator: persist → chain → projection → outbox)
+///     → Return Response
+/// </summary>
 public sealed class RuntimeControlPlane : IRuntimeControlPlane
 {
     private readonly IReadOnlyList<IMiddleware> _middlewares;
     private readonly ICommandDispatcher _dispatcher;
-    private readonly IEventStore _eventStore;
-    private readonly IChainAnchor _chainAnchor;
-    private readonly IOutbox _outbox;
+    private readonly IEventFabric _eventFabric;
 
     public RuntimeControlPlane(
-        IEnumerable<IMiddleware> middlewares,
+        IReadOnlyList<IMiddleware> middlewares,
         ICommandDispatcher dispatcher,
-        IEventStore eventStore,
-        IChainAnchor chainAnchor,
-        IOutbox outbox)
+        IEventFabric eventFabric)
     {
-        _middlewares = middlewares.ToList();
+        _middlewares = middlewares;
         _dispatcher = dispatcher;
-        _eventStore = eventStore;
-        _chainAnchor = chainAnchor;
-        _outbox = outbox;
+        _eventFabric = eventFabric;
     }
 
     public async Task<CommandResult> ExecuteAsync(object command, CommandContext context)
     {
-        // Build middleware pipeline ending with dispatcher
-        Func<Task<CommandResult>> pipeline = () => _dispatcher.DispatchAsync(command, context);
+        // Build middleware pipeline wrapping the dispatch + policy guard
+        Func<Task<CommandResult>> pipeline = () => DispatchWithPolicyGuard(command, context);
 
-        // Wrap in reverse order so first middleware runs first
-        // Order: ContextGuard → Policy (WhyceID + WhycePolicy) → Idempotency → Execution
         for (var i = _middlewares.Count - 1; i >= 0; i--)
         {
             var middleware = _middlewares[i];
@@ -44,15 +51,50 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
 
         var result = await pipeline();
 
-        // Persist → Chain → Outbox (strict order per E12)
-        // Only persist if events require it (engine commands = yes, workflow sub-commands already persisted)
+        // Event emission boundary — single, non-bypassable fabric invocation
         if (result.IsSuccess && result.EventsRequirePersistence && result.EmittedEvents.Count > 0)
         {
-            await _eventStore.AppendEventsAsync(context.AggregateId, result.EmittedEvents, expectedVersion: -1);
-            await _chainAnchor.AnchorAsync(context.CorrelationId, result.EmittedEvents, context.PolicyDecisionHash ?? string.Empty);
-            await _outbox.EnqueueAsync(context.CorrelationId, result.EmittedEvents);
+            // HARD STOP: Verify policy was evaluated before persisting events
+            if (context.PolicyDecisionAllowed != true)
+            {
+                return CommandResult.Failure(
+                    "WHYCEPOLICY HARD STOP: Events cannot be persisted without policy approval. " +
+                    "PolicyDecisionAllowed is not true. Chain integrity requires policy evaluation.");
+            }
+
+            if (string.IsNullOrEmpty(context.PolicyDecisionHash))
+            {
+                return CommandResult.Failure(
+                    "WHYCEPOLICY HARD STOP: Events cannot be persisted without PolicyDecisionHash. " +
+                    "Chain anchoring requires a valid decision hash.");
+            }
+
+            await _eventFabric.ProcessAsync(result.EmittedEvents, context);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Defense-in-depth: Verify policy was evaluated BEFORE dispatching to engine.
+    /// Guards against middleware misconfiguration (missing PolicyMiddleware).
+    /// </summary>
+    private Task<CommandResult> DispatchWithPolicyGuard(object command, CommandContext context)
+    {
+        if (context.PolicyDecisionAllowed != true)
+        {
+            return Task.FromResult(CommandResult.Failure(
+                "WHYCEPOLICY HARD STOP: Command dispatch blocked. PolicyDecisionAllowed is not true. " +
+                "No engine execution without explicit policy approval. No bypass allowed."));
+        }
+
+        if (string.IsNullOrEmpty(context.IdentityId))
+        {
+            return Task.FromResult(CommandResult.Failure(
+                "WHYCEID HARD STOP: Command dispatch blocked. IdentityId is not set. " +
+                "No engine execution without identity resolution. No bypass allowed."));
+        }
+
+        return _dispatcher.DispatchAsync(command, context);
     }
 }

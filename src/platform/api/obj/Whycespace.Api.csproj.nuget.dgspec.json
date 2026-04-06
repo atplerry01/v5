@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj": {}
+    "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj": {}
   },
   "projects": {
-    "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj": {
+    "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
+        "projectUniqueName": "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
         "projectName": "Whycespace.Api",
-        "projectPath": "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
+        "projectPath": "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
         "packagesPath": "C:\\Users\\HP\\.nuget\\packages\\",
-        "outputPath": "c:\\projects\\dev\\v5\\src\\platform\\api\\obj\\",
+        "outputPath": "C:\\projects\\dev\\v5\\src\\platform\\api\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -33,11 +33,11 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
-                "projectPath": "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
+              "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
+                "projectPath": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
               },
-              "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
-                "projectPath": "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj"
+              "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
+                "projectPath": "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj"
               }
             }
           }
@@ -500,14 +500,14 @@
         }
       }
     },
-    "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
+    "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj",
+        "projectUniqueName": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj",
         "projectName": "Whycespace.Shared",
-        "projectPath": "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj",
+        "projectPath": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj",
         "packagesPath": "C:\\Users\\HP\\.nuget\\packages\\",
-        "outputPath": "c:\\projects\\dev\\v5\\src\\shared\\obj\\",
+        "outputPath": "C:\\projects\\dev\\v5\\src\\shared\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -840,14 +840,14 @@
         }
       }
     },
-    "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
+    "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj",
+        "projectUniqueName": "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj",
         "projectName": "Whycespace.Systems",
-        "projectPath": "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj",
+        "projectPath": "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj",
         "packagesPath": "C:\\Users\\HP\\.nuget\\packages\\",
-        "outputPath": "c:\\projects\\dev\\v5\\src\\systems\\obj\\",
+        "outputPath": "C:\\projects\\dev\\v5\\src\\systems\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -869,8 +869,8 @@
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
-                "projectPath": "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
+              "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
+                "projectPath": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
               }
             }
           }

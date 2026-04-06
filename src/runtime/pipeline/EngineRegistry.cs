@@ -1,6 +1,6 @@
 using Whyce.Shared.Contracts.Engine;
 
-namespace Whyce.Runtime.Pipeline;
+namespace Whyce.Runtime.Dispatcher;
 
 public sealed class EngineRegistry : IEngineRegistry
 {

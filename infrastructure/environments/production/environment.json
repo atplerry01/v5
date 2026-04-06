@@ -1,0 +1,7 @@
+{
+  "environment": "production",
+  "classification": "operational-system",
+  "context": "deployment",
+  "domain": "sandbox",
+  "settings": {}
+}

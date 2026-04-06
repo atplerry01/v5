@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "lovejCxkCCA=",
+  "dgSpecHash": "9vwgulCVIqM=",
   "success": true,
-  "projectFilePath": "c:\\projects\\dev\\v5\\src\\platform\\host\\Whycespace.Host.csproj",
+  "projectFilePath": "C:\\projects\\dev\\v5\\src\\platform\\host\\Whycespace.Host.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\HP\\.nuget\\packages\\communitytoolkit.highperformance\\8.3.0\\communitytoolkit.highperformance.8.3.0.nupkg.sha512",
     "C:\\Users\\HP\\.nuget\\packages\\confluent.kafka\\2.8.0\\confluent.kafka.2.8.0.nupkg.sha512",

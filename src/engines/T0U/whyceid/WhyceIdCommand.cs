@@ -1,5 +1,2 @@
-namespace Whyce.Engines.T0U.WhyceId;
-
-public sealed record WhyceIdCommand(
-    string? Token,
-    string? UserId);
+// Moved to command/
+// Use Whyce.Engines.T0U.WhyceId.Command.AuthenticateIdentityCommand (and others)

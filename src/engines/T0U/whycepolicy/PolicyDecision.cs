@@ -1,5 +1,2 @@
-namespace Whyce.Engines.T0U.WhycePolicy;
-
-public sealed record PolicyDecision(
-    bool IsAllowed,
-    string DecisionHash);
+// Moved to result/PolicyEvaluationResult.cs
+// Use Whyce.Engines.T0U.WhycePolicy.Result.PolicyEvaluationResult

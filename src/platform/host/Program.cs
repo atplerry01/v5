@@ -4,8 +4,10 @@ using System.Text;
 using System.Text.Json;
 using Minio;
 using Prometheus;
-using Whyce.Engines.T0U.WhyceId;
-using Whyce.Engines.T0U.WhycePolicy;
+using Whyce.Engines.T0U.WhyceChain.Engine;
+using Whyce.Engines.T0U.WhyceId.Engine;
+using Whyce.Engines.T0U.WhycePolicy.Engine;
+using Whyce.Engines.T0U.WhycePolicy.Registry;
 using Whyce.Engines.T1M.StepExecutor;
 using Whyce.Engines.T1M.Steps.Todo;
 using Whyce.Engines.T1M.WorkflowEngine;
@@ -14,10 +16,17 @@ using Whyce.Platform.Api.Extensions;
 using Whyce.Platform.Api.Health;
 using Whyce.Platform.Host.Health;
 using Whyce.Projections.OperationalSystem.Sandbox.Todo;
-using Whyce.Runtime.Observability;
 using Whyce.Runtime.ControlPlane;
-using Whyce.Runtime.Pipeline;
-using RuntimeMiddleware = Whyce.Runtime.Pipeline.IMiddleware;
+using Whyce.Runtime.Dispatcher;
+using Whyce.Runtime.EventFabric;
+using Whyce.Runtime.Middleware;
+using Whyce.Runtime.Middleware.Execution;
+using Whyce.Runtime.Middleware.Observability;
+using Whyce.Runtime.Middleware.PostPolicy;
+using Whyce.Runtime.Middleware.PrePolicy;
+using Whyce.Runtime.Projection;
+using RuntimeMiddleware = Whyce.Runtime.Middleware.IMiddleware;
+using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Events.Todo;
@@ -51,9 +60,10 @@ builder.Services.AddSingleton<IEngineRegistry>(sp =>
     return registry;
 });
 
-// Engines — T0U (identity + policy, pre-execution)
+// Engines — T0U (identity + policy + chain, constitutional layer — all stateless)
+builder.Services.AddTransient<WhyceChainEngine>();
 builder.Services.AddTransient<WhyceIdEngine>();
-builder.Services.AddTransient<WhycePolicyEngine>();
+builder.Services.AddTransient(_ => new WhycePolicyEngine());
 
 // Engines — T1M (workflow orchestration)
 builder.Services.AddTransient<WorkflowStepExecutor>();
@@ -83,15 +93,53 @@ builder.Services.AddSingleton<TodoProjectionConsumer>();
 builder.Services.AddSingleton<IOutbox>(sp =>
     new InMemoryOutbox(sp.GetRequiredService<TodoProjectionConsumer>()));
 
-// Middleware pipeline (order matters: context guard → policy → idempotency)
-// Policy MUST execute BEFORE idempotency per canonical flow §4
-builder.Services.AddSingleton<RuntimeMiddleware, ContextGuardMiddleware>();
-builder.Services.AddSingleton<RuntimeMiddleware>(sp =>
-    new PolicyMiddleware(
+// --- Projection Registry (Event Fabric dispatches to projections) ---
+builder.Services.AddSingleton<ProjectionRegistry>();
+builder.Services.AddSingleton<IProjectionDispatcher>(sp =>
+    new ProjectionDispatcher(sp.GetRequiredService<ProjectionRegistry>()));
+
+// --- Event Fabric Services (split responsibilities) ---
+builder.Services.AddSingleton<EventStoreService>(sp =>
+    new EventStoreService(sp.GetRequiredService<IEventStore>()));
+builder.Services.AddSingleton<ChainAnchorService>(sp =>
+    new ChainAnchorService(
+        sp.GetRequiredService<WhyceChainEngine>(),
+        sp.GetRequiredService<IChainAnchor>()));
+builder.Services.AddSingleton<OutboxService>(sp =>
+    new OutboxService(sp.GetRequiredService<IOutbox>()));
+builder.Services.AddSingleton<EventSchemaRegistry>();
+
+// --- Event Fabric (orchestrator ONLY — delegates to services) ---
+builder.Services.AddSingleton<IEventFabric>(sp =>
+    new EventFabric(
+        sp.GetRequiredService<EventStoreService>(),
+        sp.GetRequiredService<ChainAnchorService>(),
+        sp.GetRequiredService<IProjectionDispatcher>(),
+        sp.GetRequiredService<OutboxService>(),
+        sp.GetRequiredService<EventSchemaRegistry>(),
+        sp.GetRequiredService<IClock>()));
+
+// --- Middleware Pipeline (LOCKED ORDER via RuntimeControlPlaneBuilder) ---
+builder.Services.AddSingleton<IReadOnlyList<RuntimeMiddleware>>(sp =>
+{
+    var policyMiddleware = new PolicyMw(
         sp.GetRequiredService<WhyceIdEngine>(),
-        sp.GetRequiredService<WhycePolicyEngine>()));
-builder.Services.AddSingleton<RuntimeMiddleware>(sp =>
-    new IdempotencyMiddleware(sp.GetRequiredService<IIdempotencyStore>()));
+        sp.GetRequiredService<WhycePolicyEngine>());
+
+    var idempotencyMiddleware = new IdempotencyMiddleware(
+        sp.GetRequiredService<IIdempotencyStore>());
+
+    return new RuntimeControlPlaneBuilder()
+        .UseTracing(new TracingMiddleware())
+        .UseMetrics(new Whyce.Runtime.Middleware.Observability.MetricsMiddleware())
+        .UseContextGuard(new ContextGuardMiddleware())
+        .UseValidation(new ValidationMiddleware())
+        .UsePolicy(policyMiddleware)
+        .UseAuthorizationGuard(new AuthorizationGuardMiddleware())
+        .UseIdempotency(idempotencyMiddleware)
+        .UseExecutionGuard(new ExecutionGuardMiddleware())
+        .Build();
+});
 
 // Workflow registry — bind workflow names to step types
 builder.Services.AddSingleton<IWorkflowRegistry>(sp =>
@@ -109,12 +157,16 @@ builder.Services.AddSingleton<IWorkflowRegistry>(sp =>
 // Workflow dispatcher — systems entry point for workflow execution
 builder.Services.AddSingleton<IWorkflowDispatcher, Whyce.Systems.Midstream.Wss.WorkflowDispatcher>();
 
-// Runtime control plane — single entry point for all command execution
-builder.Services.AddSingleton<IRuntimeControlPlane, RuntimeControlPlane>();
+// Runtime control plane — single entry point (now uses EventFabric)
+builder.Services.AddSingleton<IRuntimeControlPlane>(sp =>
+    new RuntimeControlPlane(
+        sp.GetRequiredService<IReadOnlyList<RuntimeMiddleware>>(),
+        sp.GetRequiredService<ICommandDispatcher>(),
+        sp.GetRequiredService<IEventFabric>()));
 
 // Command dispatcher (pure router) + system intent dispatcher
-builder.Services.AddSingleton<ICommandDispatcher, RuntimeCommandDispatcher>();
-builder.Services.AddSingleton<ISystemIntentDispatcher, SystemIntentDispatcher>();
+builder.Services.AddSingleton<ICommandDispatcher, Whyce.Runtime.Dispatcher.RuntimeCommandDispatcher>();
+builder.Services.AddSingleton<ISystemIntentDispatcher, Whyce.Runtime.Dispatcher.SystemIntentDispatcher>();
 
 // Systems.Downstream — Todo intent handler
 builder.Services.AddTransient<ITodoIntentHandler, TodoIntentHandler>();
@@ -169,8 +221,8 @@ builder.Services.AddControllers()
 
 var app = builder.Build();
 
-// Metrics middleware — before everything else
-app.UseMiddleware<MetricsMiddleware>();
+// HTTP observability middleware (Prometheus) — before routing
+app.UseMiddleware<Whyce.Runtime.Observability.HttpMetricsMiddleware>();
 app.UseRouting();
 
 app.UseSwagger();

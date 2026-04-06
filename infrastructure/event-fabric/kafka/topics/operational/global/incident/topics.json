@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.operational.global.incident.commands",
+    "whyce.operational.global.incident.events",
+    "whyce.operational.global.incident.retry",
+    "whyce.operational.global.incident.deadletter"
+  ]
+}
