@@ -5,13 +5,13 @@ namespace Whyce.Runtime.Pipeline;
 
 public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
 {
-    private readonly ICommandDispatcher _commandDispatcher;
+    private readonly IRuntimeControlPlane _controlPlane;
     private readonly IClock _clock;
     private readonly IIdGenerator _idGenerator;
 
-    public SystemIntentDispatcher(ICommandDispatcher commandDispatcher, IClock clock, IIdGenerator idGenerator)
+    public SystemIntentDispatcher(IRuntimeControlPlane controlPlane, IClock clock, IIdGenerator idGenerator)
     {
-        _commandDispatcher = commandDispatcher;
+        _controlPlane = controlPlane;
         _clock = clock;
         _idGenerator = idGenerator;
     }
@@ -27,17 +27,19 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         var timestamp = _clock.UtcNow.Ticks.ToString();
         var correlationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:correlation:{timestamp}");
         var causationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:causation:{timestamp}");
+        var commandId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:command:{timestamp}");
 
         var context = new CommandContext
         {
             CorrelationId = correlationId,
             CausationId = causationId,
+            CommandId = commandId,
             TenantId = "default",
             ActorId = "system",
             AggregateId = aggregateId,
             PolicyId = "whyce-policy-default"
         };
 
-        return await _commandDispatcher.DispatchAsync(command, context);
+        return await _controlPlane.ExecuteAsync(command, context);
     }
 }

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Whycespace.Tests.Integration")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8e885a4b71573fa340c497d324dd12f1c2e15fe6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4fb1920b82f1159c30c4a866bd3504c581f32ba0")]
 [assembly: System.Reflection.AssemblyProductAttribute("Whycespace.Tests.Integration")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Whycespace.Tests.Integration")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

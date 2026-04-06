@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Whycespace.Shared.csproj" />
+    <ProjectReference Include="..\..\systems\Whycespace.Systems.csproj" />
   </ItemGroup>
 
   <ItemGroup>

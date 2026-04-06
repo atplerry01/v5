@@ -25,7 +25,8 @@ public sealed class TodoProjectionHandler :
         {
             Id = e.AggregateId,
             Title = e.Title,
-            IsCompleted = false
+            IsCompleted = false,
+            Status = "active"
         });
     }
 
@@ -42,6 +43,6 @@ public sealed class TodoProjectionHandler :
         var existing = await _redis.GetAsync<TodoReadModel>($"todo:{e.AggregateId}");
         if (existing is null) return;
 
-        await _redis.SetAsync($"todo:{e.AggregateId}", existing with { IsCompleted = true });
+        await _redis.SetAsync($"todo:{e.AggregateId}", existing with { IsCompleted = true, Status = "completed" });
     }
 }

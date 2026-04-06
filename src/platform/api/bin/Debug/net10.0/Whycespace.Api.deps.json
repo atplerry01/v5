@@ -9,7 +9,8 @@
       "Whycespace.Api/1.0.0": {
         "dependencies": {
           "Swashbuckle.AspNetCore": "10.1.7",
-          "Whycespace.Shared": "1.0.0"
+          "Whycespace.Shared": "1.0.0",
+          "Whycespace.Systems": "1.0.0"
         },
         "runtime": {
           "Whycespace.Api.dll": {}
@@ -67,6 +68,17 @@
             "fileVersion": "1.0.0.0"
           }
         }
+      },
+      "Whycespace.Systems/1.0.0": {
+        "dependencies": {
+          "Whycespace.Shared": "1.0.0"
+        },
+        "runtime": {
+          "Whycespace.Systems.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -112,6 +124,11 @@
       "hashPath": "swashbuckle.aspnetcore.swaggerui.10.1.7.nupkg.sha512"
     },
     "Whycespace.Shared/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Whycespace.Systems/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

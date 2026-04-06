@@ -737,6 +737,19 @@
         "runtime": {
           "bin/placeholder/Whycespace.Shared.dll": {}
         }
+      },
+      "Whycespace.Systems/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "Whycespace.Shared": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/Whycespace.Systems.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/Whycespace.Systems.dll": {}
+        }
       }
     }
   },
@@ -1521,6 +1534,11 @@
       "type": "project",
       "path": "../../src/shared/Whycespace.Shared.csproj",
       "msbuildProject": "../../src/shared/Whycespace.Shared.csproj"
+    },
+    "Whycespace.Systems/1.0.0": {
+      "type": "project",
+      "path": "../../src/systems/Whycespace.Systems.csproj",
+      "msbuildProject": "../../src/systems/Whycespace.Systems.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -1532,6 +1550,7 @@
       "Whycespace.Projections >= 1.0.0",
       "Whycespace.Runtime >= 1.0.0",
       "Whycespace.Shared >= 1.0.0",
+      "Whycespace.Systems >= 1.0.0",
       "xunit >= 2.9.3",
       "xunit.runner.visualstudio >= 2.8.2"
     ]
@@ -1583,6 +1602,9 @@
             },
             "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
               "projectPath": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
+            },
+            "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
+              "projectPath": "C:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj"
             }
           }
         }

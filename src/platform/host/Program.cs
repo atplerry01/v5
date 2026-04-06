@@ -4,12 +4,18 @@ using System.Text;
 using System.Text.Json;
 using Minio;
 using Prometheus;
+using Whyce.Engines.T0U.WhyceId;
+using Whyce.Engines.T0U.WhycePolicy;
+using Whyce.Engines.T1M.StepExecutor;
+using Whyce.Engines.T1M.Steps.Todo;
+using Whyce.Engines.T1M.WorkflowEngine;
 using Whyce.Engines.T2E.Operational.Todo;
 using Whyce.Platform.Api.Extensions;
 using Whyce.Platform.Api.Health;
 using Whyce.Platform.Host.Health;
 using Whyce.Projections.OperationalSystem.Sandbox.Todo;
 using Whyce.Runtime.Observability;
+using Whyce.Runtime.ControlPlane;
 using Whyce.Runtime.Pipeline;
 using RuntimeMiddleware = Whyce.Runtime.Pipeline.IMiddleware;
 using Whyce.Shared.Contracts.Application.Todo;
@@ -23,6 +29,7 @@ using Whyce.Shared.Contracts.Infrastructure.Policy;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
+using Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,7 +51,20 @@ builder.Services.AddSingleton<IEngineRegistry>(sp =>
     return registry;
 });
 
-// Engines
+// Engines — T0U (identity + policy, pre-execution)
+builder.Services.AddTransient<WhyceIdEngine>();
+builder.Services.AddTransient<WhycePolicyEngine>();
+
+// Engines — T1M (workflow orchestration)
+builder.Services.AddTransient<WorkflowStepExecutor>();
+builder.Services.AddSingleton<IWorkflowEngine, T1MWorkflowEngine>();
+
+// Engines — T1M workflow steps
+builder.Services.AddTransient<ValidateIntentStep>();
+builder.Services.AddTransient<CreateTodoStep>();
+builder.Services.AddTransient<EmitCompletionStep>();
+
+// Engines — T2E (domain execution)
 builder.Services.AddTransient<TodoEngine>();
 
 // Infrastructure adapters (in-memory for Phase 1 sandbox)
@@ -63,16 +83,41 @@ builder.Services.AddSingleton<TodoProjectionConsumer>();
 builder.Services.AddSingleton<IOutbox>(sp =>
     new InMemoryOutbox(sp.GetRequiredService<TodoProjectionConsumer>()));
 
-// Middleware pipeline (order matters: context guard → idempotency → policy)
+// Middleware pipeline (order matters: context guard → policy → idempotency)
+// Policy MUST execute BEFORE idempotency per canonical flow §4
 builder.Services.AddSingleton<RuntimeMiddleware, ContextGuardMiddleware>();
 builder.Services.AddSingleton<RuntimeMiddleware>(sp =>
-    new IdempotencyMiddleware(sp.GetRequiredService<IIdempotencyStore>()));
+    new PolicyMiddleware(
+        sp.GetRequiredService<WhyceIdEngine>(),
+        sp.GetRequiredService<WhycePolicyEngine>()));
 builder.Services.AddSingleton<RuntimeMiddleware>(sp =>
-    new PolicyMiddleware(sp.GetRequiredService<IPolicyEvaluator>()));
+    new IdempotencyMiddleware(sp.GetRequiredService<IIdempotencyStore>()));
 
-// Command dispatcher + system intent dispatcher
+// Workflow registry — bind workflow names to step types
+builder.Services.AddSingleton<IWorkflowRegistry>(sp =>
+{
+    var registry = new Whyce.Runtime.Workflow.WorkflowRegistry();
+    registry.Register("todo.lifecycle.create", new[]
+    {
+        typeof(ValidateIntentStep),
+        typeof(CreateTodoStep),
+        typeof(EmitCompletionStep)
+    });
+    return registry;
+});
+
+// Workflow dispatcher — systems entry point for workflow execution
+builder.Services.AddSingleton<IWorkflowDispatcher, Whyce.Systems.Midstream.Wss.WorkflowDispatcher>();
+
+// Runtime control plane — single entry point for all command execution
+builder.Services.AddSingleton<IRuntimeControlPlane, RuntimeControlPlane>();
+
+// Command dispatcher (pure router) + system intent dispatcher
 builder.Services.AddSingleton<ICommandDispatcher, RuntimeCommandDispatcher>();
 builder.Services.AddSingleton<ISystemIntentDispatcher, SystemIntentDispatcher>();
+
+// Systems.Downstream — Todo intent handler
+builder.Services.AddTransient<ITodoIntentHandler, TodoIntentHandler>();
 
 // Health checks — one per infrastructure dependency
 builder.Services.AddSingleton<IHealthCheck>(sp =>
@@ -283,9 +328,9 @@ internal sealed class InMemoryOutbox : IOutbox
 
 internal sealed class AllowAllPolicyEvaluator : IPolicyEvaluator
 {
-    public Task<PolicyDecision> EvaluateAsync(string policyId, object command, PolicyContext policyContext)
+    public Task<Whyce.Shared.Contracts.Infrastructure.Policy.PolicyDecision> EvaluateAsync(string policyId, object command, PolicyContext policyContext)
     {
-        return Task.FromResult(new PolicyDecision(true, policyId, "sandbox-decision-hash", null));
+        return Task.FromResult(new Whyce.Shared.Contracts.Infrastructure.Policy.PolicyDecision(true, policyId, "sandbox-decision-hash", null));
     }
 }
 

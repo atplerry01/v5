@@ -101,6 +101,19 @@
         "runtime": {
           "bin/placeholder/Whycespace.Shared.dll": {}
         }
+      },
+      "Whycespace.Systems/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "Whycespace.Shared": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/Whycespace.Systems.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/Whycespace.Systems.dll": {}
+        }
       }
     }
   },
@@ -464,12 +477,18 @@
       "type": "project",
       "path": "../../shared/Whycespace.Shared.csproj",
       "msbuildProject": "../../shared/Whycespace.Shared.csproj"
+    },
+    "Whycespace.Systems/1.0.0": {
+      "type": "project",
+      "path": "../../systems/Whycespace.Systems.csproj",
+      "msbuildProject": "../../systems/Whycespace.Systems.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net10.0": [
       "Swashbuckle.AspNetCore >= 10.1.7",
-      "Whycespace.Shared >= 1.0.0"
+      "Whycespace.Shared >= 1.0.0",
+      "Whycespace.Systems >= 1.0.0"
     ]
   },
   "packageFolders": {
@@ -479,11 +498,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
+      "projectUniqueName": "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
       "projectName": "Whycespace.Api",
-      "projectPath": "C:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
+      "projectPath": "c:\\projects\\dev\\v5\\src\\platform\\api\\Whycespace.Api.csproj",
       "packagesPath": "C:\\Users\\HP\\.nuget\\packages\\",
-      "outputPath": "C:\\projects\\dev\\v5\\src\\platform\\api\\obj\\",
+      "outputPath": "c:\\projects\\dev\\v5\\src\\platform\\api\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -505,8 +524,11 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "projectReferences": {
-            "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
-              "projectPath": "C:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
+            "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj": {
+              "projectPath": "c:\\projects\\dev\\v5\\src\\shared\\Whycespace.Shared.csproj"
+            },
+            "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj": {
+              "projectPath": "c:\\projects\\dev\\v5\\src\\systems\\Whycespace.Systems.csproj"
             }
           }
         }

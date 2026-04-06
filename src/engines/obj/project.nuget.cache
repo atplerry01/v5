@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "eFZGFsuK2FU=",
+  "dgSpecHash": "Hni+riYXLgY=",
   "success": true,
   "projectFilePath": "C:\\projects\\dev\\v5\\src\\engines\\Whycespace.Engines.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\HP\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.0\\microsoft.extensions.dependencyinjection.abstractions.9.0.0.nupkg.sha512"
+  ],
   "logs": []
 }

@@ -15,6 +15,7 @@
           "Whycespace.Projections": "1.0.0",
           "Whycespace.Runtime": "1.0.0",
           "Whycespace.Shared": "1.0.0",
+          "Whycespace.Systems": "1.0.0",
           "xunit": "2.9.3"
         },
         "runtime": {
@@ -583,6 +584,17 @@
             "fileVersion": "1.0.0.0"
           }
         }
+      },
+      "Whycespace.Systems/1.0.0": {
+        "dependencies": {
+          "Whycespace.Shared": "1.0.0"
+        },
+        "runtime": {
+          "Whycespace.Systems.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -809,6 +821,11 @@
       "sha512": ""
     },
     "Whycespace.Shared/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Whycespace.Systems/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -127,3 +127,5 @@ C:\projects\dev\v5\tests\integration\obj\Debug\net10.0\refint\Whycespace.Tests.I
 C:\projects\dev\v5\tests\integration\obj\Debug\net10.0\Whycespace.Tests.Integration.pdb
 C:\projects\dev\v5\tests\integration\obj\Debug\net10.0\Whycespace.Tests.Integration.genruntimeconfig.cache
 C:\projects\dev\v5\tests\integration\obj\Debug\net10.0\ref\Whycespace.Tests.Integration.dll
+C:\projects\dev\v5\tests\integration\bin\Debug\net10.0\Whycespace.Systems.dll
+C:\projects\dev\v5\tests\integration\bin\Debug\net10.0\Whycespace.Systems.pdb

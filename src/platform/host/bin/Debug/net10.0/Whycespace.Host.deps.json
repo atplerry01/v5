@@ -291,7 +291,8 @@
       "Whycespace.Api/1.0.0": {
         "dependencies": {
           "Swashbuckle.AspNetCore": "10.1.7",
-          "Whycespace.Shared": "1.0.0"
+          "Whycespace.Shared": "1.0.0",
+          "Whycespace.Systems": "1.0.0"
         },
         "runtime": {
           "Whycespace.Api.dll": {
