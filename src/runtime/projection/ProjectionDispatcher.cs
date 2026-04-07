@@ -1,4 +1,5 @@
 using Whyce.Runtime.EventFabric;
+using Whyce.Shared.Contracts.Projection;
 
 namespace Whyce.Runtime.Projection;
 

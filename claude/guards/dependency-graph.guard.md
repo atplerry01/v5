@@ -156,7 +156,7 @@ Guard is LOCKED only if:
 
 ## NEW RULES INTEGRATED — 2026-04-07
 
-- **DG-R7-01**: Pre-existing violation tracked: Whycespace.Projections.csproj references Whycespace.Runtime.csproj. Projections may reference ONLY domain (events) + shared. Must be remediated OR granted a narrow, documented exception (interface-only, no implementation types).
+- **DG-R7-01**: ~~Pre-existing violation tracked: Whycespace.Projections.csproj references Whycespace.Runtime.csproj~~ → **REMEDIATED 2026-04-07**. Resolution: introduced shared `IEnvelopeProjectionHandler` and `IEventEnvelope` contracts under `src/shared/contracts/projection/` and `src/shared/contracts/event-fabric/`. Runtime `EventEnvelope` record now implements `IEventEnvelope`; projection handlers in `src/projections/**` consume the shared contracts only. The runtime project reference has been removed from `Whycespace.Projections.csproj`. Verified by `dotnet build` green across host, unit, and integration projects.
 - **DG-R5-01**: ~~Pre-existing violation tracked~~ → **CONVERTED TO DOCUMENTED EXCEPTION (2026-04-07)**. See DG-R5-EXCEPT-01 below.
 
 ## EXCEPTIONS (documented and granted)

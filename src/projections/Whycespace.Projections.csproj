@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\shared\Whycespace.Shared.csproj" />
-    <ProjectReference Include="..\runtime\Whycespace.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>

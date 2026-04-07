@@ -1,10 +1,11 @@
 using System.Text.Json;
 using Npgsql;
-using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Events.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
-using EnvelopeProjectionHandler = Whyce.Runtime.Projection.IProjectionHandler;
+using Whyce.Shared.Contracts.Projection;
+
 namespace Whyce.Projections.OperationalSystem.Sandbox.Todo;
 
 /// <summary>
@@ -12,9 +13,12 @@ namespace Whyce.Projections.OperationalSystem.Sandbox.Todo;
 /// state row. Owns the write to projection_operational_sandbox_todo.todo_read_model —
 /// the generic projection writer is suppressed for handled events so this handler is
 /// the single source of truth for the row's `state` JSONB.
+///
+/// Implements the shared envelope-based projection handler contract so this file does
+/// not depend on src/runtime/**. Closes dependency-graph guard violation DG-R7-01.
 /// </summary>
 public sealed class TodoProjectionHandler :
-    EnvelopeProjectionHandler,
+    IEnvelopeProjectionHandler,
     IProjectionHandler<TodoCreatedEventSchema>,
     IProjectionHandler<TodoUpdatedEventSchema>,
     IProjectionHandler<TodoCompletedEventSchema>
@@ -35,9 +39,9 @@ public sealed class TodoProjectionHandler :
         _connectionString = connectionString;
     }
 
-    public Whyce.Runtime.Projection.ProjectionExecutionPolicy ExecutionPolicy => Whyce.Runtime.Projection.ProjectionExecutionPolicy.Inline;
+    public ProjectionExecutionPolicy ExecutionPolicy => ProjectionExecutionPolicy.Inline;
 
-    public Task HandleAsync(EventEnvelope envelope)
+    public Task HandleAsync(IEventEnvelope envelope)
     {
         _currentCorrelationId = envelope.CorrelationId;
         return envelope.Payload switch

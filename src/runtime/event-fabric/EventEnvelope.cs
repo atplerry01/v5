@@ -1,11 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
+using Whyce.Shared.Contracts.EventFabric;
 
 namespace Whyce.Runtime.EventFabric;
 
 /// <summary>
 /// Immutable event envelope. Every domain event passing through the Event Fabric
 /// is wrapped in this envelope with deterministic metadata.
+///
+/// Implements <see cref="IEventEnvelope"/> so projection handlers in
+/// <c>src/projections/**</c> can consume envelopes through the shared contract
+/// without referencing the runtime project.
 ///
 /// All events MUST include:
 /// - EventId (deterministic, SHA256-based)
@@ -15,7 +20,7 @@ namespace Whyce.Runtime.EventFabric;
 /// - ExecutionHash (fingerprint of the execution)
 /// - PolicyHash (hash of the policy decision)
 /// </summary>
-public sealed record EventEnvelope
+public sealed record EventEnvelope : IEventEnvelope
 {
     public required Guid EventId { get; init; }
     public required Guid AggregateId { get; init; }
@@ -34,6 +39,10 @@ public sealed record EventEnvelope
     public string Classification { get; init; } = string.Empty;
     public string Context { get; init; } = string.Empty;
     public string Domain { get; init; } = string.Empty;
+
+    // Explicit interface implementation: shared contract exposes EventVersion as a
+    // string so the runtime EventVersion type is not lifted into shared contracts.
+    string IEventEnvelope.EventVersion => EventVersion.ToString();
 
     public static Guid GenerateDeterministicId(Guid correlationId, string eventType, int sequenceNumber)
     {
