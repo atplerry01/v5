@@ -92,3 +92,12 @@ PLATFORM_GUARD_VIOLATION:
   actual: <detected violation>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **PLAT-NO-DOMAIN-01**: src/platform/host/Program.cs MUST NOT reference any concrete domain type. Per-domain wiring MUST be encapsulated in a bootstrap module (*Bootstrap.cs) under src/platform/host/composition/ or src/systems/ and invoked from Program.cs by a single non-typed call.
+- **PLAT-RESOLVER-01**: Host adapters MUST NOT hold static dictionaries keyed by concrete domain types. Event-type -> CLR-type mappings live in a runtime-side EventSchemaRegistry.
+- **PLAT-KAFKA-GENERIC-01**: Kafka projection consumer workers in src/platform/host/adapters/** MUST be generic over (topic, handler-resolver, schema-registry, projection-table-resolver). Per-domain workers (e.g. KafkaTodoProjectionConsumerWorker) are FORBIDDEN.
+- **PLAT-DET-01**: Within src/platform/host/adapters/**, Guid.NewGuid() and DateTime*.UtcNow are FORBIDDEN. Use injected IIdGenerator (with deterministic seed derived from aggregate id+version) and IClock. Sole exception: SystemClock itself.

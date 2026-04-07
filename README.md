@@ -57,11 +57,14 @@ Runtime persists, anchors, publishes, projects, and returns the final result upw
 - upgrade runtime
 - 1m RPS upgrade
 
+- deteministic id ->
 - clean domain model
 - fix project dependency
 - connection string in code
 
-- deteministic id
+
+
+
 - update the new generated guard rules
 - runtime workflow and workflow-state fix
 
@@ -80,4 +83,17 @@ the poer of upbringing and associations
 
 
 - get a skill
-- 
+
+
+
+Intelligence Investors
+
+
+Before
+Program.cs → manual wiring
+🚀 After
+Program.cs → ModuleLoader → Modules → System
+
+
+
+Generate Domain E1–E8 Standardization Prompt (Scale 100+ domains safely)

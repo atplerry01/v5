@@ -179,3 +179,32 @@ ENGINE_GUARD_VIOLATION:
   detected: <what was found>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07 (from claude/new-rules)
+
+- **E-WORKFLOW-01**: Workflow orchestration belongs ONLY in src/engines/T1M/. No WorkflowEngine or workflow execution logic in src/runtime/ or src/systems/. Runtime delegates to IWorkflowEngine (T1MWorkflowEngine).
+- **E-STEP-01**: All IWorkflowStep implementations MUST live under src/engines/T1M/steps/. Forbidden in src/systems/** and src/runtime/**.
+- **E-VERSION-01**: Aggregate event versions MUST strictly increment (newVersion = currentVersion + 1). Engines MUST load prior aggregate state before applying mutating commands. Persistence layer MUST persist supplied version, not default/reset to 0.
+- **E-STEP-02**: T1M steps SHOULD aggregate intent results, NOT dispatch new commands via ISystemIntentDispatcher. Re-entry from step->runtime->engine requires explicit architectural approval.
+
+## NEW RULES INTEGRATED — 2026-04-07 (NORMALIZATION)
+
+### RULE: ENG-PURITY-01 — ENGINE PURITY (T2E)
+T2E engines MUST be pure execution units.
+
+ENFORCEMENT:
+- MUST NOT persist data
+- MUST NOT call runtime
+- MUST NOT call infrastructure directly
+- MUST only emit events
+
+---
+
+### RULE: ENG-DOMAIN-ALIGN-01 — STRICT DOMAIN ALIGNMENT
+Each engine MUST map to a single domain aggregate.
+
+ENFORCEMENT:
+- No cross-domain logic inside a single engine
+- One engine = one domain responsibility

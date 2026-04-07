@@ -153,3 +153,11 @@ BEHAVIORAL_GUARD_VIOLATION:
   pattern_detected: <code snippet>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **B-CLOCK-01**: SystemClock is the SINGLE permitted reader of DateTimeOffset.UtcNow. All other code MUST consume IClock. Sandbox-mode IClock implementations MUST accept an injectable/seeded time source for deterministic replay.
+- **B-ID-01**: All correlation/causation/aggregate ID generation MUST go through IIdGenerator. Guid.NewGuid() is FORBIDDEN in src/runtime/**, src/engines/**, src/domain/**, AND src/platform/host/adapters/**.
+- **B-CHAIN-01**: ChainAnchor.BlockId MUST be a deterministic hash of (events, previousBlockId). Timestamps from IClock only. No Guid.NewGuid() for block ids.

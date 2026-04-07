@@ -3,6 +3,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Projection;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Adapters;
 
@@ -25,6 +26,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     private readonly EventDeserializer _deserializer;
     private readonly ProjectionRegistry _projectionRegistry;
     private readonly IPostgresProjectionWriter _writer;
+    private readonly IClock _clock;
     private readonly TimeSpan _pollTimeout;
 
     public GenericKafkaProjectionConsumerWorker(
@@ -34,6 +36,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         EventDeserializer deserializer,
         ProjectionRegistry projectionRegistry,
         IPostgresProjectionWriter writer,
+        IClock clock,
         TimeSpan? pollTimeout = null)
     {
         _kafkaBootstrapServers = kafkaBootstrapServers;
@@ -42,6 +45,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         _deserializer = deserializer;
         _projectionRegistry = projectionRegistry;
         _writer = writer;
+        _clock = clock;
         _pollTimeout = pollTimeout ?? TimeSpan.FromSeconds(1);
     }
 
@@ -91,7 +95,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     Payload = @event,
                     ExecutionHash = string.Empty,
                     PolicyHash = string.Empty,
-                    Timestamp = DateTimeOffset.UtcNow
+                    Timestamp = _clock.UtcNow
                 };
 
                 var handlers = _projectionRegistry.ResolveHandlers(eventType).ToList();

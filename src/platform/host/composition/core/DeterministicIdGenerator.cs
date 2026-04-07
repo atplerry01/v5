@@ -1,0 +1,14 @@
+using System.Security.Cryptography;
+using System.Text;
+using Whyce.Shared.Kernel.Domain;
+
+namespace Whyce.Platform.Host.Composition.Core;
+
+internal sealed class DeterministicIdGenerator : IIdGenerator
+{
+    public Guid Generate(string seed)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(seed));
+        return new Guid(hash.AsSpan(0, 16));
+    }
+}

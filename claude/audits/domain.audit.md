@@ -242,3 +242,11 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-D-PURITY-01**: grep "Microsoft.Extensions.DependencyInjection" under src/domain/** => any hit = S1.
+- **CHECK-D-DET-01**: grep "Guid.NewGuid|DateTime.Now|DateTime.UtcNow|DateTimeOffset.UtcNow|new Random" under src/domain/** => any hit = S0.
+- **CHECK-D-NO-SYSCLOCK**: glob src/domain/**/SystemClock.cs => any hit = S2 (delete).

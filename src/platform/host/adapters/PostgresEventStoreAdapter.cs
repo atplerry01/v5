@@ -2,6 +2,7 @@ using System.Text.Json;
 using Npgsql;
 using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Adapters;
 
@@ -16,11 +17,13 @@ public sealed class PostgresEventStoreAdapter : IEventStore
 {
     private readonly string _connectionString;
     private readonly EventDeserializer _deserializer;
+    private readonly IIdGenerator _idGenerator;
 
-    public PostgresEventStoreAdapter(string connectionString, EventDeserializer deserializer)
+    public PostgresEventStoreAdapter(string connectionString, EventDeserializer deserializer, IIdGenerator idGenerator)
     {
         _connectionString = connectionString;
         _deserializer = deserializer;
+        _idGenerator = idGenerator;
     }
 
     public async Task<IReadOnlyList<object>> LoadEventsAsync(Guid aggregateId)
@@ -79,7 +82,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
                 """,
                 conn, tx);
 
-            cmd.Parameters.AddWithValue("id", Guid.NewGuid());
+            cmd.Parameters.AddWithValue("id", _idGenerator.Generate($"{aggregateId}:{version}"));
             cmd.Parameters.AddWithValue("agg", aggregateId);
             cmd.Parameters.AddWithValue("aggType", aggregateType);
             cmd.Parameters.AddWithValue("evtType", eventType);

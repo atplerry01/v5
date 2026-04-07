@@ -152,3 +152,9 @@ POLICY_GUARD_VIOLATION:
   actual: <detected gap>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **POL-AUDIT-01**: After every WHYCEPOLICY evaluation (allow OR deny), runtime pipeline MUST emit a PolicyEvaluatedEvent / PolicyDeniedEvent containing DecisionHash, IdentityId, PolicyName, IsAllowed. Decision must be independently auditable as an event, not only via chain DecisionHash.

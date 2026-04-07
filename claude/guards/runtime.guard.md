@@ -193,3 +193,37 @@ RUNTIME_GUARD_VIOLATION:
   actual: <detected bypass>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **R-CTX-01**: CommandContext.PolicyDecisionHash MUST be mutable (get; set;) so middleware mutations propagate through closure-captured pipeline. PolicyMiddleware MUST mutate in-place, not via "with { ... }".
+- **R-ORDER-01**: Middleware order is LOCKED: Tracing -> Metrics -> ContextGuard -> Validation -> Policy -> AuthorizationGuard -> Idempotency -> ExecutionGuard -> Execution. Idempotency MUST come AFTER Auth + Policy. RuntimeControlPlaneBuilder MUST reject pipelines violating this order.
+- **R-UOW-01**: EventStore.Append -> ChainAnchor -> Outbox in RuntimeCommandDispatcher.ExecuteEngineAsync MUST be wrapped in a unit-of-work / saga to prevent partial persistence on failure.
+- **R-WORKFLOW-PIPE-01**: ExecuteWorkflowAsync MUST explicitly invoke persist->chain->outbox for accumulated workflow events, matching the engine path.
+- **R-DOM-LEAK-01** (sub-clause of rule 11): Runtime projection bridges MUST be event-type-agnostic (dispatch by string event-type key against a registry). No "using" of concrete Whycespace.Domain.* types in src/runtime/projection/**. Allowlist: dispatcher infrastructure only.
+- **R-POLICY-PATH-01**: No classification/context/domain folder nesting under src/runtime/policies/**. Policy identifier constants belong in src/shared/contracts/.
+- **R-WF-OBSERVER-01**: Runtime MAY persist workflow state mid-execution via shared-contract IWorkflowStepObserver. Contract lives in shared; engine MUST NOT know about persistence; observer implementation lives in runtime.
+
+## NEW RULES INTEGRATED — 2026-04-07 (NORMALIZATION)
+
+### RULE: R-POLICY-FIRST-01 — POLICY BEFORE EXECUTION
+Runtime MUST enforce policy BEFORE any execution.
+
+ENFORCEMENT:
+- Order MUST be: Guard → Policy → Idempotency → Execution
+
+---
+
+### RULE: R-CANONICAL-PIPELINE-01 — EXECUTION ORDER LOCK
+Runtime MUST follow canonical execution order:
+
+1. Validation
+2. Identity
+3. Policy
+4. Idempotency
+5. Execution
+6. Persistence
+7. Chain
+8. Kafka Publish

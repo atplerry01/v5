@@ -129,3 +129,11 @@ TESTS_GUARD_VIOLATION:
   actual: <detected issue>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **T-BUILD-01**: tests/integration/ MUST compile on every CI run. A red integration project halts merge. The CI gate fails when "dotnet build tests/integration/Whycespace.Tests.Integration.csproj" fails.
+- **T-DOUBLES-01**: All in-memory test doubles (InMemoryChainAnchor, InMemoryOutbox, InMemoryEventStore, etc.) MUST take IClock and IIdGenerator constructor parameters. No Guid.NewGuid() / DateTimeOffset.UtcNow inside test doubles.
+- **T-PLACEHOLDER-01**: In-memory repository implementations used in production composition MUST be clearly marked as placeholders AND have a corresponding migration script in scripts/migrations/ ready for swap.

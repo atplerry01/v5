@@ -224,3 +224,11 @@ DOMAIN_GUARD_VIOLATION:
   expected: <correct structure/naming>
   actual: <detected issue>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **D-PURITY-01**: Files under src/domain/** MUST NOT reference Microsoft.Extensions.DependencyInjection.* or any DI container abstraction. Domain assembly references limited to BCL + shared kernel ($7 layer purity).
+- **D-DET-01**: All domain value-object ID factories are forbidden from calling Guid.NewGuid(), DateTime.Now, DateTime.UtcNow, DateTimeOffset.UtcNow, or Random. ID generation goes through injected IIdGenerator; timestamps through IClock. Applies to every *Id / value object under src/domain/**.
+- **D-NO-SYSCLOCK**: No SystemClock or clock implementations in src/domain/** (delete on sight — dead code).

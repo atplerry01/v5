@@ -239,3 +239,22 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-E-WORKFLOW-01**: grep src/runtime/ src/systems/ for "WorkflowEngine" / IWorkflowStep impls. Any hit outside src/engines/T1M/ = S1.
+- **CHECK-E-VERSION-01**: Inspect every engine update path. Confirm aggregate state load before mutation and that (newVersion = currentVersion + 1) is computed. Verify Postgres adapter does not coerce version to 0/default.
+- **CHECK-E-STEP-02**: grep src/engines/T1M/steps/ for ISystemIntentDispatcher. Each hit must carry an explicit "// architectural-decision:" comment or fails.
+
+### CHECK: ENG-PURITY-01
+Verify engines:
+- do not persist
+- do not call runtime
+- only emit events
+
+## TRACEABILITY REFERENCE — 2026-04-07
+
+MAP: see claude/traceability/guard-traceability.map.md
+- Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.

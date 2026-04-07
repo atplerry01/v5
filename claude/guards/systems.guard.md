@@ -147,3 +147,10 @@ SYSTEMS_GUARD_VIOLATION:
   actual: <detected execution/mutation>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **SYS-BOUND-01**: Systems layer MUST access runtime ONLY through IWorkflowDispatcher or IRuntimeControlPlane shared-contract surfaces. Direct calls to ISystemIntentDispatcher or other internal runtime dispatcher interfaces from src/systems/** are FORBIDDEN.
+- **SYS-NO-STEP-01**: IWorkflowStep implementations are FORBIDDEN under src/systems/** (see E-STEP-01).

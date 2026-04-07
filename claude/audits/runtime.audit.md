@@ -224,3 +224,22 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-R-CTX-01**: Confirm CommandContext.PolicyDecisionHash declared "{ get; set; }" (not init). PolicyMiddleware uses in-place mutation, not "with { ... }".
+- **CHECK-R-ORDER-01**: Inspect RuntimeControlPlaneBuilder middleware list against locked 11-stage order. Idempotency MUST appear AFTER PolicyMiddleware and AuthorizationGuardMiddleware.
+- **CHECK-R-UOW-01**: ExecuteEngineAsync wraps Append/Anchor/Outbox in unit-of-work or saga; otherwise S1.
+- **CHECK-R-WORKFLOW-PIPE-01**: ExecuteWorkflowAsync explicitly invokes persist->chain->outbox after collecting workflow events.
+- **CHECK-R-DOM-LEAK-01**: grep "Whycespace.Domain" / "*EventSchema" inside src/runtime/** outside dispatcher allowlist => S1.
+- **CHECK-R-POLICY-PATH-01**: glob src/runtime/policies/**/*.cs nested by classification/context/domain => S2.
+
+### CHECK: R-POLICY-FIRST-01
+Verify policy executes before aggregate load.
+
+## TRACEABILITY REFERENCE — 2026-04-07
+
+MAP: see claude/traceability/guard-traceability.map.md
+- Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.

@@ -6,6 +6,7 @@ using Whyce.Platform.Host.Adapters;
 using Whyce.Projections.OperationalSystem.Sandbox.Todo;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Projection;
+using Whyce.Shared.Kernel.Domain;
 using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
@@ -72,7 +73,8 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
                     postgresProjectionsCs,
                     projectionSchema,
                     projectionTable,
-                    aggregateType)));
+                    aggregateType),
+                sp.GetRequiredService<IClock>()));
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)

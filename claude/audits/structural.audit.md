@@ -286,3 +286,11 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-STR-AUTH-01**: Scan all controllers in src/platform/api/controllers/**. For each action with HTTP verb POST/PUT/PATCH/DELETE, confirm [Authorize] attribute on the action OR controller, OR confirm global authentication middleware is registered before MVC routing in Program.cs / composition. Missing => S1.
+- **CHECK-STR-HEALTH-01**: Verify health-check adapters live in src/infrastructure/health/, contracts in src/shared/contracts/infrastructure/health/. Any health-check class in domain/runtime/engines = S2.
+- **CHECK-STR-OBS-01**: Verify observability middleware lives only in src/runtime/observability/. Reject any domain references inside.

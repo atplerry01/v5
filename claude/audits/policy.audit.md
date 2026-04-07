@@ -199,3 +199,17 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-POL-AUDIT-01**: Verify runtime emits PolicyEvaluatedEvent (or PolicyDeniedEvent) on every policy evaluation path (allow + deny). Event payload must include DecisionHash, IdentityId, PolicyName, IsAllowed.
+
+### CHECK: POLICY-CHAIN-01
+Verify every policy decision is anchored to WhyceChain.
+
+## TRACEABILITY REFERENCE — 2026-04-07
+
+MAP: see claude/traceability/guard-traceability.map.md
+- Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.

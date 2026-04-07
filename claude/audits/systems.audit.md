@@ -206,3 +206,10 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-SYS-BOUND-01**: grep "ISystemIntentDispatcher" under src/systems/** => any hit = S1 unless routed via IWorkflowDispatcher / IRuntimeControlPlane.
+- **CHECK-SYS-NO-STEP-01**: grep "IWorkflowStep" implementors under src/systems/** => S1.

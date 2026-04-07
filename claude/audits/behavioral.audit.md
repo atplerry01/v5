@@ -346,3 +346,11 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-B-CLOCK-01**: grep "DateTimeOffset.UtcNow|DateTime.UtcNow|DateTime.Now" across src/** => only permitted hit is the SystemClock implementation. Any other = S1.
+- **CHECK-B-ID-01**: grep "Guid.NewGuid" across src/runtime/** src/engines/** src/domain/** src/platform/host/adapters/** => any hit = S0.
+- **CHECK-B-CHAIN-01**: Inspect ChainAnchor implementation; BlockId must be SHA256(events||prev). Reject Guid.NewGuid usage.

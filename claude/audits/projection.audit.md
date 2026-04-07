@@ -239,3 +239,18 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-P-TYPE-ALIGN-01**: For every projection bridge, verify the matched event type IS the type emitted by the corresponding domain aggregate (or that EventFabric performs explicit domain->schema mapping). Silent mismatch = S1.
+- **CHECK-P-AGNOSTIC-01**: grep src/runtime/projection/bridges/** for concrete domain/schema usings => S1.
+
+### CHECK: PROJ-READ-ONLY-01
+Verify projections do not mutate domain.
+
+## TRACEABILITY REFERENCE — 2026-04-07
+
+MAP: see claude/traceability/guard-traceability.map.md
+- Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.

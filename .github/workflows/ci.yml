@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main, dev_wip]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (src + tests)
+        run: dotnet build --configuration Release --no-restore /clp:ErrorsOnly
+
+      # ─── Phase 2 lock gate: integration tests MUST compile ───
+      # Per claude/new-rules/20260407-133419-audits.md, the integration test
+      # project was previously red and silently broken. This step prevents
+      # silent regression. A compile failure here halts CI.
+      - name: Verify integration tests compile
+        run: dotnet build tests/integration/Whycespace.Tests.Integration.csproj --configuration Release --no-restore
+
+      - name: Verify e2e tests compile
+        run: dotnet build tests/e2e/Whycespace.Tests.E2E.csproj --configuration Release --no-restore
+
+      # ─── Run all tests ───
+      - name: Unit tests
+        run: dotnet test tests/unit/Whycespace.Tests.Unit.csproj --configuration Release --no-build --logger "trx;LogFileName=unit.trx"
+
+      - name: Integration tests
+        run: dotnet test tests/integration/Whycespace.Tests.Integration.csproj --configuration Release --no-build --logger "trx;LogFileName=integration.trx"
+
+      # E2E includes Phase 2 deterministic replay proof — failure halts CI.
+      - name: E2E tests (Phase 2 lock gate)
+        run: dotnet test tests/e2e/Whycespace.Tests.E2E.csproj --configuration Release --no-build --logger "trx;LogFileName=e2e.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'

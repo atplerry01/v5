@@ -158,3 +158,11 @@ STRUCTURAL_GUARD_VIOLATION:
   expected: <correct behavior>
   actual: <detected behavior>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **STR-AUTH-01**: Every controller action with HTTP verb POST/PUT/PATCH/DELETE MUST be protected by [Authorize] (controller or action) OR by global authentication middleware registered before MVC routing. A structural scan MUST fail the build for any unprotected mutating endpoint.
+- **STR-HEALTH-01**: Health-check adapter implementations live in src/infrastructure/health/. Contracts (IHealthCheck, HealthCheckResult) live in src/shared/contracts/infrastructure/health/. HealthAggregator lives in infrastructure and is exposed only via platform API.
+- **STR-OBS-01**: Observability middleware (metrics/logging/tracing) lives ONLY in src/runtime/observability/. MUST NOT contain business logic or domain references.

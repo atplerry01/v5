@@ -198,3 +198,13 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-INFRA-HEALTH-01** (S-HEALTH-01): Verify health-check placement per STR-HEALTH-01.
+- **CHECK-INFRA-OBS-01** (S-OBSERVABILITY-01): Verify observability middleware placement per STR-OBS-01.
+- **CHECK-INFRA-CLOCK-01** (S-CLOCK-01): Verify IClock present in shared kernel and consumed by all timestamp generators outside domain aggregates.
+- **CHECK-INFRA-TOPICS-01**: Bootstrap MUST apply event-store + outbox + chain migrations to event store DB (not just event-store migrations). Missing migration sets in initdb.d / bootstrap = S2.
+- **CHECK-INFRA-PLACEHOLDER-01**: Every in-memory repository in production composition is marked as placeholder AND has corresponding scripts/migrations/*.sql ready.

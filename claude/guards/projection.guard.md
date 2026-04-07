@@ -255,3 +255,24 @@ PROJECTION_GUARD_VIOLATION:
   actual: <detected behavior>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **P-TYPE-ALIGN-01**: Projection bridges MUST match on the same event types the domain layer emits. Either (a) EventFabric maps domain events to schema types before dispatch, or (b) bridges match domain types directly. Type alignment between emit and consume MUST be verified at registration time. Silent type-mismatch drops are S1 violations.
+- **P-AGNOSTIC-01**: Runtime projection bridges MUST be event-type-agnostic — no "using" of concrete domain/schema types inside src/runtime/projection/bridges/**.
+
+## NEW RULES INTEGRATED — 2026-04-07 (NORMALIZATION)
+
+### RULE: PROJ-READ-ONLY-01 — PROJECTIONS ARE READ ONLY
+Projections MUST NOT modify domain state.
+
+ENFORCEMENT:
+- No write-back to domain
+- No aggregate mutation
+
+---
+
+### RULE: PROJ-DOMAIN-ALIGN-01 — DOMAIN ALIGNED STRUCTURE
+Projections MUST follow domain-aligned folder structure.

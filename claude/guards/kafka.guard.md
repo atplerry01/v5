@@ -153,3 +153,30 @@ KAFKA_GUARD_VIOLATION:
   actual: <detected violation>
   remediation: <fix instruction>
 ```
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07
+
+- **K-TOPIC-01**: Outbox publishers MUST route events to domain-aligned Kafka topics derived from event metadata: whyce.{classification}.{context}.{domain}.events. Hardcoded default topics (e.g. whyce.events) are FORBIDDEN.
+- **K-TOPIC-02**: Every bounded context that emits events MUST declare its topics in infrastructure/event-fabric/kafka/create-topics.sh. Missing topic declarations fail bootstrap verification.
+
+## NEW RULES INTEGRATED — 2026-04-07 (NORMALIZATION)
+
+### RULE: K-TOPIC-CANONICAL-01 — NAMING STANDARD
+Kafka topics MUST follow canonical format:
+
+whyce.{cluster}.{context}.{event}
+
+ENFORCEMENT:
+- 4–5 segments ONLY
+- lowercase ONLY
+- event MUST be past tense
+
+---
+
+### RULE: K-DETERMINISTIC-01 — PARTITION RESOLUTION
+Kafka partition MUST be deterministic.
+
+ENFORCEMENT:
+- PartitionResolver must use deterministic hash (FNV-1a or equivalent)

@@ -203,3 +203,18 @@ blocking_violations: {count of CRITICAL/HIGH}
 | LOW violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+---
+
+## NEW CHECKS INTEGRATED — 2026-04-07
+
+- **CHECK-K-TOPIC-01**: grep "whyce.events" or hardcoded topic literals in outbox publisher classes => S1. Confirm topic is computed from event metadata.
+- **CHECK-K-TOPIC-02**: For every bounded context emitting events, verify a matching topic line exists in infrastructure/event-fabric/kafka/create-topics.sh; missing => S2.
+
+### CHECK: K-TOPIC-CANONICAL-01
+Verify topic naming follows canonical format.
+
+## TRACEABILITY REFERENCE — 2026-04-07
+
+MAP: see claude/traceability/guard-traceability.map.md
+- Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
