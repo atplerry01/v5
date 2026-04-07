@@ -111,12 +111,21 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         foreach (var entry in batch)
         {
+            // Projection consumer requires event-id + aggregate-id headers (see
+            // GenericKafkaProjectionConsumerWorker.ExecuteAsync). The outbox table does
+            // not store these as discrete columns, so derive them here:
+            //   event-id     ← outbox row id (UUID, unique per outbox entry)
+            //   aggregate-id ← payload.AggregateId.Value (or payload.AggregateId if scalar)
+            var aggregateId = TryExtractAggregateId(entry.Payload) ?? Guid.Empty;
+
             var message = new Message<string, string>
             {
                 Key = entry.CorrelationId.ToString(),
                 Value = entry.Payload,
                 Headers = new Headers
                 {
+                    { "event-id", System.Text.Encoding.UTF8.GetBytes(entry.Id.ToString()) },
+                    { "aggregate-id", System.Text.Encoding.UTF8.GetBytes(aggregateId.ToString()) },
                     { "event-type", System.Text.Encoding.UTF8.GetBytes(entry.EventType) },
                     { "correlation-id", System.Text.Encoding.UTF8.GetBytes(entry.CorrelationId.ToString()) }
                 }
@@ -195,6 +204,41 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                 "Outbox row {OutboxId} promoted to deadletter after {Max} failed attempts. Last error: {Reason}",
                 id, _maxRetryCount, reason);
         }
+    }
+
+    /// <summary>
+    /// Pulls AggregateId out of the JSONB payload. Tolerates two shapes:
+    ///   { "AggregateId": "guid" }
+    ///   { "AggregateId": { "Value": "guid" } }
+    /// Returns null when the field is absent or unparseable — caller falls back to Guid.Empty.
+    /// </summary>
+    private static Guid? TryExtractAggregateId(string payloadJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("AggregateId", out var aggIdElement))
+                return null;
+
+            if (aggIdElement.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(aggIdElement.GetString(), out var directGuid))
+            {
+                return directGuid;
+            }
+
+            if (aggIdElement.ValueKind == JsonValueKind.Object &&
+                aggIdElement.TryGetProperty("Value", out var valueElement) &&
+                valueElement.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(valueElement.GetString(), out var nestedGuid))
+            {
+                return nestedGuid;
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed payload — fall through to null and let caller use Guid.Empty.
+        }
+        return null;
     }
 
     public override void Dispose()
