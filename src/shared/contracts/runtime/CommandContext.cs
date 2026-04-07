@@ -95,6 +95,27 @@ public sealed record CommandContext
         }
     }
 
+    // --- HSID v2.1 (write-once, locked after RuntimeControlPlane prelude) ---
+
+    private string? _hsid;
+    /// <summary>
+    /// Compact HSID v2.1 correlation id of the form
+    /// <c>PPP-LLLL-TTT-TOPOLOGY-SEQ</c>. Stamped exactly once by the
+    /// RuntimeControlPlane prelude before the middleware pipeline runs.
+    /// Locked after first set to preserve replay determinism.
+    /// </summary>
+    public string? Hsid
+    {
+        get => _hsid;
+        set
+        {
+            if (_hsid is not null)
+                throw new InvalidOperationException(
+                    "Hsid is write-once. Already locked to '" + _hsid + "'.");
+            _hsid = value;
+        }
+    }
+
     private string? _policyVersion;
     public string? PolicyVersion
     {

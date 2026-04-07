@@ -1,4 +1,5 @@
 using Whyce.Shared.Contracts.Application.Todo;
+using Whycespace.Domain.ConstitutionalSystem.Policy.Decision;
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Tests.Integration.Setup;
 
@@ -31,22 +32,28 @@ public sealed class TodoPipelineTests
             host.NewTodoContext(aggregateId));
         Assert.True(completeResult.IsSuccess, completeResult.Error);
 
-        // Three events persisted, three chain blocks, three outbox batches.
+        // Three domain events persisted under the Todo aggregate stream
+        // (PolicyEvaluatedEvent now flows to a dedicated policy decision stream
+        // via AuditEmission — see PolicyEventificationTests).
         var stored = host.EventStore.AllEvents(aggregateId);
         Assert.Equal(3, stored.Count);
         Assert.IsType<TodoCreatedEvent>(stored[0]);
         Assert.IsType<TodoUpdatedEvent>(stored[1]);
         Assert.IsType<TodoCompletedEvent>(stored[2]);
+        Assert.DoesNotContain(stored, e => e is PolicyEvaluatedEvent);
 
-        Assert.Equal(3, host.ChainAnchor.Blocks.Count);
-        Assert.Equal(3, host.Outbox.Batches.Count);
+        // Six chain blocks + outbox batches: each command emits one audit batch
+        // (policy decision) THEN one domain batch (todo event).
+        Assert.Equal(6, host.ChainAnchor.Blocks.Count);
+        Assert.Equal(6, host.Outbox.Batches.Count);
+        // Audit batches publish to the dedicated constitutional-system policy topic.
+        Assert.Equal("whyce.constitutional-system.policy.decision.events", host.Outbox.Batches[0].Topic);
+        Assert.Equal("whyce.operational.sandbox.todo.events", host.Outbox.Batches[1].Topic);
 
-        // Outbox topic resolution exercises TopicNameResolver against the real envelope.
-        Assert.Equal("whyce.operational.sandbox.todo.events", host.Outbox.Batches[0].Topic);
     }
 
     [Fact]
-    public async Task PolicyDenial_BlocksExecution()
+    public async Task PolicyDenial_BlocksExecution_But_Records_DeniedEvent()
     {
         var host = TestHost.ForTodo(denyPolicy: true);
         var aggregateId = host.IdGenerator.Generate("todo:denied:1");
@@ -56,8 +63,16 @@ public sealed class TodoPipelineTests
             host.NewTodoContext(aggregateId));
 
         Assert.False(result.IsSuccess);
+
+        // The Todo aggregate stream stays empty — denial blocked the command
+        // before the engine ran. The PolicyDeniedEvent flows to its own
+        // dedicated audit stream (covered by PolicyEventificationTests).
         Assert.Empty(host.EventStore.AllEvents(aggregateId));
-        Assert.Empty(host.ChainAnchor.Blocks);
-        Assert.Empty(host.Outbox.Batches);
+
+        // Audit emission still produces one chain block + one outbox batch on
+        // the constitutional-system policy topic.
+        Assert.Single(host.ChainAnchor.Blocks);
+        var batch = Assert.Single(host.Outbox.Batches);
+        Assert.Equal("whyce.constitutional-system.policy.decision.events", batch.Topic);
     }
 }

@@ -47,32 +47,41 @@ Domain aggregates enforce invariants and raise events.
 Runtime persists, anchors, publishes, projects, and returns the final result upward to Systems and then Platform API.
 
 ## TODO
-- Add failure + compensation flow to Todo workflow
+
 - fix domain entity scattered in code base
 - program.cs file too large lets break it down
-- upgrade todo to trello/kaban style to accomodate lifecycle/workflow
+- fix project dependency
+- connection string in code
+- deteministic id ->
+- HSID means
+- runtime workflow and workflow-state fix
 
-- multistep workflow calling different domain services using todo/incident as case study
-
+- T1M/step/todo
+- kafka need to follow domain classification
 - upgrade runtime
 - 1m RPS upgrade
 
-- deteministic id ->
+
+In-memory <see cref="IStructureRegistry"/> stub.
+
+
+- Add failure + compensation flow to Todo workflow
+- upgrade todo to trello/kaban style to accomodate lifecycle/workflow
+- multistep workflow calling different domain services using todo/incident as case study
+
+##
 - clean domain model
-- fix project dependency
-- connection string in code
 
+## Validation process
+## ------------------------------------
+- TODO in action
+- WORKFLOW STATE COMPLETENESS in acion
+- REPLAY & RESUME IN ACTION
+- WHAT ARE THE FEATURES THAT WE HAVE FOR THIS PHASE 1
+- Deterministic, replay-safe, failure-resumable execution
+- DLQ in actions
 
-
-
-- update the new generated guard rules
-- runtime workflow and workflow-state fix
-
-
-
-
-
-We are not invetorment platform, but platform that help you scale your investment portforlio
+We are not investment platform, but platform that help you scale your investment portforlio
 True economic activities, not extractive activities
 Team work
 African can continue in its complaint tactics
@@ -97,3 +106,15 @@ Program.cs → ModuleLoader → Modules → System
 
 
 Generate Domain E1–E8 Standardization Prompt (Scale 100+ domains safely)
+
+
+
+
+
+
+✔ Deterministic execution
+✔ Policy-enforced pipeline
+✔ Event-sourced state
+✔ Typed replay
+✔ Resume-safe workflows
+✔ End-to-end test validation

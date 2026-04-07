@@ -20,10 +20,11 @@ public sealed class NoOpWorkflowRegistry : IWorkflowRegistry
     public IReadOnlyList<Type>? Resolve(string workflowName) => null;
 }
 
-public sealed class InMemoryWorkflowStateRepository : IWorkflowStateRepository
+public sealed class NoOpWorkflowExecutionReplayService : IWorkflowExecutionReplayService
 {
-    private readonly Dictionary<string, WorkflowStateRecord> _store = new();
-    public Task SaveAsync(WorkflowStateRecord state) { _store[state.WorkflowId] = state; return Task.CompletedTask; }
-    public Task<WorkflowStateRecord?> GetAsync(string workflowId) => Task.FromResult(_store.GetValueOrDefault(workflowId));
-    public Task UpdateAsync(WorkflowStateRecord state) { _store[state.WorkflowId] = state; return Task.CompletedTask; }
+    public Task<WorkflowExecutionReplayState?> ReplayAsync(Guid workflowExecutionId)
+        => throw new InvalidOperationException("NoOpWorkflowExecutionReplayService should not be invoked in non-workflow tests.");
+
+    public Task<object> ResumeAsync(Guid workflowExecutionId)
+        => throw new InvalidOperationException("NoOpWorkflowExecutionReplayService should not be invoked in non-workflow tests.");
 }

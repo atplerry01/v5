@@ -1,19 +1,33 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Whyce.Engines.T1M.Lifecycle;
 using Whyce.Engines.T1M.StepExecutor;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Engines.T1M.WorkflowEngine;
 
+/// <summary>
+/// T1M workflow orchestrator. Executes a workflow definition step-by-step and
+/// emits domain lifecycle events through <see cref="WorkflowLifecycleEventFactory"/>
+/// into the <see cref="IDomainEventSink"/> on the execution context.
+///
+/// The engine NEVER mutates aggregate state directly (engine.guard rule 3).
+/// Lifecycle transitions are produced as event records by the factory; the
+/// runtime drains them through persist → chain → outbox.
+/// </summary>
 public sealed class T1MWorkflowEngine : IWorkflowEngine
 {
     private readonly WorkflowStepExecutor _stepExecutor;
+    private readonly WorkflowLifecycleEventFactory _lifecycleFactory;
 
-    public T1MWorkflowEngine(WorkflowStepExecutor stepExecutor)
+    public T1MWorkflowEngine(
+        WorkflowStepExecutor stepExecutor,
+        WorkflowLifecycleEventFactory lifecycleFactory)
     {
         _stepExecutor = stepExecutor;
+        _lifecycleFactory = lifecycleFactory;
     }
 
     public async Task<WorkflowExecutionResult> ExecuteAsync(
@@ -21,6 +35,12 @@ public sealed class T1MWorkflowEngine : IWorkflowEngine
         WorkflowExecutionContext context)
     {
         var startIndex = context.CurrentStepIndex;
+
+        if (startIndex == 0)
+        {
+            context.EmitEvent(_lifecycleFactory.Started(context.WorkflowId, context.WorkflowName, context.Payload));
+        }
+
         for (var i = startIndex; i < definition.Steps.Count; i++)
         {
             var stepDefinition = definition.Steps[i];
@@ -31,11 +51,7 @@ public sealed class T1MWorkflowEngine : IWorkflowEngine
             if (!stepResult.IsSuccess)
             {
                 var error = stepResult.Error ?? $"Step '{stepDefinition.StepName}' failed.";
-                if (context.StepObserver is not null)
-                {
-                    await context.StepObserver.OnWorkflowFailedAsync(context, stepDefinition.StepName, error);
-                }
-
+                context.EmitEvent(_lifecycleFactory.Failed(context.WorkflowId, stepDefinition.StepName, error));
                 return WorkflowExecutionResult.Failure(stepDefinition.StepName, error);
             }
 
@@ -51,16 +67,11 @@ public sealed class T1MWorkflowEngine : IWorkflowEngine
                 stepDefinition.StepId,
                 stepResult.Output);
 
-            if (context.StepObserver is not null)
-            {
-                await context.StepObserver.OnStepCompletedAsync(context, i, stepDefinition.StepName);
-            }
+            context.EmitEvent(_lifecycleFactory.StepCompleted(
+                context.WorkflowId, i, stepDefinition.StepName, context.ExecutionHash, stepResult.Output));
         }
 
-        if (context.StepObserver is not null)
-        {
-            await context.StepObserver.OnWorkflowCompletedAsync(context);
-        }
+        context.EmitEvent(_lifecycleFactory.Completed(context.WorkflowId, context.ExecutionHash));
 
         return WorkflowExecutionResult.Success(
             context.WorkflowOutput,

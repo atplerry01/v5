@@ -1,0 +1,7 @@
+                  id                  |             aggregate_id             | aggregate_type |     event_type     |                                                  payload                                                  | version |         created_at         
+--------------------------------------+--------------------------------------+----------------+--------------------+-----------------------------------------------------------------------------------------------------------+---------+----------------------------
+ 0a7fbe82-6ec2-fb73-4b85-714511ac2ee8 | 09d35182-feca-7022-5fe3-60ef7509962f | Todo           | TodoCreatedEvent   | {"Title": "Phase1 Gate Todo", "AggregateId": {"Value": "09d35182-feca-7022-5fe3-60ef7509962f"}}           |       0 | 2026-04-07 23:05:53.675824
+ 5c22de6b-c4d4-4308-6b7d-9d142ac2f9aa | 09d35182-feca-7022-5fe3-60ef7509962f | Todo           | TodoUpdatedEvent   | {"Title": "Phase1 Gate Todo (updated)", "AggregateId": {"Value": "09d35182-feca-7022-5fe3-60ef7509962f"}} |       1 | 2026-04-07 23:06:09.891031
+ cecde5f2-7c20-6d38-ef2a-2f79d4aca5dc | 09d35182-feca-7022-5fe3-60ef7509962f | Todo           | TodoCompletedEvent | {"AggregateId": {"Value": "09d35182-feca-7022-5fe3-60ef7509962f"}}                                        |       2 | 2026-04-07 23:06:09.988396
+(3 rows)
+

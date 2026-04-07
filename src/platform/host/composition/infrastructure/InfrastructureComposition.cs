@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.WorkflowState;
 using Whyce.Shared.Contracts.Infrastructure.Chain;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
@@ -65,9 +64,10 @@ public static class InfrastructureComposition
         // --- Idempotency, outbox, workflow state ---
         services.AddSingleton<IIdempotencyStore>(_ =>
             new PostgresIdempotencyStoreAdapter(postgresEventStoreCs));
+        services.AddSingleton<ISequenceStore>(_ =>
+            new PostgresSequenceStoreAdapter(postgresEventStoreCs));
         services.AddSingleton<IOutbox>(_ =>
             new PostgresOutboxAdapter(postgresOutboxCs));
-        services.AddSingleton<IWorkflowStateRepository, WorkflowStateRepository>();
 
         // --- Kafka producer (for outbox relay) ---
         services.AddSingleton<IProducer<string, string>>(_ =>

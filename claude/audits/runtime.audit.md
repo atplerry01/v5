@@ -239,6 +239,16 @@ blocking_violations: {count of CRITICAL/HIGH}
 ### CHECK: R-POLICY-FIRST-01
 Verify policy executes before aggregate load.
 
+### CHECK: R-WF-EVENTIFIED-01 (NEW 2026-04-07)
+- FAIL if `src/runtime/workflow-state/` exists.
+- FAIL if `src/shared/contracts/runtime/IWorkflowStateRepository.cs` or `IWorkflowStepObserver.cs` exists.
+- FAIL if `RuntimeCommandDispatcher` constructor accepts `IWorkflowStateRepository`.
+- FAIL if `WorkflowExecutionContext` exposes a `StepObserver` property.
+- PASS requires the workflow execution lifecycle to be expressed exclusively as domain events emitted by `WorkflowLifecycleEventFactory` in `src/engines/T1M/lifecycle/` and projected by `WorkflowExecutionProjectionHandler` in `src/projections/orchestration-system/workflow/`.
+
+### CHECK: R-WF-RESUME-01 (NEW 2026-04-07)
+- ADVISORY: `WorkflowResumeCommand` returns a structured failure pending introduction of `IWorkflowExecutionReplayService`. Tracked in `claude/new-rules/`.
+
 ## TRACEABILITY REFERENCE — 2026-04-07
 
 MAP: see claude/traceability/guard-traceability.map.md

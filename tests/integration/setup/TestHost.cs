@@ -1,6 +1,11 @@
+using Whyce.Engines.T0U.Determinism;
+using Whyce.Engines.T0U.Determinism.Sequence;
+using Whyce.Engines.T0U.Determinism.Time;
 using Whyce.Engines.T0U.WhyceChain.Engine;
 using Whyce.Engines.T0U.WhyceId.Engine;
 using Whyce.Engines.T0U.WhycePolicy.Engine;
+using Whyce.Runtime.Topology;
+using Whyce.Shared.Kernel.Determinism;
 using Whyce.Engines.T2E.Operational.Todo;
 using Whyce.Runtime.ControlPlane;
 using Whyce.Runtime.Dispatcher;
@@ -113,7 +118,7 @@ public sealed class TestHost
         // Workflow surface (stubbed — Todo doesn't use it)
         var workflowEngine = new NoOpWorkflowEngine();
         var workflowRegistry = new NoOpWorkflowRegistry();
-        var workflowStateRepository = new InMemoryWorkflowStateRepository();
+        var replayService = new NoOpWorkflowExecutionReplayService();
 
         // Real RuntimeCommandDispatcher
         var dispatcher = new RuntimeCommandDispatcher(
@@ -122,8 +127,7 @@ public sealed class TestHost
             eventStore,
             workflowEngine,
             workflowRegistry,
-            workflowStateRepository,
-            clock);
+            replayService);
 
         // Build the locked middleware pipeline via RuntimeControlPlaneBuilder,
         // then wrap each middleware in a RecordingMiddleware so the test can
@@ -134,7 +138,12 @@ public sealed class TestHost
             .UseMetrics(new MetricsMiddleware())
             .UseContextGuard(new ContextGuardMiddleware())
             .UseValidation(new ValidationMiddleware())
-            .UsePolicy(new PolicyMw(whyceIdEngine, whycePolicyEngine, policyEvaluator))
+            .UsePolicy(new PolicyMw(
+                whyceIdEngine,
+                whycePolicyEngine,
+                policyEvaluator,
+                idGenerator,
+                new Whyce.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory()))
             .UseAuthorizationGuard(new AuthorizationGuardMiddleware())
             .UseIdempotency(new IdempotencyMiddleware(idempotencyStore))
             .UseExecutionGuard(new ExecutionGuardMiddleware());
@@ -147,7 +156,20 @@ public sealed class TestHost
             recordedMiddlewares[i] = new RecordingMiddleware(realMiddlewares[i], name, recorder);
         }
 
-        var controlPlane = new RuntimeControlPlane(recordedMiddlewares, dispatcher, eventFabric);
+        // HSID v2.1 hardening — mandatory deterministic identity stack.
+        var hsidEngine = new DeterministicIdEngine(new DeterministicTimeBucketProvider());
+        var sequenceStore = new InMemorySequenceStore();
+        var sequenceResolver = new PersistedSequenceResolver(sequenceStore);
+        var topologyResolver = new TopologyResolver(
+            new InMemoryStructureRegistry(Array.Empty<StructureNode>()));
+
+        var controlPlane = new RuntimeControlPlane(
+            recordedMiddlewares,
+            dispatcher,
+            eventFabric,
+            hsidEngine,
+            sequenceResolver,
+            topologyResolver);
 
         return new TestHost(controlPlane, eventStore, chainAnchor, outbox, recorder, clock, idGenerator);
     }

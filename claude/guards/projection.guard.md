@@ -276,3 +276,25 @@ ENFORCEMENT:
 
 ### RULE: PROJ-DOMAIN-ALIGN-01 — DOMAIN ALIGNED STRUCTURE
 Projections MUST follow domain-aligned folder structure.
+
+---
+
+### RULE: PROJ-WF-EXEC-01 — WORKFLOW EXECUTION PROJECTION (NEW 2026-04-07)
+
+The `src/projections/orchestration-system/workflow/` projection layer is the
+ONLY query source for workflow execution state. Runtime is forbidden from
+persisting, mutating, or caching workflow lifecycle state.
+
+ENFORCEMENT:
+- `WorkflowExecutionProjectionHandler` consumes the four lifecycle event
+  schemas (`WorkflowExecutionStartedEventSchema`, `WorkflowStepCompletedEventSchema`,
+  `WorkflowExecutionCompletedEventSchema`, `WorkflowExecutionFailedEventSchema`)
+  defined in `src/shared/contracts/events/orchestration-system/workflow/`.
+- The handler writes ONLY to `IWorkflowExecutionProjectionStore`
+  (`src/shared/contracts/projections/orchestration-system/workflow/`).
+- Production wiring uses `InMemoryWorkflowExecutionProjectionStore` as a
+  PLACEHOLDER (T-PLACEHOLDER-01) until migration
+  `scripts/migrations/002_create_workflow_execution_projection.sql` is
+  applied and a Postgres-backed adapter is provided.
+- Any runtime-side type that re-introduces a `WorkflowState*` mutator,
+  observer, or in-memory store under `src/runtime/**` is an S1 violation.

@@ -6,8 +6,11 @@ namespace Whycespace.Tests.Integration.Runtime;
 /// <summary>
 /// Witnesses the locked WBSM v3 execution order at runtime by recording each
 /// stage as it executes. The 8 middlewares are wrapped in RecordingMiddleware
-/// inside TestHost; the 3 fabric stages (Persist, Chain, Outbox) record via
-/// the in-memory adapters.
+/// inside TestHost; the fabric stages (Persist, Chain, Outbox) record via the
+/// in-memory adapters. Under WBSM v3.5 policy eventification, the fabric runs
+/// TWICE per command on the allow path: first for the policy AuditEmission
+/// (constitutional-system/policy/decision stream), then for the command's
+/// domain events. Audit always precedes domain.
 ///
 /// This test makes the static guarantees in
 /// claude/audits/runtime-order.audit.md observable at runtime.
@@ -28,8 +31,10 @@ public sealed class ExecutionOrderTest
 
         var observed = host.Recorder.Snapshot();
 
-        // Expected canonical order — 8 middlewares + 3 fabric stages.
+        // Expected canonical order — 8 middlewares + 2 fabric passes.
         // Middleware names match RuntimeControlPlaneBuilder.Build() positions 1..8.
+        // Fabric pass 1: AuditEmission (policy decision stream).
+        // Fabric pass 2: Domain events (command's aggregate stream).
         var expected = new[]
         {
             "Tracing",
@@ -40,6 +45,9 @@ public sealed class ExecutionOrderTest
             "AuthorizationGuard",
             "Idempotency",
             "ExecutionGuard",
+            "Persist",
+            "Chain",
+            "Outbox",
             "Persist",
             "Chain",
             "Outbox"

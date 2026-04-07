@@ -254,6 +254,53 @@ Verify engines:
 - do not call runtime
 - only emit events
 
+### CHECK: E-LIFECYCLE-FACTORY-01 (NEW 2026-04-07)
+- FAIL if any file under `src/engines/T1M/**` calls `WorkflowExecutionAggregate.Start`, `.CompleteStep`, `.Complete`, or `.Fail` (engine.guard rule 3 — T1M MUST NOT mutate domain).
+- PASS requires `T1MWorkflowEngine` to construct lifecycle events via injected `WorkflowLifecycleEventFactory` and emit them through `IDomainEventSink.EmitEvent` on `WorkflowExecutionContext`.
+- The aggregate remains the canonical replay target — its `Apply` method is exercised by event-store replay only, not by T1M execution.
+
+### CHECK-E-RESUME-01 (NEW 2026-04-07)
+- FAIL if `RuntimeCommandDispatcher` (or any other handler of `WorkflowResumeCommand`) reconstructs workflow state from anything other than `IWorkflowExecutionReplayService.ReplayAsync`.
+- FAIL if `WorkflowExecutionReplayService.ReplayAsync` reads from a projection store, read model, or snapshot instead of `IEventStore.LoadEventsAsync`.
+- PASS requires the resume path to: replay → guard `Status == "Running"` → reconstruct definition via `IWorkflowRegistry.Resolve` → call `T1MWorkflowEngine.ExecuteAsync` with a context whose `CurrentStepIndex` equals the replayed `NextStepIndex`.
+
+### CHECK-E-RESUME-02 (NEW 2026-04-07)
+- FAIL if `WorkflowExecutionReplayState.NextStepIndex` is derived from `aggregate.CurrentStepIndex` instead of the count of `WorkflowStepCompletedEvent` instances on the loaded stream (the aggregate field is ambiguous between "started, no steps done" and "step 0 completed").
+- FAIL if any resume path calls a `ResumeAsync`-style method on `IWorkflowEngine` (the engine has no such method by E-RESUME-03; resume MUST go through the existing `ExecuteAsync` with a pre-populated cursor).
+- FAIL if a resumed run re-emits `WorkflowExecutionStartedEvent` (covered by `T1MWorkflowEngine`'s `if (startIndex == 0)` gate; any new resume path must preserve it).
+
+### CHECK-E-STATE-01 (NEW 2026-04-08)
+- FAIL if `WorkflowExecutionStartedEvent` does not carry a `Payload` parameter.
+- FAIL if `T1MWorkflowEngine` does not pass `context.Payload` into `WorkflowLifecycleEventFactory.Started(...)`.
+- FAIL if `WorkflowExecutionBootstrap`'s `WorkflowExecutionStartedEvent` payload-mapper drops `Payload` when constructing `WorkflowExecutionStartedEventSchema`.
+
+### CHECK-E-STATE-02 (NEW 2026-04-08)
+- FAIL if `WorkflowStepCompletedEvent` does not carry an `Output` parameter.
+- FAIL if `T1MWorkflowEngine` does not pass `stepResult.Output` into `WorkflowLifecycleEventFactory.StepCompleted(...)`.
+- FAIL if `WorkflowExecutionBootstrap`'s `WorkflowStepCompletedEvent` payload-mapper drops `Output` when constructing `WorkflowStepCompletedEventSchema`.
+
+### CHECK-E-STATE-03 (NEW 2026-04-08)
+- FAIL if `WorkflowExecutionReplayService.ReplayAsync` does not extract `Payload` from `WorkflowExecutionStartedEvent` into the returned `WorkflowExecutionReplayState.Payload`.
+- FAIL if `WorkflowExecutionReplayService.ReplayAsync` does not populate `WorkflowExecutionReplayState.StepOutputs` from each `WorkflowStepCompletedEvent.Output` keyed on `StepName`.
+- FAIL if `RuntimeCommandDispatcher.ResumeWorkflowAsync` initializes `executionContext.Payload = new object()` instead of `state.Payload ?? new object()`.
+- FAIL if `RuntimeCommandDispatcher.ResumeWorkflowAsync` does not copy `state.StepOutputs` into `executionContext.StepOutputs`.
+
+### CHECK-E-TYPE-01 (NEW 2026-04-07)
+- FAIL if `IPayloadTypeRegistry` is missing from `src/shared/contracts/event-fabric/`.
+- FAIL if `PayloadTypeRegistry` impl is missing from `src/runtime/event-fabric/` or holds a hard-coded list of concrete domain types instead of being populated by `IDomainBootstrapModule.RegisterPayloadTypes`.
+- FAIL if `IDomainBootstrapModule` does not declare `RegisterPayloadTypes(IPayloadTypeRegistry)` (default no-op permitted for back-compat).
+
+### CHECK-E-TYPE-02 (NEW 2026-04-07)
+- FAIL if `WorkflowExecutionStartedEvent` does not carry a `PayloadType` field.
+- FAIL if `WorkflowStepCompletedEvent` does not carry an `OutputType` field.
+- FAIL if `WorkflowLifecycleEventFactory` constructs lifecycle events without consulting `IPayloadTypeRegistry.TryGetName` to populate the discriminator.
+- FAIL if the factory throws when the payload type is unregistered (write side MUST be permissive — emit null discriminator and let replay round-trip as JsonElement).
+
+### CHECK-E-TYPE-03 (NEW 2026-04-07)
+- FAIL if `WorkflowExecutionReplayService.Rehydrate` (or equivalent extraction loop) does not check for `JsonElement` + non-null discriminator and call `IPayloadTypeRegistry.Resolve` to deserialize.
+- FAIL if the typed-payload reconstruction code lives anywhere under `src/runtime/event-fabric/` or `src/platform/host/adapters/` — runtime.guard 11.R-DOM-01 forbids concrete domain references in those paths; the seam MUST be in the engine layer.
+- FAIL if `IPayloadTypeRegistry.Resolve` is called with a non-strict fallback (e.g. swallowing the unknown-type exception) — read side MUST fail fast.
+
 ## TRACEABILITY REFERENCE — 2026-04-07
 
 MAP: see claude/traceability/guard-traceability.map.md

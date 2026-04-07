@@ -189,6 +189,22 @@ ENGINE_GUARD_VIOLATION:
 - **E-VERSION-01**: Aggregate event versions MUST strictly increment (newVersion = currentVersion + 1). Engines MUST load prior aggregate state before applying mutating commands. Persistence layer MUST persist supplied version, not default/reset to 0.
 - **E-STEP-02**: T1M steps SHOULD aggregate intent results, NOT dispatch new commands via ISystemIntentDispatcher. Re-entry from step->runtime->engine requires explicit architectural approval.
 
+- **E-LIFECYCLE-FACTORY-01** (NEW 2026-04-07): T1M MUST NOT call mutating methods on `WorkflowExecutionAggregate` (or any other aggregate) directly — that would violate rule 3 ("T1M: NO DIRECT DOMAIN MUTATION"). Lifecycle events are produced via `WorkflowLifecycleEventFactory` (located at `src/engines/T1M/lifecycle/`), which constructs the event records itself. The aggregate exists solely as the canonical replay target (its `Apply` method reconstructs state from those events). Severity S1.
+
+- **E-RESUME-01** (NEW 2026-04-07): Workflow resume MUST be driven by `IWorkflowExecutionReplayService` (replay-from-events). Direct state restoration from any read model, projection, or snapshot is forbidden. The replay service lives at `src/engines/T1M/lifecycle/WorkflowExecutionReplayService.cs` and may reference `Whycespace.Domain.OrchestrationSystem.Workflow.Execution.*` because it lives in the engine layer; the runtime dispatcher consumes only the shared contract `IWorkflowExecutionReplayService` + `WorkflowExecutionReplayState` DTO. Severity S1.
+
+- **E-RESUME-02** (NEW 2026-04-07): Resume MUST continue from the deterministic next-step cursor — defined as the count of `WorkflowStepCompletedEvent` instances on the loaded event stream. Resume MUST NOT re-execute already-completed steps. The aggregate's `CurrentStepIndex` is INSUFFICIENT as a cursor on its own because it collapses "started, no steps done" and "step 0 completed" to the same value; the replay service exposes `NextStepIndex` which is unambiguous. Severity S1.
+
+- **E-RESUME-03** (NEW 2026-04-07): Resume MUST go through `T1MWorkflowEngine.ExecuteAsync` with `WorkflowExecutionContext.CurrentStepIndex` pre-populated from the replayed cursor. Adding a parallel `IWorkflowEngine.ResumeAsync` is forbidden — it would duplicate the lifecycle-event emission contract enforced by E-LIFECYCLE-FACTORY-01. The engine's existing gate (`if (startIndex == 0) EmitEvent(Started)`) ensures a resumed run does NOT re-emit `WorkflowExecutionStartedEvent`. Severity S1.
+
+- **E-STATE-01** (NEW 2026-04-08): `WorkflowExecutionStartedEvent` MUST carry the original `Payload` (typed as `object?`, default null for back-compat). The T1M engine MUST pass `context.Payload` into `WorkflowLifecycleEventFactory.Started(...)`. Without this, replay cannot reconstruct the original input and `WorkflowResumeCommand` cannot resume payload-dependent steps. Severity S1.
+
+- **E-STATE-02** (NEW 2026-04-08): `WorkflowStepCompletedEvent` MUST carry the step's `Output` (typed as `object?`, default null for back-compat). The T1M engine MUST pass `stepResult.Output` into `WorkflowLifecycleEventFactory.StepCompleted(...)`. Without this, replay cannot reconstruct `WorkflowExecutionContext.StepOutputs` and downstream steps that read prior outputs cannot be resumed. Severity S1.
+
+- **E-STATE-03** (NEW 2026-04-08): `IWorkflowExecutionReplayService.ReplayAsync` MUST reconstruct both `Payload` (from the started event) and `StepOutputs` (a dictionary keyed on `StepName`, populated from each `WorkflowStepCompletedEvent.Output`). The dispatcher resume path MUST populate `WorkflowExecutionContext.Payload` and copy each `state.StepOutputs` entry into `executionContext.StepOutputs` (init-only on the property, member-mutable). Severity S1.
+
+  CAVEAT (not yet a guard): `Payload`/`Output` are statically `object?`, so `PostgresEventStoreAdapter`'s `JsonSerializer.Serialize(evt, evt.GetType())` round-trips them as `JsonElement` on Postgres-backed replay. In-process / in-memory replay preserves the original CLR reference. A typed-payload registry is required for typed Postgres-backed resume — tracked in `claude/new-rules/20260407-230000-workflow-resume-payload-and-test-coverage.md`.
+
 ## NEW RULES INTEGRATED — 2026-04-07 (NORMALIZATION)
 
 ### RULE: ENG-PURITY-01 — ENGINE PURITY (T2E)
@@ -208,3 +224,13 @@ Each engine MUST map to a single domain aggregate.
 ENFORCEMENT:
 - No cross-domain logic inside a single engine
 - One engine = one domain responsibility
+
+---
+
+## NEW RULES INTEGRATED — 2026-04-07 (H10 TYPE SAFETY)
+
+- **E-TYPE-01** (NEW 2026-04-07): Any CLR type that flows through a workflow lifecycle event as `Payload` or step `Output` MUST be registered in `IPayloadTypeRegistry` via the owning `IDomainBootstrapModule.RegisterPayloadTypes`. Unregistered types round-trip as `JsonElement` on Postgres-backed replay (current legacy behavior, preserved for back-compat) and CANNOT be consumed by resumed steps that expect a typed object. Severity S1.
+
+- **E-TYPE-02** (NEW 2026-04-07): `WorkflowExecutionStartedEvent` and `WorkflowStepCompletedEvent` MUST carry `PayloadType` / `OutputType` discriminator strings stamped by `WorkflowLifecycleEventFactory` at write time when (a) the payload/output is non-null and (b) the type is registered in `IPayloadTypeRegistry`. The factory MUST consult the registry via `TryGetName` and emit a null discriminator on miss (back-compat), never throw. Severity S1.
+
+- **E-TYPE-03** (NEW 2026-04-07): `WorkflowExecutionReplayService.ReplayAsync` MUST rehydrate `Payload` and step `Output` values from `JsonElement` back into the registered CLR type when (a) the value is a `JsonElement` and (b) the corresponding `PayloadType` / `OutputType` discriminator is non-null. Resolution MUST go through `IPayloadTypeRegistry.Resolve` (strict — throws on unknown). The deserialization seam MUST live in the engine layer (`src/engines/T1M/lifecycle/`), NOT in `src/runtime/event-fabric/EventDeserializer` or `src/platform/host/adapters/PostgresEventStoreAdapter` (runtime.guard 11.R-DOM-01 forbids concrete domain references in those paths). Severity S1.

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Contracts.Engine;
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Platform.Host.Composition;
@@ -35,4 +36,13 @@ public interface IDomainBootstrapModule
     void RegisterEngines(IEngineRegistry engine);
 
     void RegisterWorkflows(IWorkflowRegistry workflow);
+
+    /// <summary>
+    /// Registers CLR types that may appear as opaque <c>object?</c> Payload or
+    /// step Output values on this domain's workflow lifecycle events. Without
+    /// registration the type round-trips as <c>JsonElement</c> on Postgres-backed
+    /// replay (current behavior). With registration the deserializer rehydrates
+    /// it back into the original CLR type. Default no-op for back-compat.
+    /// </summary>
+    void RegisterPayloadTypes(IPayloadTypeRegistry registry) { }
 }

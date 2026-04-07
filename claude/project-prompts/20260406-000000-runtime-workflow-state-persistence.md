@@ -1,3 +1,16 @@
+# STATUS: SUPERSEDED — 2026-04-07
+# SUPERSEDED BY: 20260407-210000-runtime-workflow-state-eventification.md
+#
+# All artifacts produced by this prompt (`src/runtime/workflow-state/`,
+# `IWorkflowStateRepository`, `IWorkflowStepObserver`, `WorkflowStateObserver`,
+# `WorkflowStateRepository`, the runtime workflow_state migration) have been
+# REMOVED. The runtime no longer owns workflow state — lifecycle transitions
+# are domain events emitted by the T1M `WorkflowLifecycleEventFactory` and
+# projected by `WorkflowExecutionProjectionHandler` in `src/projections/`.
+# Reason: violated runtime layer purity ($7) by storing domain lifecycle as
+# the source of truth inside `src/runtime/`. See R-WF-OBSERVER-01 (revoked)
+# and R-WF-EVENTIFIED-01 (new) in claude/guards/runtime.guard.md.
+
 # TITLE
 WBSM v3.5 — Workflow State Persistence (Runtime Control Plane)
 

@@ -1,8 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Whyce.Engines.T0U.Determinism;
+using Whyce.Engines.T0U.Determinism.Sequence;
+using Whyce.Engines.T0U.Determinism.Time;
+using Whyce.Platform.Host.Bootstrap;
+using Whyce.Runtime.Topology;
 using Whyce.Engines.T0U.WhyceChain.Engine;
 using Whyce.Engines.T0U.WhyceId.Engine;
 using Whyce.Engines.T0U.WhycePolicy.Engine;
+using Whyce.Shared.Kernel.Determinism;
+using Whyce.Engines.T1M.Lifecycle;
 using Whyce.Engines.T1M.StepExecutor;
 using Whyce.Engines.T1M.WorkflowEngine;
 using Whyce.Runtime.ControlPlane;
@@ -14,9 +21,12 @@ using Whyce.Runtime.Middleware.Observability;
 using Whyce.Runtime.Middleware.PostPolicy;
 using Whyce.Runtime.Middleware.PrePolicy;
 using Whyce.Shared.Contracts.Engine;
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 using Whyce.Shared.Contracts.Infrastructure.Policy;
+using Whyce.Shared.Contracts.Policy;
 using Whyce.Shared.Contracts.Runtime;
+using Whyce.Shared.Kernel.Domain;
 using RuntimeMiddleware = Whyce.Runtime.Middleware.IMiddleware;
 using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
 
@@ -43,14 +53,53 @@ public static class RuntimeComposition
             return registry;
         });
 
+        // HSID v2.1 — parallel deterministic identity seam (see
+        // claude/new-rules/20260407-200000-hsid-v2.1-parallel-seam.md).
+        // Stateless engine + persisted sequence resolver (ISequenceStore is
+        // registered by InfrastructureComposition). Topology resolver is
+        // backed by an in-memory structure registry stub until the canonical
+        // constitutional registry is wired in.
+        services.AddSingleton<ITimeBucketProvider, DeterministicTimeBucketProvider>();
+        services.AddSingleton<ISequenceResolver, PersistedSequenceResolver>();
+        services.AddSingleton<IDeterministicIdEngine, DeterministicIdEngine>();
+        services.AddSingleton<IStructureRegistry>(_ =>
+            new InMemoryStructureRegistry(Array.Empty<StructureNode>()));
+        services.AddSingleton<ITopologyResolver, TopologyResolver>();
+
+        // HSID v2.1 H7 — fail-fast infrastructure validator. Resolved once
+        // by Program.cs at host start; throws if hsid_sequences table is
+        // missing or drifted (deterministic-id.guard.md G19/G20).
+        services.AddSingleton<HsidInfrastructureValidator>();
+
         // Engines — T0U (identity + policy + chain, constitutional layer — all stateless)
         services.AddTransient<WhyceChainEngine>();
         services.AddTransient<WhyceIdEngine>();
         services.AddTransient(_ => new WhycePolicyEngine());
 
+        // Policy decision event factory — engine-layer constructor for policy
+        // domain events (runtime middleware cannot reference Whycespace.Domain.*).
+        services.AddSingleton<IPolicyDecisionEventFactory, Whyce.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory>();
+
+        // Payload type registry — populated by domain bootstrap modules,
+        // consumed by WorkflowLifecycleEventFactory (write side stamps
+        // PayloadType/OutputType discriminators) and by
+        // WorkflowExecutionReplayService (read side rehydrates JsonElement
+        // back into typed CLR objects). Domain-agnostic per
+        // runtime.guard 11.R-DOM-01. See engine.guard E-TYPE-01..03.
+        services.AddSingleton<IPayloadTypeRegistry>(sp =>
+        {
+            var registry = new PayloadTypeRegistry();
+            foreach (var module in sp.GetServices<IDomainBootstrapModule>())
+                module.RegisterPayloadTypes(registry);
+            registry.Lock();
+            return registry;
+        });
+
         // Engines — T1M (workflow orchestration)
         services.AddTransient<WorkflowStepExecutor>();
+        services.AddSingleton<WorkflowLifecycleEventFactory>();
         services.AddSingleton<IWorkflowEngine, T1MWorkflowEngine>();
+        services.AddSingleton<IWorkflowExecutionReplayService, WorkflowExecutionReplayService>();
 
         // T1M workflow steps and T2E engines are registered by domain bootstrap modules.
 
@@ -60,7 +109,9 @@ public static class RuntimeComposition
             var policyMiddleware = new PolicyMw(
                 sp.GetRequiredService<WhyceIdEngine>(),
                 sp.GetRequiredService<WhycePolicyEngine>(),
-                sp.GetRequiredService<IPolicyEvaluator>());
+                sp.GetRequiredService<IPolicyEvaluator>(),
+                sp.GetRequiredService<IIdGenerator>(),
+                sp.GetRequiredService<IPolicyDecisionEventFactory>());
 
             var idempotencyMiddleware = new IdempotencyMiddleware(
                 sp.GetRequiredService<IIdempotencyStore>());
@@ -94,7 +145,10 @@ public static class RuntimeComposition
             new RuntimeControlPlane(
                 sp.GetRequiredService<IReadOnlyList<RuntimeMiddleware>>(),
                 sp.GetRequiredService<ICommandDispatcher>(),
-                sp.GetRequiredService<IEventFabric>()));
+                sp.GetRequiredService<IEventFabric>(),
+                sp.GetRequiredService<IDeterministicIdEngine>(),
+                sp.GetRequiredService<ISequenceResolver>(),
+                sp.GetRequiredService<ITopologyResolver>()));
 
         // Command dispatcher (pure router) + system intent dispatcher
         services.AddSingleton<ICommandDispatcher, Whyce.Runtime.Dispatcher.RuntimeCommandDispatcher>();

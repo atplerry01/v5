@@ -44,9 +44,44 @@ public sealed class EventFabric : IEventFabric
         _clock = clock;
     }
 
-    public async Task ProcessAsync(IReadOnlyList<object> domainEvents, CommandContext context)
+    public Task ProcessAsync(IReadOnlyList<object> domainEvents, CommandContext context) =>
+        ProcessInternalAsync(
+            domainEvents,
+            context,
+            aggregateIdOverride: null,
+            classificationOverride: null,
+            contextOverride: null,
+            domainOverride: null);
+
+    /// <summary>
+    /// Processes an audit emission with explicit routing overrides. Used by the
+    /// runtime control plane for policy decision events that must be persisted
+    /// to a dedicated stream and published to a dedicated topic, isolated from
+    /// the command's domain aggregate stream.
+    /// </summary>
+    public Task ProcessAuditAsync(AuditEmission audit, CommandContext context) =>
+        ProcessInternalAsync(
+            audit.Events,
+            context,
+            aggregateIdOverride: audit.AggregateId,
+            classificationOverride: audit.Classification,
+            contextOverride: audit.Context,
+            domainOverride: audit.Domain);
+
+    private async Task ProcessInternalAsync(
+        IReadOnlyList<object> domainEvents,
+        CommandContext context,
+        Guid? aggregateIdOverride,
+        string? classificationOverride,
+        string? contextOverride,
+        string? domainOverride)
     {
         if (domainEvents.Count == 0) return;
+
+        var aggregateId = aggregateIdOverride ?? context.AggregateId;
+        var classification = classificationOverride ?? context.Classification;
+        var ctxName = contextOverride ?? context.Context;
+        var domainName = domainOverride ?? context.Domain;
 
         var policyHash = context.PolicyDecisionHash ?? string.Empty;
         var executionHash = ExecutionHash.Compute(context, domainEvents);
@@ -63,7 +98,7 @@ public sealed class EventFabric : IEventFabric
             {
                 EventId = EventEnvelope.GenerateDeterministicId(
                     context.CorrelationId, eventTypeName, i),
-                AggregateId = context.AggregateId,
+                AggregateId = aggregateId,
                 CorrelationId = context.CorrelationId,
                 EventType = eventTypeName,
                 EventName = schema.EventName,
@@ -74,9 +109,9 @@ public sealed class EventFabric : IEventFabric
                 PolicyHash = policyHash,
                 Timestamp = _clock.UtcNow,
                 SequenceNumber = i,
-                Classification = context.Classification,
-                Context = context.Context,
-                Domain = context.Domain
+                Classification = classification,
+                Context = ctxName,
+                Domain = domainName
             });
         }
 
@@ -84,7 +119,7 @@ public sealed class EventFabric : IEventFabric
         var topic = _topicNameResolver.Resolve(envelopes[0], "events");
 
         // Step 2: Persist to EventStore (source of truth)
-        await _eventStoreService.AppendAsync(context.AggregateId, domainEvents);
+        await _eventStoreService.AppendAsync(aggregateId, domainEvents);
 
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
         await _chainAnchorService.AnchorAsync(context.CorrelationId, domainEvents, policyHash);

@@ -2,9 +2,12 @@ using Whyce.Engines.T0U.WhyceId.Command;
 using Whyce.Engines.T0U.WhyceId.Engine;
 using Whyce.Engines.T0U.WhycePolicy.Command;
 using Whyce.Engines.T0U.WhycePolicy.Engine;
+using Whyce.Runtime.Deterministic;
 using Whyce.Runtime.Middleware;
 using Whyce.Shared.Contracts.Infrastructure.Policy;
+using Whyce.Shared.Contracts.Policy;
 using Whyce.Shared.Contracts.Runtime;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Runtime.Middleware.Policy;
 
@@ -26,12 +29,21 @@ public sealed class PolicyMiddleware : IMiddleware
     private readonly WhyceIdEngine _whyceIdEngine;
     private readonly WhycePolicyEngine _whycePolicyEngine;
     private readonly IPolicyEvaluator _policyEvaluator;
+    private readonly IIdGenerator _idGenerator;
+    private readonly IPolicyDecisionEventFactory _decisionEventFactory;
 
-    public PolicyMiddleware(WhyceIdEngine whyceIdEngine, WhycePolicyEngine whycePolicyEngine, IPolicyEvaluator policyEvaluator)
+    public PolicyMiddleware(
+        WhyceIdEngine whyceIdEngine,
+        WhycePolicyEngine whycePolicyEngine,
+        IPolicyEvaluator policyEvaluator,
+        IIdGenerator idGenerator,
+        IPolicyDecisionEventFactory decisionEventFactory)
     {
         _whyceIdEngine = whyceIdEngine;
         _whycePolicyEngine = whycePolicyEngine;
         _policyEvaluator = policyEvaluator;
+        _idGenerator = idGenerator;
+        _decisionEventFactory = decisionEventFactory;
     }
 
     public async Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
@@ -70,8 +82,29 @@ public sealed class PolicyMiddleware : IMiddleware
         var opaDecision = await _policyEvaluator.EvaluateAsync(policyPath, command, opaContext);
         if (!opaDecision.IsAllowed)
         {
+            // OPA-deny is also a governed decision and MUST emit audit. The
+            // OPA decision hash is treated as canonical for this branch since
+            // the constitutional WhycePolicyEngine never runs.
+            context.PolicyDecisionAllowed = false;
+            context.PolicyDecisionHash = opaDecision.DecisionHash;
+            context.PolicyVersion = opaDecision.PolicyId;
+
+            var opaAuditAggregateId = _idGenerator.Generate($"policy-audit-stream:{context.CommandId}");
+            var opaDenyEmission = _decisionEventFactory.CreateDeniedEmission(
+                eventId: _idGenerator.Generate($"{context.CommandId}:PolicyDeniedEvent"),
+                aggregateId: opaAuditAggregateId,
+                identityId: authResult.Identity.IdentityId,
+                policyName: context.PolicyId,
+                decisionHash: opaDecision.DecisionHash,
+                executionHash: ExecutionHash.Compute(context, Array.Empty<object>()),
+                policyVersion: opaDecision.PolicyId,
+                commandId: context.CommandId,
+                correlationId: context.CorrelationId,
+                causationId: context.CausationId);
+
             return CommandResult.Failure(
-                $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.");
+                $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.")
+                with { AuditEmission = opaDenyEmission };
         }
 
         // Step 4: Evaluate constitutional policy via WhycePolicyEngine (T0U)
@@ -91,13 +124,58 @@ public sealed class PolicyMiddleware : IMiddleware
         context.PolicyDecisionHash = policyResult.DecisionHash;
         context.PolicyVersion = policyResult.PolicyVersion;
 
-        // Step 5: Policy deny = HARD STOP
+        // Step 5: Build the dedicated audit stream coordinate. Deterministic
+        // seed → IIdGenerator → Guid. Same seed yields the same aggregate id
+        // on replay so the audit stream is reproducible.
+        var auditAggregateId = _idGenerator.Generate($"policy-audit-stream:{context.CommandId}");
+        var policyVersion = policyResult.PolicyVersion ?? "none";
+
+        // Step 6: Policy deny = HARD STOP. The denial is recorded via an
+        // AuditEmission so it flows to the dedicated policy decision stream
+        // (constitutional-system/policy/decision) — independent of the command's
+        // aggregate. Satisfies POL-AUDIT-01 / POLICY-NO-SILENT-DECISION-01.
         if (!policyResult.IsCompliant)
         {
+            var denyEmission = _decisionEventFactory.CreateDeniedEmission(
+                eventId: _idGenerator.Generate($"{context.CommandId}:PolicyDeniedEvent"),
+                aggregateId: auditAggregateId,
+                identityId: authResult.Identity.IdentityId,
+                policyName: context.PolicyId,
+                decisionHash: policyResult.DecisionHash,
+                executionHash: ExecutionHash.Compute(context, Array.Empty<object>()),
+                policyVersion: policyVersion,
+                commandId: context.CommandId,
+                correlationId: context.CorrelationId,
+                causationId: context.CausationId);
+
             return CommandResult.Failure(
-                $"WHYCEPOLICY denied: {policyResult.DenialReason ?? "execution not permitted"}. No bypass allowed.");
+                $"WHYCEPOLICY denied: {policyResult.DenialReason ?? "execution not permitted"}. No bypass allowed.")
+                with { AuditEmission = denyEmission };
         }
 
-        return await next();
+        // Step 7: ALLOW path. Build the AuditEmission BEFORE dispatching the
+        // remainder of the pipeline so the audit record is unconditional —
+        // attached even if a downstream middleware or the engine fails. The
+        // fabric routes it to the dedicated policy decision stream (NOT the
+        // command's aggregate stream). Determinism: every field is sourced
+        // from upstream context; EventId is derived deterministically from
+        // CommandId so replay reproduces the identical record.
+        var allowEmission = _decisionEventFactory.CreateEvaluatedEmission(
+            eventId: _idGenerator.Generate($"{context.CommandId}:PolicyEvaluatedEvent"),
+            aggregateId: auditAggregateId,
+            identityId: authResult.Identity.IdentityId,
+            policyName: context.PolicyId,
+            decisionHash: policyResult.DecisionHash,
+            executionHash: ExecutionHash.Compute(context, Array.Empty<object>()),
+            policyVersion: policyVersion,
+            commandId: context.CommandId,
+            correlationId: context.CorrelationId,
+            causationId: context.CausationId);
+
+        var innerResult = await next();
+
+        // Audit emission overrides any AuditEmission set downstream — policy
+        // decision is the canonical audit for this execution.
+        return innerResult with { AuditEmission = allowEmission };
     }
 }

@@ -14,4 +14,11 @@ namespace Whyce.Runtime.EventFabric;
 public interface IEventFabric
 {
     Task ProcessAsync(IReadOnlyList<object> domainEvents, CommandContext context);
+
+    /// <summary>
+    /// Processes an audit emission with explicit aggregate-id and routing
+    /// overrides. Used for cross-cutting events (e.g. policy decisions) that
+    /// must be persisted to a stream distinct from the command's aggregate.
+    /// </summary>
+    Task ProcessAuditAsync(AuditEmission audit, CommandContext context);
 }

@@ -1,6 +1,6 @@
 namespace Whyce.Shared.Contracts.Runtime;
 
-public sealed class WorkflowExecutionContext
+public sealed class WorkflowExecutionContext : IDomainEventSink
 {
     public required Guid WorkflowId { get; init; }
     public required Guid CorrelationId { get; init; }
@@ -15,5 +15,10 @@ public sealed class WorkflowExecutionContext
     public string ExecutionHash { get; set; } = string.Empty;
     public string? IdentityId { get; set; }
     public string? PolicyDecision { get; set; }
-    public IWorkflowStepObserver? StepObserver { get; set; }
+
+    public IReadOnlyList<object> EmittedEvents => AccumulatedEvents.AsReadOnly();
+
+    public void EmitEvent(object domainEvent) => AccumulatedEvents.Add(domainEvent);
+
+    public void EmitEvents(IEnumerable<object> domainEvents) => AccumulatedEvents.AddRange(domainEvents);
 }

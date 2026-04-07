@@ -1,4 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
+using Whyce.Platform.Host.Bootstrap;
 using Whyce.Platform.Host.Composition;
 using Whyce.Platform.Host.Composition.Loader;
 
@@ -23,6 +25,15 @@ foreach (var module in BootstrapModuleCatalog.All)
 builder.Services.LoadModules(builder.Configuration);
 
 var app = builder.Build();
+
+// HSID v2.1 H7 — fail-fast infrastructure gate. Verifies the hsid_sequences
+// table exists before any HTTP traffic is accepted. Missing migration =
+// host refuses to start. See deterministic-id.guard.md G19/G20.
+using (var scope = app.Services.CreateScope())
+{
+    var validator = scope.ServiceProvider.GetRequiredService<HsidInfrastructureValidator>();
+    await validator.ValidateAsync();
+}
 
 // HTTP observability middleware (Prometheus) — before routing
 app.UseMiddleware<Whyce.Runtime.Observability.HttpMetricsMiddleware>();
