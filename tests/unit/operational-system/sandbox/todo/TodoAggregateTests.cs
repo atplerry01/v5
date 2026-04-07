@@ -1,14 +1,17 @@
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Unit.OperationalSystem.Sandbox.Todo;
 
 public sealed class TodoAggregateTests
 {
+    private static readonly TestIdGenerator IdGen = new();
+
     [Fact]
     public void Create_WithValidTitle_RaisesTodoCreatedEvent()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Create_Valid:id"));
 
         var aggregate = TodoAggregate.Create(id, "Buy groceries");
 
@@ -22,7 +25,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void Create_WithEmptyTitle_Throws()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Create_Empty:id"));
 
         Assert.Throws<DomainInvariantViolationException>(() =>
             TodoAggregate.Create(id, ""));
@@ -31,7 +34,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void Update_WithValidTitle_RaisesTodoUpdatedEvent()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Update_Valid:id"));
         var aggregate = TodoAggregate.Create(id, "Original");
         aggregate.ClearDomainEvents();
 
@@ -46,7 +49,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void Update_WhenCompleted_Throws()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Update_Completed:id"));
         var aggregate = TodoAggregate.Create(id, "Task");
         aggregate.Complete();
 
@@ -57,7 +60,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void Complete_RaisesTodoCompletedEvent()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Complete:id"));
         var aggregate = TodoAggregate.Create(id, "Task");
         aggregate.ClearDomainEvents();
 
@@ -71,7 +74,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void Complete_WhenAlreadyCompleted_Throws()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:Complete_Already:id"));
         var aggregate = TodoAggregate.Create(id, "Task");
         aggregate.Complete();
 
@@ -82,7 +85,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void LoadFromHistory_ReconstitutesState()
     {
-        var aggregateId = new AggregateId(Guid.NewGuid());
+        var aggregateId = new AggregateId(IdGen.Generate("TodoAggregateTests:LoadFromHistory:id"));
         var events = new object[]
         {
             new TodoCreatedEvent(aggregateId, "Test"),
@@ -101,7 +104,7 @@ public sealed class TodoAggregateTests
     [Fact]
     public void FullLifecycle_Create_Update_Complete()
     {
-        var id = new TodoId(Guid.NewGuid());
+        var id = new TodoId(IdGen.Generate("TodoAggregateTests:FullLifecycle:id"));
 
         var aggregate = TodoAggregate.Create(id, "Initial");
         aggregate.Update("Modified");

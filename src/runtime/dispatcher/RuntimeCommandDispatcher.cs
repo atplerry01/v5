@@ -114,7 +114,10 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         var result = await _workflowEngine.ExecuteAsync(definition, executionContext);
 
         return result.IsSuccess
-            ? CommandResult.Success(result.EmittedEvents, result.Output, eventsRequirePersistence: false)
+            ? CommandResult.Success(
+                result.EmittedEvents,
+                result.Output,
+                eventsRequirePersistence: result.EmittedEvents != null && result.EmittedEvents.Count > 0)
             : CommandResult.Failure(
                 $"Workflow '{command.WorkflowName}' failed at step '{result.FailedStep}': {result.Error}");
     }
@@ -188,7 +191,10 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         var result = await _workflowEngine.ExecuteAsync(definition, executionContext);
 
         return result.IsSuccess
-            ? CommandResult.Success(result.EmittedEvents, result.Output, eventsRequirePersistence: false)
+            ? CommandResult.Success(
+                result.EmittedEvents,
+                result.Output,
+                eventsRequirePersistence: result.EmittedEvents != null && result.EmittedEvents.Count > 0)
             : CommandResult.Failure(
                 $"Workflow '{stateRecord.WorkflowName}' failed at step '{result.FailedStep}': {result.Error}");
     }

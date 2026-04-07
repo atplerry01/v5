@@ -25,6 +25,11 @@ public sealed class TodoProjectionHandler :
 
     private readonly string _connectionString;
 
+    // Carries the current envelope's correlation id into the per-type
+    // HandleAsync overloads. Safe because ExecutionPolicy is Inline —
+    // each envelope is fully processed before the next is dispatched.
+    private Guid _currentCorrelationId = Guid.Empty;
+
     public TodoProjectionHandler(string connectionString)
     {
         _connectionString = connectionString;
@@ -32,15 +37,19 @@ public sealed class TodoProjectionHandler :
 
     public Whyce.Runtime.Projection.ProjectionExecutionPolicy ExecutionPolicy => Whyce.Runtime.Projection.ProjectionExecutionPolicy.Inline;
 
-    public Task HandleAsync(EventEnvelope envelope) => envelope.Payload switch
+    public Task HandleAsync(EventEnvelope envelope)
     {
-        TodoCreatedEventSchema created => HandleAsync(created),
-        TodoUpdatedEventSchema updated => HandleAsync(updated),
-        TodoCompletedEventSchema completed => HandleAsync(completed),
-        _ => throw new InvalidOperationException(
-            $"TodoProjectionHandler received unmatched event type: {envelope.Payload.GetType().Name}. " +
-            $"EventId={envelope.EventId}, EventType={envelope.EventType}.")
-    };
+        _currentCorrelationId = envelope.CorrelationId;
+        return envelope.Payload switch
+        {
+            TodoCreatedEventSchema created => HandleAsync(created),
+            TodoUpdatedEventSchema updated => HandleAsync(updated),
+            TodoCompletedEventSchema completed => HandleAsync(completed),
+            _ => throw new InvalidOperationException(
+                $"TodoProjectionHandler received unmatched event type: {envelope.Payload.GetType().Name}. " +
+                $"EventId={envelope.EventId}, EventType={envelope.EventType}.")
+        };
+    }
 
     public async Task HandleAsync(TodoCreatedEventSchema e)
     {
@@ -103,7 +112,7 @@ public sealed class TodoProjectionHandler :
         cmd.Parameters.AddWithValue("aggType", AggregateType);
         cmd.Parameters.AddWithValue("state", stateJson);
         cmd.Parameters.AddWithValue("eventType", lastEventType);
-        cmd.Parameters.AddWithValue("corrId", Guid.Empty);
+        cmd.Parameters.AddWithValue("corrId", _currentCorrelationId);
 
         await cmd.ExecuteNonQueryAsync();
     }

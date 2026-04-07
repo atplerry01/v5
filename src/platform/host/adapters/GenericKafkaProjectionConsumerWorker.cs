@@ -71,10 +71,30 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var correlationId = ExtractHeader(result.Message.Headers, "correlation-id");
+                var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");
+                var aggregateIdHeader = ExtractHeader(result.Message.Headers, "aggregate-id");
                 var rawPayload = result.Message.Value;
 
                 if (string.IsNullOrEmpty(eventType))
                 {
+                    consumer.Commit(result);
+                    continue;
+                }
+
+                // Kafka guard rule 11 + Phase-2 envelope-truth: projection envelopes MUST
+                // reflect the original event's identity. Missing identity headers indicate
+                // a malformed message; log + commit + skip (mirrors event-type behavior).
+                if (string.IsNullOrEmpty(eventIdHeader) || string.IsNullOrEmpty(aggregateIdHeader))
+                {
+                    Console.WriteLine($"[KAFKA] Missing event-id/aggregate-id headers on {_topic} for {eventType}; skipping.");
+                    consumer.Commit(result);
+                    continue;
+                }
+
+                if (!Guid.TryParse(eventIdHeader, out var parsedEventId) ||
+                    !Guid.TryParse(aggregateIdHeader, out var parsedAggregateId))
+                {
+                    Console.WriteLine($"[KAFKA] Unparseable event-id/aggregate-id headers on {_topic} for {eventType}; skipping.");
                     consumer.Commit(result);
                     continue;
                 }
@@ -85,8 +105,8 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 
                 var envelope = new EventEnvelope
                 {
-                    EventId = Guid.Empty,
-                    AggregateId = Guid.Empty,
+                    EventId = parsedEventId,
+                    AggregateId = parsedAggregateId,
                     CorrelationId = Guid.TryParse(correlationId, out var cid) ? cid : Guid.Empty,
                     EventType = eventType,
                     EventName = eventType,

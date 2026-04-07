@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\src\domain\Whycespace.Domain.csproj" />
     <ProjectReference Include="..\..\src\shared\Whycespace.Shared.csproj" />
     <ProjectReference Include="..\..\src\engines\Whycespace.Engines.csproj" />
+    <ProjectReference Include="..\shared\Whycespace.Tests.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

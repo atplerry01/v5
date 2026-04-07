@@ -3,16 +3,19 @@ using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Unit.OperationalSystem.Sandbox.Todo;
 
 public sealed class TodoEngineTests
 {
+    private static readonly TestIdGenerator IdGen = new();
+
     [Fact]
     public async Task ExecuteAsync_CreateCommand_EmitsCreatedEvent()
     {
         var engine = new TodoEngine();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("TodoEngineTests:Create:agg");
         var command = new CreateTodoCommand(aggregateId, "Test todo");
 
         var context = new EngineContext(
@@ -31,7 +34,7 @@ public sealed class TodoEngineTests
     public async Task ExecuteAsync_UpdateCommand_EmitsUpdatedEvent()
     {
         var engine = new TodoEngine();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("TodoEngineTests:Update:agg");
         var command = new UpdateTodoCommand(aggregateId, "Updated");
 
         // Pre-create aggregate with history
@@ -54,7 +57,7 @@ public sealed class TodoEngineTests
     public async Task ExecuteAsync_CompleteCommand_EmitsCompletedEvent()
     {
         var engine = new TodoEngine();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("TodoEngineTests:Complete:agg");
         var command = new CompleteTodoCommand(aggregateId);
 
         var aggregate = TodoAggregate.Create(new TodoId(aggregateId), "Task");

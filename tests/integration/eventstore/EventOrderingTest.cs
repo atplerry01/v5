@@ -1,4 +1,5 @@
 using Whycespace.Tests.Integration.Setup;
+using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Integration.EventStore;
 
@@ -13,11 +14,13 @@ namespace Whycespace.Tests.Integration.EventStore;
 /// </summary>
 public sealed class EventOrderingTest
 {
+    private static readonly TestIdGenerator IdGen = new();
+
     [Fact]
     public async Task Versions_Are_Monotonic_And_Contiguous_For_A_Single_Aggregate()
     {
         var store = new InMemoryEventStore();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("EventOrderingTest:Monotonic:agg");
 
         await store.AppendEventsAsync(aggregateId, new object[] { new Evt("a"), new Evt("b") }, expectedVersion: -1);
         await store.AppendEventsAsync(aggregateId, new object[] { new Evt("c") }, expectedVersion: -1);
@@ -30,8 +33,8 @@ public sealed class EventOrderingTest
     public async Task Aggregates_Have_Independent_Version_Streams()
     {
         var store = new InMemoryEventStore();
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
+        var a = IdGen.Generate("EventOrderingTest:Independent:a");
+        var b = IdGen.Generate("EventOrderingTest:Independent:b");
 
         await store.AppendEventsAsync(a, new object[] { new Evt("a0"), new Evt("a1") }, -1);
         await store.AppendEventsAsync(b, new object[] { new Evt("b0") }, -1);
@@ -46,7 +49,7 @@ public sealed class EventOrderingTest
     public async Task Empty_Append_Is_A_Noop()
     {
         var store = new InMemoryEventStore();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("EventOrderingTest:Empty:agg");
 
         await store.AppendEventsAsync(aggregateId, Array.Empty<object>(), -1);
 
@@ -58,7 +61,7 @@ public sealed class EventOrderingTest
     public async Task Loaded_Events_Preserve_Append_Order()
     {
         var store = new InMemoryEventStore();
-        var aggregateId = Guid.NewGuid();
+        var aggregateId = IdGen.Generate("EventOrderingTest:Preserve:agg");
 
         var first = new Evt("first");
         var second = new Evt("second");
