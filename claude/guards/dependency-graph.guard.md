@@ -157,4 +157,46 @@ Guard is LOCKED only if:
 ## NEW RULES INTEGRATED — 2026-04-07
 
 - **DG-R7-01**: Pre-existing violation tracked: Whycespace.Projections.csproj references Whycespace.Runtime.csproj. Projections may reference ONLY domain (events) + shared. Must be remediated OR granted a narrow, documented exception (interface-only, no implementation types).
-- **DG-R5-01**: Pre-existing violation tracked: Whycespace.Host.csproj references Runtime, Engines, Projections, Domain directly. Under R5 platform may reference only systems (+shared). Composition root may warrant a documented exception, but none currently granted. LOCK is suspended until remediated or exception logged here.
+- **DG-R5-01**: ~~Pre-existing violation tracked~~ → **CONVERTED TO DOCUMENTED EXCEPTION (2026-04-07)**. See DG-R5-EXCEPT-01 below.
+
+## EXCEPTIONS (documented and granted)
+
+### DG-R5-EXCEPT-01 — Composition Root references (2026-04-07)
+
+`src/platform/host/Whycespace.Host.csproj` MAY reference `Whycespace.Runtime`,
+`Whycespace.Engines`, `Whycespace.Projections`, `Whycespace.Domain`, and
+infrastructure adapters **for DI registration purposes only**.
+
+**Authority:** This exception aligns with the already-canonical composition-root
+permission in [platform.guard.md G-PLATFORM-07](platform.guard.md):
+
+> "Host (`Program.cs`) is the composition root and MAY reference runtime,
+> engines, systems, domain, and infrastructure for DI registration purposes
+> only."
+
+The prior R5 wording ("Allowed: systems only") was inconsistent with
+G-PLATFORM-07 and produced a perpetually-tracked violation that was
+not actually a violation under the canonical platform guard. This
+exception entry resolves the inconsistency by recording the DI-only
+permission explicitly inside dependency-graph.guard.md.
+
+**Constraints on the exception:**
+1. The references are permitted **only** in `Whycespace.Host.csproj` itself.
+   No other project under `src/platform/**` may use this exception.
+2. The references must be **DI registration only**. Per
+   [program-composition.guard.md G-PROGCOMP-01 / G-PROGCOMP-03](program-composition.guard.md),
+   `Program.cs` must not contain `AddSingleton<...>` calls keyed on
+   concrete domain types — domain wiring flows through
+   `IDomainBootstrapModule` and `BootstrapModuleCatalog`, and category
+   wiring flows through the literal-list `CompositionModuleLoader`.
+3. Per [runtime.guard.md rule 11.R-DOM-01](runtime.guard.md), the host
+   may not contain folders nested by `{classification}/{context}/{domain}/`
+   nor hold static dictionaries keyed on a single domain.
+4. Removal of any of these direct references is permitted only after
+   the corresponding wiring has been migrated into a bootstrap module
+   listed in `BootstrapModuleCatalog` or a category composition module.
+
+**LOCK status:** With this exception logged, R5 is no longer suspended
+on `Whycespace.Host.csproj` references. DG-R7-01 (projections → runtime)
+remains the sole outstanding tracked violation under this guard, pending
+the `IProjectionHandler` relocation in Prompt B Step B-1.
