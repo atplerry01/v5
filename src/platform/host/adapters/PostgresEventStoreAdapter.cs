@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Npgsql;
+using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 
 namespace Whyce.Platform.Host.Adapters;
@@ -7,14 +8,19 @@ namespace Whyce.Platform.Host.Adapters;
 /// <summary>
 /// PostgreSQL-backed event store. Persists domain events as JSONB rows
 /// in the canonical events table (see 001_event_store.sql).
+///
+/// Phase B2b: deserialization is now schema-driven via EventDeserializer
+/// (no static EventTypeResolver, no per-domain Type dictionary).
 /// </summary>
 public sealed class PostgresEventStoreAdapter : IEventStore
 {
     private readonly string _connectionString;
+    private readonly EventDeserializer _deserializer;
 
-    public PostgresEventStoreAdapter(string connectionString)
+    public PostgresEventStoreAdapter(string connectionString, EventDeserializer deserializer)
     {
         _connectionString = connectionString;
+        _deserializer = deserializer;
     }
 
     public async Task<IReadOnlyList<object>> LoadEventsAsync(Guid aggregateId)
@@ -34,9 +40,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         {
             var eventType = reader.GetString(0);
             var payload = reader.GetString(1);
-            var resolved = EventTypeResolver.Resolve(eventType, payload);
-            if (resolved is not null)
-                events.Add(resolved);
+            events.Add(_deserializer.DeserializeStored(eventType, payload));
         }
 
         return events.AsReadOnly();
@@ -47,6 +51,18 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
+
+        // Compute current max version for this aggregate inside the transaction so
+        // concurrent appends serialize correctly. Ignores caller-supplied expectedVersion;
+        // determinism comes from the stored stream, not the in-memory engine snapshot.
+        await using (var maxCmd = new NpgsqlCommand(
+            "SELECT COALESCE(MAX(version), -1) FROM events WHERE aggregate_id = @id",
+            conn, tx))
+        {
+            maxCmd.Parameters.AddWithValue("id", aggregateId);
+            var scalar = await maxCmd.ExecuteScalarAsync();
+            expectedVersion = scalar is int v ? v : Convert.ToInt32(scalar);
+        }
 
         for (var i = 0; i < events.Count; i++)
         {

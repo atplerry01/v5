@@ -36,6 +36,27 @@ public sealed class EventSchemaRegistry
     }
 
     /// <summary>
+    /// Registers an event type with its version and dual CLR types (Phase B2b).
+    /// StoredEventType is the type used by the event store replay path (domain event).
+    /// InboundEventType is the type used by inbound consumers (Kafka, after payload mapping — schema contract).
+    /// </summary>
+    public void Register(string eventTypeName, EventVersion version, Type storedEventType, Type inboundEventType)
+    {
+        if (_locked)
+            throw new InvalidOperationException("EventSchemaRegistry is locked. Cannot register after build.");
+
+        var schemaHash = DeterministicHasher.ComputeHash($"{eventTypeName}:{version}");
+        _schemas[eventTypeName] = new EventSchemaEntry
+        {
+            EventName = eventTypeName,
+            Version = version,
+            SchemaHash = schemaHash,
+            StoredEventType = storedEventType,
+            InboundEventType = inboundEventType
+        };
+    }
+
+    /// <summary>
     /// Registers an event type at default version (1.0.0).
     /// </summary>
     public void Register(string eventTypeName)
@@ -90,4 +111,11 @@ public sealed record EventSchemaEntry
     public required string EventName { get; init; }
     public required EventVersion Version { get; init; }
     public required string SchemaHash { get; init; }
+
+    // Phase B2b: dual CLR types for the two deserialization paths.
+    // - StoredEventType: domain event type used by PostgresEventStoreAdapter replay
+    // - InboundEventType: schema contract type used by Kafka consumers (post payload mapping)
+    // Nullable so existing Register(string [, EventVersion]) overloads remain valid.
+    public Type? StoredEventType { get; init; }
+    public Type? InboundEventType { get; init; }
 }

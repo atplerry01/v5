@@ -58,3 +58,6 @@ docker-compose.override.yml
 # CLAUDE TEMP (OPTIONAL)
 # ------------------------------
 claude/tmp/
+
+# Others
+_archives/

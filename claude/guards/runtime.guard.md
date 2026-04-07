@@ -37,6 +37,39 @@ All files under `src/runtime/`, and all files that interact with runtime (platfo
 
 11. **NO DOMAIN LOGIC IN RUNTIME** — Runtime orchestrates but does not decide. Business rules, domain validation, and aggregate invariant enforcement stay in domain. Runtime must not contain if/else business conditions on domain state.
 
+    **11.R-DOM-01 (S1) — NO DOMAIN-NAMED SYMBOLS OR PATHS IN RUNTIME / HOST / ADAPTERS**
+
+    No file under `src/runtime/**`, `src/platform/host/**`, or `src/platform/host/adapters/**` may:
+    - Reference a concrete domain type (`using Whycespace.Domain.*` for any classification/context/domain)
+    - Reference a concrete domain event/schema type by name in a `using`, parameter, generic argument, switch case, or string literal
+    - Contain folders nested by `{classification}/{context}/{domain}/` (e.g. `runtime/policies/operational-system/sandbox/todo/`)
+    - Hold static dictionaries, switch/case branches, or constructor dependencies keyed on a single domain
+    - Hardcode domain-specific topic names, consumer-group names, projection table names, or schema mapper bodies
+
+    **ALLOWED PATTERNS** in runtime/host/adapters:
+    - Generic registries (`EventHandlerRegistry`, `ProjectionHandlerRegistry`, `EventSchemaRegistry`) keyed by string event-type
+    - Generic bridges/workers parameterized over (topic, handler-resolver, schema-registry, table-resolver)
+    - Reflection/registry-driven dispatch via the existing `Whyce.Shared.Contracts.Infrastructure.Projection.IProjectionHandler` contract
+
+    **EXEMPT PATHS** (allowed to hold concrete domain references):
+    - `src/domain/**`
+    - `src/engines/T2E/**`
+    - `src/projections/**`
+    - `src/platform/api/**` (controllers and request DTOs are domain-shaped by design)
+    - `src/systems/**` (per-domain bootstrap modules and intent handlers)
+    - `src/shared/contracts/**` (cross-layer contracts may carry domain identifiers)
+
+    **CHECK:** `grep -R "Todo\|<DomainName>" src/runtime/ src/platform/host/` MUST return zero matches for any registered domain. Severity is S1 — block merge, fail CI, must resolve in current PR.
+
+    **STATUS: FULLY ENFORCED as of Phase B2b (2026-04-07).** Zero exemptions. Verified by:
+    - `grep -R "Todo" src/runtime/` → 0 matches
+    - `grep -R "Todo" src/platform/host/` → matches only inside `src/platform/host/composition/**` (exempt by design)
+
+    **Phase history:**
+    - **B1**: eliminated `src/runtime/projection/bridges/TodoProjectionBridge.cs` (`TodoProjectionHandler` now implements envelope-based `IProjectionHandler` directly) and `src/runtime/policies/operational-system/sandbox/todo/TodoPolicyDefinition.cs` (constants relocated to `src/shared/contracts/policy/TodoPolicyIds.cs`).
+    - **B2a**: introduced `IDomainBootstrapModule` contract; relocated all 10 Program.cs Todo wiring sites into `TodoBootstrap`. Registry factories now iterate `sp.GetServices<IDomainBootstrapModule>()` inside the factory closure, before `Lock()` — preserving the lock-after-build immutability guarantee.
+    - **B2b**: extended `EventSchemaEntry` with dual CLR types (`StoredEventType` for replay, `InboundEventType` for Kafka). Introduced `EventDeserializer`, `IPostgresProjectionWriter` / `PostgresProjectionWriter`, and a generic `GenericKafkaProjectionConsumerWorker` parameterized over (topic, consumer-group, deserializer, registry, writer). Deleted `KafkaProjectionConsumerWorker.cs` and `EventTypeResolver.cs`. `PostgresEventStoreAdapter` now deserializes via `EventDeserializer`. Introduced `BootstrapModuleCatalog` so Program.cs imports zero domain-named symbols.
+
 12. **RUNTIME MUST ENFORCE POLICY MIDDLEWARE** — The runtime pipeline must include a policy evaluation middleware step that runs before command dispatch to engines. Every command must pass through policy evaluation. The policy middleware checks that a valid `PolicyDecision` exists for the command. Commands without policy decisions are rejected. No engine receives an unauthorized command.
 
 13. **RUNTIME MUST ANCHOR EVENTS TO CHAIN** — After successful command execution, runtime must anchor the resulting domain events to the WhyceChain immutable ledger. Each event batch produces a `ChainBlock` linking: correlation ID, event hashes, policy decision hash, and actor. Events that are not chain-anchored are not governance-compliant.
@@ -136,6 +169,7 @@ All files under `src/runtime/`, and all files that interact with runtime (platfo
 | **S0 — CRITICAL** | Engine anchors to chain directly | T2E creates `ChainBlock` or calls chain anchor service |
 | **S1 — HIGH** | Middleware in engine/platform | Authorization middleware in `src/engines/` |
 | **S1 — HIGH** | Domain logic in runtime | `if (order.Status == Approved)` in runtime |
+| **S1 — HIGH** | R-DOM-01: domain-named symbol in runtime/host | `using Whycespace.Domain.OperationalSystem.Sandbox.Todo` in `src/runtime/**` or `src/platform/host/**` |
 | **S1 — HIGH** | Engine manages transaction | `new TransactionScope()` in engine |
 | **S2 — MEDIUM** | Projection bypasses runtime | Projection subscribes directly to Kafka topic |
 | **S2 — MEDIUM** | Engine has retry logic | `Polly.Policy.Handle<>()` in engine |

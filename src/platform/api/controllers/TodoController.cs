@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Npgsql;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
 using Whyce.Shared.Contracts.Runtime;
@@ -14,15 +17,19 @@ public sealed class TodoController : ControllerBase
     private readonly ITodoIntentHandler _intentHandler;
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IRedisClient _redis;
+    private readonly string _projectionsConnectionString;
 
     public TodoController(
         ITodoIntentHandler intentHandler,
         ISystemIntentDispatcher dispatcher,
-        IRedisClient redis)
+        IRedisClient redis,
+        IConfiguration configuration)
     {
         _intentHandler = intentHandler;
         _dispatcher = dispatcher;
         _redis = redis;
+        _projectionsConnectionString = configuration["Projections__ConnectionString"]
+            ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
     }
 
     [HttpPost("create")]
@@ -38,10 +45,45 @@ public sealed class TodoController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
     {
-        var readModel = await _redis.GetAsync<TodoReadModel>($"todo:{id}");
-        if (readModel is null) return NotFound();
+        Console.WriteLine($"[GET] Querying projection for: {id}");
 
-        return Ok(readModel);
+        await using var conn = new NpgsqlConnection(_projectionsConnectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT aggregate_id, current_version, last_event_type, state
+            FROM projection_operational_sandbox_todo.todo_read_model
+            WHERE aggregate_id = @id
+            LIMIT 1
+            """, conn);
+        cmd.Parameters.AddWithValue("id", id);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var found = await reader.ReadAsync();
+        Console.WriteLine($"[GET] Row found: {found}");
+        if (!found) return NotFound();
+
+        var lastEventType = reader.GetString(2);
+        var stateJson = reader.GetString(3);
+
+        string title = string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(stateJson);
+            if (doc.RootElement.TryGetProperty("Title", out var t)) title = t.GetString() ?? string.Empty;
+        }
+        catch { }
+
+        var status = lastEventType == "TodoCompletedEvent" ? "completed" : "active";
+
+        return Ok(new TodoReadModel
+        {
+            Id = id,
+            Title = title,
+            IsCompleted = status == "completed",
+            Status = status
+        });
     }
 
     private static readonly DomainRoute TodoRoute = new("operational", "sandbox", "todo");

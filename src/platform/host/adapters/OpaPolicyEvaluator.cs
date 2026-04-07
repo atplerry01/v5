@@ -20,7 +20,7 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
 
     public async Task<PolicyDecision> EvaluateAsync(string policyId, object command, PolicyContext policyContext)
     {
-        // Map CommandType to OPA action (e.g., "CreateTodoCommand" → "todo.create")
+        // Map CommandType to OPA action (e.g., "CreateFooCommand" → "foo.create")
         var action = MapCommandTypeToAction(policyContext.CommandType, policyContext.Domain);
 
         var requestBody = new
@@ -72,11 +72,11 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
 
     private static string MapCommandTypeToAction(string commandType, string domain)
     {
-        // Strip "Command" suffix and extract verb: "CreateTodoCommand" → "create"
+        // Strip "Command" suffix and extract verb: "CreateFooCommand" → "create"
         var name = commandType.Replace("Command", "", StringComparison.Ordinal);
 
         // Find the verb by removing the domain name portion
-        // e.g., "CreateTodo" with domain "todo" → verb = "create"
+        // e.g., "CreateFoo" with domain "foo" → verb = "create"
         var domainIndex = name.IndexOf(domain, StringComparison.OrdinalIgnoreCase);
         var verb = domainIndex > 0
             ? name[..domainIndex].ToLowerInvariant()

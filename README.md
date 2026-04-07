@@ -10,6 +10,18 @@ This is the v5 project repository.
 | Chain  | Weak ❌              | Cryptographically stable ✅ |
 | Outbox | Duplicate risk ❌    | Exactly-once semantics ✅   |
 
+E1 → Domain
+E2 → Contracts
+E3 → Persistence
+E4 → Determinism
+E5 → Engine
+E6 → Runtime
+E7 → Workflow
+E8 → Projection
+E9 → Policy
+E10 → Guard
+E11 → Chain
+E12 → Full enforcement
 
 Platform API
   → Systems.Downstream
@@ -49,3 +61,23 @@ Runtime persists, anchors, publishes, projects, and returns the final result upw
 - fix project dependency
 - connection string in code
 
+- deteministic id
+- update the new generated guard rules
+- runtime workflow and workflow-state fix
+
+
+
+
+
+We are not invetorment platform, but platform that help you scale your investment portforlio
+True economic activities, not extractive activities
+Team work
+African can continue in its complaint tactics
+Building ecosystem
+
+Real world economic structure /not short time, not 
+the poer of upbringing and associations
+
+
+- get a skill
+- 
