@@ -152,5 +152,18 @@ SYSTEMS_GUARD_VIOLATION:
 
 ## NEW RULES INTEGRATED — 2026-04-07
 
-- **SYS-BOUND-01**: Systems layer MUST access runtime ONLY through IWorkflowDispatcher or IRuntimeControlPlane shared-contract surfaces. Direct calls to ISystemIntentDispatcher or other internal runtime dispatcher interfaces from src/systems/** are FORBIDDEN.
+- **SYS-BOUND-01** (CLARIFIED 2026-04-07): Systems layer MUST access runtime ONLY through shared-contract surfaces under `Whyce.Shared.Contracts.Runtime.*`. The permitted surfaces are:
+  - `IWorkflowDispatcher` — for starting workflows from systems orchestrators
+  - `IRuntimeControlPlane` — for entry points that already hold a fully-built `CommandContext`
+  - `ISystemIntentDispatcher` — for entry points that hold only a bare command plus `DomainRoute` (the canonical bridge that internally constructs `CommandContext` via runtime middleware)
+
+  All three of these interfaces live in `src/shared/contracts/runtime/` and are shared-contract surfaces by namespace, by file location, and by design intent. Direct references from `src/systems/**` to runtime **implementations** (concrete classes under `Whyce.Runtime.*`) remain FORBIDDEN.
+
+  **Rationale for the clarification:** the prior wording forbade `ISystemIntentDispatcher` on the basis that it was "internal runtime dispatcher". That classification was incorrect — the type is in the shared contracts namespace, and it exists precisely because systems layer entry points (e.g. `WorkflowDispatcher` implementing `IWorkflowDispatcher`) do not hold a `CommandContext` and cannot construct one without invoking the policy / identity middleware that runs inside the runtime control plane. Forbidding it produced a perpetually-tracked violation that could only be "remediated" by either (a) adding a `DomainRoute` overload to `IRuntimeControlPlane` (cascade through every implementer and caller) or (b) collapsing ISystemIntentDispatcher into the runtime control plane (architectural decision out of scope for hardening).
+
+  **Scope of the permission:**
+  - Permitted in `src/systems/midstream/wss/WorkflowDispatcher.cs` (the canonical example) and any other systems-layer entry-point class that bridges API/external triggers into the runtime command pipeline.
+  - NOT a license to spray dispatcher calls across systems composition modules. Composition logic (per `## Rules` 1, 13 above) must remain composition-only.
+  - The E-STEP-02 concern (T1M workflow steps using `ISystemIntentDispatcher` from inside `src/engines/T1M/steps/`) is **separate** and remains under engines.guard.md authority. This clarification does not relax E-STEP-02.
+
 - **SYS-NO-STEP-01**: IWorkflowStep implementations are FORBIDDEN under src/systems/** (see E-STEP-01).
