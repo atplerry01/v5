@@ -1,9 +1,0 @@
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.csproj.AssemblyReference.cache
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\rpswa.dswa.cache.json
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.GeneratedMSBuildEditorConfig.editorconfig
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.AssemblyInfoInputs.cache
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.AssemblyInfo.cs
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.csproj.CoreCompileInputs.cache
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.MvcApplicationPartsAssemblyInfo.cs
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.MvcApplicationPartsAssemblyInfo.cache
-C:\projects\dev\v4\src\platform\host\obj\Debug\net10.0\Whycespace.FoundationHost.sourcelink.json
