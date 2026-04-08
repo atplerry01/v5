@@ -11,13 +11,11 @@ namespace Whyce.Runtime.Dispatcher;
 public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
 {
     private readonly IRuntimeControlPlane _controlPlane;
-    private readonly IClock _clock;
     private readonly IIdGenerator _idGenerator;
 
-    public SystemIntentDispatcher(IRuntimeControlPlane controlPlane, IClock clock, IIdGenerator idGenerator)
+    public SystemIntentDispatcher(IRuntimeControlPlane controlPlane, IIdGenerator idGenerator)
     {
         _controlPlane = controlPlane;
-        _clock = clock;
         _idGenerator = idGenerator;
     }
 
@@ -29,10 +27,16 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         var idProperty = commandType.GetProperty("Id");
         var aggregateId = idProperty is not null ? (Guid)idProperty.GetValue(command)! : Guid.Empty;
 
-        var timestamp = _clock.UtcNow.Ticks.ToString();
-        var correlationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:correlation:{timestamp}");
-        var causationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:causation:{timestamp}");
-        var commandId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:command:{timestamp}");
+        // phase1.6-S1.1 (DET-SEED-DERIVATION-01): correlation/causation/command
+        // ids derive ONLY from stable command coordinates — never from the
+        // clock. The command's record ToString includes every init property,
+        // so two distinct command instances produce distinct ids while two
+        // dispatches of the same instance collapse (correct semantics for
+        // idempotency / retry under the IdempotencyMiddleware).
+        var commandSignature = command.ToString() ?? commandType.Name;
+        var correlationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:correlation:{commandSignature}");
+        var causationId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:causation:{commandSignature}");
+        var commandId = _idGenerator.Generate($"{aggregateId}:{commandType.Name}:command:{commandSignature}");
 
         var context = new CommandContext
         {

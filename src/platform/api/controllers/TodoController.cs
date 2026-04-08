@@ -16,20 +16,17 @@ public sealed class TodoController : ControllerBase
 {
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
-    private readonly IClock _clock;
     private readonly IRedisClient _redis;
     private readonly string _projectionsConnectionString;
 
     public TodoController(
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
-        IClock clock,
         IRedisClient redis,
         IConfiguration configuration)
     {
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
-        _clock = clock;
         _redis = redis;
         _projectionsConnectionString = configuration["Projections__ConnectionString"]
             ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
@@ -40,9 +37,15 @@ public sealed class TodoController : ControllerBase
     {
         // phase1-gate-S1: route through dispatcher so the policy envelope,
         // guards, outbox, and chain anchor all run — same path as Update/Complete.
-        // $9: deterministic ID, no Guid.NewGuid.
+        // phase1.6-S1.1 (DET-SEED-DERIVATION-01): seed contains only stable
+        // request coordinates — no clock, no random. Two creates with the same
+        // (user, title) collapse to the same aggregate id, making the endpoint
+        // idempotent under retry. Callers that need distinct todos with the
+        // same title must vary the title (the alternative — accepting a client
+        // idempotency key — is the cleaner long-term API but out of scope for
+        // S1.1, which is constrained to seed-derivation only).
         var aggregateId = _idGenerator.Generate(
-            $"{request.UserId}:{request.Title}:{_clock.UtcNow.Ticks}");
+            $"todo:create:{request.UserId}:{request.Title}");
         var cmd = new CreateTodoCommand(aggregateId, request.Title);
         var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
         return result.IsSuccess

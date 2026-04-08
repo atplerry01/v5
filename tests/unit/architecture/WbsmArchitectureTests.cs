@@ -36,6 +36,61 @@ public sealed class WbsmArchitectureTests
             "Hits:\n" + string.Join("\n", hits));
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // DET-SEED-DERIVATION-01 (phase1.6-S1.1)
+    // ─────────────────────────────────────────────────────────────────────
+    // IIdGenerator.Generate(seed) is the canonical deterministic-id seam.
+    // The engine is deterministic only as far as its seed is — if the seed
+    // string embeds wall-clock ticks, Guid.NewGuid, Random, or any other
+    // entropy source, the entire mechanism is defeated and IDs diverge on
+    // replay.
+    //
+    // This test scans the entire src/ tree for any line that calls
+    // .Generate( and contains a forbidden token in the same statement. It
+    // intentionally does NOT use StripCommentAndString — the forbidden
+    // tokens we're hunting are themselves inside string interpolations,
+    // and stripping the strings would hide every real violation.
+    //
+    // Closes the regression vector that produced the phase-1 audit S1.1.
+    [Fact]
+    public void IdGenerator_Generate_seeds_contain_no_clock_or_random_entropy()
+    {
+        var forbidden = new Regex(
+            @"\.Generate\s*\([^)]*?(?:" +
+            @"\.UtcNow|\.Now\b|" +     // IClock.UtcNow, DateTime.Now/UtcNow
+            @"\.Ticks\b|" +             // any *.Ticks read
+            @"Guid\.NewGuid|" +         // Guid.NewGuid()
+            @"\bnew\s+Random\b|" +      // new Random(...)
+            @"RandomNumberGenerator|" + // crypto RNG
+            @"Stopwatch\." +            // Stopwatch.GetTimestamp / .ElapsedTicks
+            @")");
+
+        var hits = new System.Collections.Generic.List<string>();
+        foreach (var file in Directory.EnumerateFiles(SrcRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                // skip line comments only — keep string literals intact
+                var commentIdx = line.IndexOf("//", System.StringComparison.Ordinal);
+                var scanned = commentIdx >= 0 ? line.Substring(0, commentIdx) : line;
+                if (forbidden.IsMatch(scanned))
+                    hits.Add($"{file}:{i + 1}: {line.Trim()}");
+            }
+        }
+
+        Assert.True(hits.Count == 0,
+            "DET-SEED-DERIVATION-01: IIdGenerator.Generate(seed) seeds must " +
+            "derive only from stable command coordinates. Forbidden tokens " +
+            "(clock ticks, Guid.NewGuid, Random, Stopwatch) found in seed " +
+            "construction:\n" + string.Join("\n", hits));
+    }
+
     [Fact]
     public void Domain_layer_contains_no_DateTime_UtcNow_calls()
     {
