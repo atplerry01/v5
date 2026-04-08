@@ -27,11 +27,16 @@ public sealed class WorkflowExecutionReplayService : IWorkflowExecutionReplaySer
 {
     private readonly IEventStore _eventStore;
     private readonly IPayloadTypeRegistry _payloadTypes;
+    private readonly WorkflowLifecycleEventFactory _lifecycleFactory;
 
-    public WorkflowExecutionReplayService(IEventStore eventStore, IPayloadTypeRegistry payloadTypes)
+    public WorkflowExecutionReplayService(
+        IEventStore eventStore,
+        IPayloadTypeRegistry payloadTypes,
+        WorkflowLifecycleEventFactory lifecycleFactory)
     {
         _eventStore = eventStore;
         _payloadTypes = payloadTypes;
+        _lifecycleFactory = lifecycleFactory;
     }
 
     public async Task<WorkflowExecutionReplayState?> ReplayAsync(Guid workflowExecutionId)
@@ -104,12 +109,15 @@ public sealed class WorkflowExecutionReplayService : IWorkflowExecutionReplaySer
                 $"Workflow execution '{workflowExecutionId}' is in status {aggregate.Status}; " +
                 "resume is only valid from the Failed state.");
 
-        // LoadFromHistory does not populate DomainEvents (it only calls Apply),
-        // so after Resume() the DomainEvents list contains exactly the new
-        // WorkflowExecutionResumedEvent. Returning it as object keeps the
-        // runtime contract domain-agnostic per R-DOM-01.
-        aggregate.Resume();
-        return aggregate.DomainEvents[0];
+        // phase1.6-S1.2 (E-LIFECYCLE-FACTORY-CALL-SITE-01): construct the
+        // resume event via the lifecycle factory instead of mutating the
+        // aggregate. The factory re-validates the Failed precondition, reads
+        // the failure context from the aggregate's public surface, and
+        // returns the event without touching aggregate state. The runtime
+        // dispatcher then appends it to the workflow's accumulated events,
+        // the persist pipeline writes it to the event store, and the next
+        // replay reconstructs the Running status via Apply.
+        return _lifecycleFactory.Resumed(aggregate);
     }
 
     private object? Rehydrate(object? value, string? typeName)

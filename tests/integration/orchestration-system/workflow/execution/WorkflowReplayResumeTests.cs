@@ -26,7 +26,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Fail_Then_Resume_Then_Complete_Works()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         // Phase 1: original run that fails on step 2.
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
@@ -71,7 +72,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Resume_Without_Failure_Throws()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
         live.CompleteStep(0, "Validate", "h0");
@@ -84,7 +86,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Resume_When_No_Events_Throws()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.ResumeAsync(ExecutionId));
     }
@@ -93,7 +96,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Replay_After_Resume_Matches_Expected_State()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
         live.CompleteStep(0, "Validate", "h0");
@@ -114,7 +118,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Double_Replay_Produces_Identical_State()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
         live.CompleteStep(0, "Validate", "h0");
@@ -136,7 +141,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Resume_Emits_ResumedEvent_Exactly_Once()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
         live.Fail("Validate", "boom");
@@ -154,7 +160,8 @@ public sealed class WorkflowReplayResumeTests
     public async Task Resume_Twice_Without_Intervening_Failure_Throws()
     {
         var store = new MutableEventStore();
-        var service = new WorkflowExecutionReplayService(store, new PayloadTypeRegistry());
+        var registry = new PayloadTypeRegistry();
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
 
         var live = WorkflowExecutionAggregate.Start(new WorkflowExecutionId(ExecutionId), "wf");
         live.Fail("Validate", "boom");

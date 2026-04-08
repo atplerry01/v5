@@ -16,11 +16,14 @@ public interface IWorkflowExecutionReplayService
 
     /// <summary>
     /// Loads the workflow execution from the event store, asserts the
-    /// aggregate is in the Failed state, invokes
-    /// <c>WorkflowExecutionAggregate.Resume()</c>, and returns the
-    /// <c>WorkflowExecutionResumedEvent</c> raised by that call. The event
-    /// is returned as <see cref="object"/> so the runtime contract stays
-    /// domain-agnostic per runtime.guard R-DOM-01.
+    /// aggregate is in the Failed state, and returns a freshly constructed
+    /// <c>WorkflowExecutionResumedEvent</c> via
+    /// <c>WorkflowLifecycleEventFactory.Resumed</c>. The aggregate is NOT
+    /// mutated by this call (phase1.6-S1.2 / E-LIFECYCLE-FACTORY-CALL-SITE-01)
+    /// — state change happens only when the persist pipeline replays the
+    /// returned event through <c>Apply(WorkflowExecutionResumedEvent)</c>.
+    /// The event is returned as <see cref="object"/> so the runtime contract
+    /// stays domain-agnostic per runtime.guard R-DOM-01.
     ///
     /// The dispatcher prepends this event onto the executing workflow's
     /// accumulated event list so it persists to the same aggregate stream

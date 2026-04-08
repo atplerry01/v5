@@ -104,6 +104,55 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // E-LIFECYCLE-FACTORY-CALL-SITE-01 (phase1.6-S1.2)
+    // ─────────────────────────────────────────────────────────────────────
+    // T1M engines must not invoke aggregate command methods directly. The
+    // canonical lifecycle transition factory is WorkflowLifecycleEventFactory;
+    // it is the only allowed construction site for lifecycle events. The
+    // aggregate's previous public Resume() command method has been removed
+    // — state change happens only via Apply on replay.
+    //
+    // We pin two complementary invariants here so a regression cannot pass:
+    //   1. Reflection: WorkflowExecutionAggregate has no public Resume method
+    //   2. Source scan: nothing under src/engines/** invokes a literal
+    //      .Resume( on a workflow aggregate variable.
+
+    [Fact]
+    public void WorkflowExecutionAggregate_does_not_expose_a_public_Resume_command()
+    {
+        var aggregateType = typeof(Whycespace.Domain.OrchestrationSystem.Workflow.Execution.WorkflowExecutionAggregate);
+        var publicResume = aggregateType.GetMethods(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "Resume");
+
+        Assert.True(publicResume is null,
+            "WorkflowExecutionAggregate must not expose a public Resume() command. " +
+            "Lifecycle resume flows through WorkflowLifecycleEventFactory.Resumed; " +
+            "state change happens only via Apply on replay. " +
+            "(phase1.6-S1.2 / E-LIFECYCLE-FACTORY-CALL-SITE-01)");
+    }
+
+    [Fact]
+    public void Engines_do_not_call_Resume_on_workflow_aggregate_directly()
+    {
+        // Source scan covering src/engines/**. The previous violation lived
+        // at WorkflowExecutionReplayService.cs:111 as `aggregate.Resume();`.
+        // After the S1.2 fix the only legitimate construction path is
+        // WorkflowLifecycleEventFactory.Resumed(aggregate). Any direct
+        // .Resume( call on a workflow-execution variable in the engine
+        // layer is a regression.
+        var hits = ScanCode(
+            Path.Combine(SrcRoot, "engines"),
+            new Regex(@"\b(workflowExecution|aggregate)\.Resume\s*\(",
+                RegexOptions.IgnoreCase));
+
+        Assert.True(hits.Count == 0,
+            "T1M engines must not call .Resume() on a workflow aggregate. " +
+            "Use WorkflowLifecycleEventFactory.Resumed(aggregate) instead. Hits:\n"
+            + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // §3 Dependency graph
     // ─────────────────────────────────────────────────────────────────────
 

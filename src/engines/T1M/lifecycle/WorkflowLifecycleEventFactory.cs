@@ -48,4 +48,31 @@ public sealed class WorkflowLifecycleEventFactory
     public WorkflowExecutionFailedEvent Failed(
         Guid workflowExecutionId, string failedStepName, string reason)
         => new(new AggregateId(workflowExecutionId), failedStepName, reason);
+
+    /// <summary>
+    /// phase1.6-S1.2 (E-LIFECYCLE-FACTORY-CALL-SITE-01): canonical construction
+    /// site for <see cref="WorkflowExecutionResumedEvent"/>. Replaces the
+    /// previous <c>WorkflowExecutionAggregate.Resume()</c> mutation method —
+    /// the aggregate no longer exposes a Resume command. State change happens
+    /// only when the runtime persist pipeline replays this event back through
+    /// <c>Apply(WorkflowExecutionResumedEvent)</c>.
+    ///
+    /// The factory enforces the same precondition the aggregate previously
+    /// guarded (status MUST be Failed), reading the failure context from the
+    /// aggregate's public surface. The aggregate is not mutated; on success
+    /// the caller appends the returned event to the event store and the
+    /// next replay reconstructs the Running status via Apply.
+    /// </summary>
+    public WorkflowExecutionResumedEvent Resumed(WorkflowExecutionAggregate aggregate)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+        Guard.Against(
+            aggregate.Status != WorkflowExecutionStatus.Failed,
+            WorkflowExecutionErrors.CannotResumeUnlessFailed);
+
+        return new WorkflowExecutionResumedEvent(
+            new AggregateId(aggregate.Id.Value),
+            aggregate.FailedStepName ?? string.Empty,
+            aggregate.FailureReason ?? string.Empty);
+    }
 }

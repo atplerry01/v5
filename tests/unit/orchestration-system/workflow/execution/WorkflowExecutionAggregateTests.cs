@@ -1,3 +1,6 @@
+using NSubstitute;
+using Whyce.Engines.T1M.Lifecycle;
+using Whyce.Shared.Contracts.EventFabric;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -53,13 +56,28 @@ public sealed class WorkflowExecutionAggregateTests
     [Fact]
     public void Replay_IsDeterministic_AcrossInstances()
     {
-        var source = WorkflowExecutionAggregate.Start(NewId(), "OrderFulfillment");
-        source.CompleteStep(0, "Validate", "h0");
-        source.Fail("Validate", "boom");
-        source.Resume();
-        source.CompleteStep(1, "Reserve", "h1");
-        source.Complete("h-final");
-        var history = source.DomainEvents.ToList();
+        // phase1.6-S1.2: resume is no longer a command on the aggregate; the
+        // resumed event comes from WorkflowLifecycleEventFactory.Resumed and
+        // the aggregate consumes it via Apply on replay. Fixture mirrors the
+        // production path: build pre-resume stream, factory-construct the
+        // resume event, then replay-then-continue on a fresh aggregate.
+        var factory = NewFactory();
+
+        var pre = WorkflowExecutionAggregate.Start(NewId(), "OrderFulfillment");
+        pre.CompleteStep(0, "Validate", "h0");
+        pre.Fail("Validate", "boom");
+
+        var resumedEvt = factory.Resumed(pre);
+
+        var continuation = NewBareAggregate();
+        continuation.LoadFromHistory(pre.DomainEvents.Concat(new[] { (object)resumedEvt }).ToList());
+        continuation.CompleteStep(1, "Reserve", "h1");
+        continuation.Complete("h-final");
+
+        var history = pre.DomainEvents
+            .Concat(new object[] { resumedEvt })
+            .Concat(continuation.DomainEvents)
+            .ToList();
 
         var a = NewBareAggregate();
         var b = NewBareAggregate();
@@ -103,31 +121,10 @@ public sealed class WorkflowExecutionAggregateTests
         Assert.Throws<DomainInvariantViolationException>(() => aggregate.CompleteStep(1, "Reserve", "h"));
     }
 
-    [Fact]
-    public void Resume_FromRunning_Throws()
-    {
-        var aggregate = WorkflowExecutionAggregate.Start(NewId(), "wf");
-        Assert.Throws<DomainInvariantViolationException>(() => aggregate.Resume());
-    }
-
-    [Fact]
-    public void Resume_FromCompleted_Throws()
-    {
-        var aggregate = WorkflowExecutionAggregate.Start(NewId(), "wf");
-        aggregate.Complete("h");
-        Assert.Throws<DomainInvariantViolationException>(() => aggregate.Resume());
-    }
-
-    [Fact]
-    public void Resume_FromFailed_RaisesResumedEvent_AndReturnsToRunning()
-    {
-        var aggregate = WorkflowExecutionAggregate.Start(NewId(), "wf");
-        aggregate.Fail("Validate", "boom");
-        aggregate.Resume();
-
-        Assert.Equal(WorkflowExecutionStatus.Running, aggregate.Status);
-        Assert.Contains(aggregate.DomainEvents, e => e is WorkflowExecutionResumedEvent);
-    }
+    // phase1.6-S1.2: precondition + happy-path tests for the resume transition
+    // moved to WorkflowLifecycleEventFactoryTests, since the factory is the
+    // canonical construction site after the aggregate-side Resume() command
+    // was removed (E-LIFECYCLE-FACTORY-CALL-SITE-01).
 
     [Fact]
     public void Aggregate_IsSoleAuthority_NoExternalStateRequired()
@@ -152,23 +149,33 @@ public sealed class WorkflowExecutionAggregateTests
         // status, completed steps, failure cleared, and final consistency all
         // match the in-memory aggregate state. Proves the event stream is
         // sufficient to fully rebuild workflow state with no external input.
-        var source = WorkflowExecutionAggregate.Start(NewId(), "OrderFulfillment");
-        source.CompleteStep(0, "Validate", "h0");
-        source.CompleteStep(1, "Reserve", "h1");
-        source.Fail("Charge", "card declined");
+        var factory = NewFactory();
+        var pre = WorkflowExecutionAggregate.Start(NewId(), "OrderFulfillment");
+        pre.CompleteStep(0, "Validate", "h0");
+        pre.CompleteStep(1, "Reserve", "h1");
+        pre.Fail("Charge", "card declined");
 
-        Assert.Equal(WorkflowExecutionStatus.Failed, source.Status);
-        Assert.Equal("Charge", source.FailedStepName);
-        Assert.Equal("card declined", source.FailureReason);
+        Assert.Equal(WorkflowExecutionStatus.Failed, pre.Status);
+        Assert.Equal("Charge", pre.FailedStepName);
+        Assert.Equal("card declined", pre.FailureReason);
 
-        source.Resume();
-        Assert.Equal(WorkflowExecutionStatus.Running, source.Status);
+        // phase1.6-S1.2: factory constructs the resume event without mutating
+        // the aggregate. Continuation aggregate is hydrated from the full
+        // history including the resume event before issuing further commands.
+        var resumedEvt = factory.Resumed(pre);
 
-        source.CompleteStep(2, "Charge", "h2");
-        source.CompleteStep(3, "Ship", "h3");
-        source.Complete("h-final");
+        var continuation = NewBareAggregate();
+        continuation.LoadFromHistory(pre.DomainEvents.Concat(new[] { (object)resumedEvt }).ToList());
+        Assert.Equal(WorkflowExecutionStatus.Running, continuation.Status);
 
-        var history = source.DomainEvents.ToList();
+        continuation.CompleteStep(2, "Charge", "h2");
+        continuation.CompleteStep(3, "Ship", "h3");
+        continuation.Complete("h-final");
+
+        var history = pre.DomainEvents
+            .Concat(new object[] { resumedEvt })
+            .Concat(continuation.DomainEvents)
+            .ToList();
 
         // Reload via replay only — no external state, no shortcuts.
         var replayed = NewBareAggregate();
@@ -205,4 +212,10 @@ public sealed class WorkflowExecutionAggregateTests
     private static WorkflowExecutionAggregate NewBareAggregate() =>
         (WorkflowExecutionAggregate)System.Activator.CreateInstance(
             typeof(WorkflowExecutionAggregate), nonPublic: true)!;
+
+    // phase1.6-S1.2: factory needs IPayloadTypeRegistry for Started/StepCompleted
+    // discriminator stamping. Resumed() does not consult the registry, so a
+    // bare NSubstitute stub is sufficient for these tests.
+    private static WorkflowLifecycleEventFactory NewFactory() =>
+        new(Substitute.For<IPayloadTypeRegistry>());
 }

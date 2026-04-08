@@ -75,15 +75,15 @@ public sealed class WorkflowExecutionAggregate : AggregateRoot
         RaiseDomainEvent(new WorkflowExecutionFailedEvent(new AggregateId(Id.Value), failedStepName, reason));
     }
 
-    public void Resume()
-    {
-        Guard.Against(_status != WorkflowExecutionStatus.Failed, WorkflowExecutionErrors.CannotResumeUnlessFailed);
-
-        RaiseDomainEvent(new WorkflowExecutionResumedEvent(
-            new AggregateId(Id.Value),
-            _failedStepName ?? string.Empty,
-            _failureReason ?? string.Empty));
-    }
+    // phase1.6-S1.2 (E-LIFECYCLE-FACTORY-CALL-SITE-01): the previous public
+    // Resume() command method has been removed. WorkflowExecutionResumedEvent
+    // is now constructed exclusively by WorkflowLifecycleEventFactory.Resumed,
+    // which reads the failure context from this aggregate's public surface
+    // and validates the Failed-only precondition. State change still happens
+    // here, but only via Apply(WorkflowExecutionResumedEvent) on replay —
+    // there is no in-aggregate command path that mutates state directly for
+    // resume. This eliminates the engine-from-aggregate-mutation pattern
+    // flagged in the phase-1 audit sweep (S1.2).
 
     protected override void Apply(object domainEvent)
     {

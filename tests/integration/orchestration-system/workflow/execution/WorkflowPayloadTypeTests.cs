@@ -67,7 +67,7 @@ public sealed class WorkflowPayloadTypeTests
             new WorkflowExecutionCompletedEvent(new AggregateId(executionId), "h-final"),
         });
 
-        var service = new WorkflowExecutionReplayService(store, registry);
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
         var state = await service.ReplayAsync(executionId);
 
         Assert.NotNull(state);
@@ -94,7 +94,7 @@ public sealed class WorkflowPayloadTypeTests
                 new AggregateId(executionId), "wf", payloadJson, PayloadType: null),
         });
 
-        var service = new WorkflowExecutionReplayService(store, registry);
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.ReplayAsync(executionId));
     }
 
@@ -113,7 +113,7 @@ public sealed class WorkflowPayloadTypeTests
                 new AggregateId(executionId), "wf", payloadJson, "Not.A.Real.Type"),
         });
 
-        var service = new WorkflowExecutionReplayService(store, registry);
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.ReplayAsync(executionId));
     }
 
@@ -136,7 +136,7 @@ public sealed class WorkflowPayloadTypeTests
             new WorkflowExecutionCompletedEvent(new AggregateId(executionId), "h"),
         });
 
-        var service = new WorkflowExecutionReplayService(store, registry);
+        var service = new WorkflowExecutionReplayService(store, registry, new WorkflowLifecycleEventFactory(registry));
         var state = await service.ReplayAsync(executionId);
 
         Assert.NotNull(state);

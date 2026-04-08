@@ -162,10 +162,11 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         // H8 — emit the WorkflowExecutionResumedEvent BEFORE the engine begins
         // executing so the persisted event ordering is:
         //   ... Failed → Resumed → StepCompleted → ... → Completed
-        // The event is constructed by the replay service via aggregate.Resume()
-        // (which enforces the Failed-only invariant); we add it to the engine
-        // context's accumulated events so it persists in the same fabric pass
-        // as the new step events.
+        // phase1.6-S1.2: the event is constructed by the replay service via
+        // WorkflowLifecycleEventFactory.Resumed (which enforces the Failed-only
+        // invariant) — the aggregate is no longer mutated. We add the event to
+        // the engine context's accumulated events so it persists in the same
+        // fabric pass as the new step events.
         var resumedEvent = await _replayService.ResumeAsync(workflowExecutionId);
         executionContext.AccumulatedEvents.Add(resumedEvent);
 
