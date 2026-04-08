@@ -101,3 +101,12 @@ PLATFORM_GUARD_VIOLATION:
 - **PLAT-RESOLVER-01**: Host adapters MUST NOT hold static dictionaries keyed by concrete domain types. Event-type -> CLR-type mappings live in a runtime-side EventSchemaRegistry.
 - **PLAT-KAFKA-GENERIC-01**: Kafka projection consumer workers in src/platform/host/adapters/** MUST be generic over (topic, handler-resolver, schema-registry, projection-table-resolver). Per-domain workers (e.g. KafkaTodoProjectionConsumerWorker) are FORBIDDEN.
 - **PLAT-DET-01**: Within src/platform/host/adapters/**, Guid.NewGuid() and DateTime*.UtcNow are FORBIDDEN. Use injected IIdGenerator (with deterministic seed derived from aggregate id+version) and IClock. Sole exception: SystemClock itself.
+
+## NEW RULES INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **PLAT-DISPATCH-ONLY-01** (S1): All controller actions in `src/platform/api/controllers/**` MUST
+  enter the runtime through `ISystemIntentDispatcher.DispatchAsync` and return `CommandResult` (with
+  the full `auditEmission` envelope — PolicyEvaluatedEvent, DecisionHash, ExecutionHash,
+  correlation/causation IDs). Direct `IIntentHandler.HandleAsync` calls from controllers are
+  FORBIDDEN. Two parallel paths into the runtime = structural drift. DRIFT-4.
+- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

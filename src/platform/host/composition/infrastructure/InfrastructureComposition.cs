@@ -28,17 +28,21 @@ public static class InfrastructureComposition
         IConfiguration configuration)
     {
         // --- Connection strings (NO hardcoded fallback for required deps) ---
-        var postgresEventStoreCs = configuration.GetValue<string>("Postgres__ConnectionString")
-            ?? throw new InvalidOperationException("Postgres__ConnectionString is required. No fallback.");
-        var postgresChainCs = configuration.GetValue<string>("Postgres__ChainConnectionString")
+        // phase1.6-CFG-K1: env-var lookup uses Section:Key form. .NET's
+        // AddEnvironmentVariables() rewrites env-var "Foo__Bar" to config
+        // key "Foo:Bar"; the literal "Foo__Bar" lookup never matches an
+        // env var by design. See claude/new-rules/20260408-145000-validation-live-execution.md.
+        var postgresEventStoreCs = configuration.GetValue<string>("Postgres:ConnectionString")
+            ?? throw new InvalidOperationException("Postgres:ConnectionString is required. No fallback.");
+        var postgresChainCs = configuration.GetValue<string>("Postgres:ChainConnectionString")
             ?? postgresEventStoreCs;
         var postgresOutboxCs = postgresEventStoreCs;
-        var redisConnectionString = configuration.GetValue<string>("Redis__ConnectionString")
-            ?? throw new InvalidOperationException("Redis__ConnectionString is required. No fallback.");
-        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka__BootstrapServers")
-            ?? throw new InvalidOperationException("Kafka__BootstrapServers is required. No fallback.");
-        var opaEndpoint = configuration.GetValue<string>("OPA__Endpoint")
-            ?? throw new InvalidOperationException("OPA__Endpoint is required. No fallback.");
+        var redisConnectionString = configuration.GetValue<string>("Redis:ConnectionString")
+            ?? throw new InvalidOperationException("Redis:ConnectionString is required. No fallback.");
+        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
+            ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
+        var opaEndpoint = configuration.GetValue<string>("OPA:Endpoint")
+            ?? throw new InvalidOperationException("OPA:Endpoint is required. No fallback.");
 
         // --- Event store + schema-driven deserializer ---
         services.AddSingleton<IEventStore>(sp =>
@@ -93,7 +97,7 @@ public static class InfrastructureComposition
         // so unconfigured deployments are byte-identical to the previous
         // behavior. Validation lives in the OutboxOptions/publisher
         // constructor — composition only resolves the value.
-        var outboxMaxRetry = configuration.GetValue<int?>("Outbox__MaxRetry")
+        var outboxMaxRetry = configuration.GetValue<int?>("Outbox:MaxRetry")
             ?? new OutboxOptionsRecord().MaxRetry;
         var outboxOptions = new OutboxOptionsRecord { MaxRetry = outboxMaxRetry };
         services.AddSingleton(outboxOptions);

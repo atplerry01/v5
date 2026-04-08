@@ -254,3 +254,13 @@ Verify projections do not mutate domain.
 
 MAP: see claude/traceability/guard-traceability.map.md
 - Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
+
+## NEW CHECKS INTEGRATED — 2026-04-08
+
+- **CHECK-PROJ-REPLAY-SAFE-01** (S2): Grep all handlers under `src/projections/**` for
+  `throw new InvalidOperationException` branches guarding missing read-model rows. Any match on a
+  lifecycle handler = FAIL. Handlers must upsert-on-missing.
+- **CHECK-PROJ-NO-INPLACE-MUTATION-01** (S2): Grep all handlers under `src/projections/**` for
+  in-place mutation of values returned from `IProjectionStore.GetAsync` (e.g. dictionary indexer
+  assignment on an `existing` variable). Any match = FAIL.
+- Source: `claude/new-rules/_archives/20260408-091500-domain.md`.

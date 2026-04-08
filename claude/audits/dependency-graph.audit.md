@@ -132,3 +132,5 @@ must be addressed by an explicit remediation prompt before lock.
 
 - **CHECK-DG-R7-01**: scripts/dependency-check.sh MUST flag Whycespace.Projections.csproj -> Whycespace.Runtime.csproj as a violation until remediated or explicit exception is logged in dependency-graph.guard.md.
 - **CHECK-DG-R5-01**: scripts/dependency-check.sh MUST flag Whycespace.Host.csproj -> Runtime/Engines/Projections/Domain as 4 distinct R5 violations until remediated or scoped exception is granted. LOCK condition is suspended while either rule is red.
+- **CHECK-DG-BASELINE-01**: (2026-04-07 addendum) The baseline scan findings above MUST remain RED in the audit report until the new-rule
+  `claude/new-rules/_archives/20260407-160000-dependency-graph.md` is resolved (remediation PR or documented exception). S0.

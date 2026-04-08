@@ -169,3 +169,10 @@ design-intent violation as well.
   block list.
 - [claude/audits/replay-determinism.audit.md](../audits/replay-determinism.audit.md) —
   the by-design source-of-truth for the sentinel pattern.
+
+## NEW RULES INTEGRATED — 2026-04-07 (policy eventification)
+
+- **POLICY-REPLAY-INTEGRITY-01** (S0): `EventReplayService` MUST NOT re-evaluate policy during replay.
+  Stored `PolicyEvaluatedEvent` / `PolicyDeniedEvent` records are the source of truth for replayed decisions.
+  Re-evaluation would risk drift if policy versions or trust scores have changed since original evaluation.
+- Source: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`.

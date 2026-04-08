@@ -180,3 +180,38 @@ Kafka partition MUST be deterministic.
 
 ENFORCEMENT:
 - PartitionResolver must use deterministic hash (FNV-1a or equivalent)
+
+## NEW RULES INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **K-TOPIC-COVERAGE-01** (S0): Every event type ever written to `outbox.topic` MUST have a
+  corresponding topic provisioned in `infrastructure/event-fabric/kafka/create-topics.sh`. A
+  startup-time guard MUST diff the set of distinct `outbox.topic` values against the broker topic
+  list and fail fast on mismatch. DRIFT-1.
+- **K-OUTBOX-ISOLATION-01** (S0): Outbox publishers MUST catch produce exceptions per row, mark the
+  row `status='failed'` with an error message column (or move it to a dead-letter table), and
+  continue. A single bad row MUST NOT halt the publish loop or crash the host. DRIFT-2.
+- **K-TOPIC-DOC-CONSISTENCY-01** (S3): Any topic name written in `claude/` docs / prompts MUST match
+  an existing topic in `create-topics.sh`. DRIFT-6.
+
+## NEW RULES INTEGRATED — 2026-04-08 (DLQ publish)
+
+- **K-DLQ-PUBLISH-01** (S2): Sub-clause of rule 8 (Dead Letter Topic Required). When an outbox row
+  exhausts its retry budget, the publisher MUST attempt to produce the message body to the canonical
+  deadletter topic `{classification}.{context}.{domain}.deadletter` BEFORE updating the row to
+  `status='deadletter'`. Headers MUST include original topic, `event-type`, `correlation-id`, and
+  `dlq-reason` (last error). "Configured" in rule 8 means "actively published to," not merely "exists
+  in create-topics.sh." Source:
+  `claude/new-rules/_archives/20260408-010000-kafka-dlq-publish.md`.
+
+## NEW RULES INTEGRATED — 2026-04-08 (Kafka header contract)
+
+- **K-HEADER-CONTRACT-01** (S1): Sub-clause of rule 6 (OUTBOX PATTERN MANDATORY). All Kafka messages
+  produced by the WBSM event fabric MUST carry the following headers populated from the canonical
+  `EventEnvelope` discrete columns (NOT derived from payload bodies):
+  `event-id` (UUID, from `EventEnvelope.EventId`), `aggregate-id` (UUID, from
+  `EventEnvelope.AggregateId`), `event-type` (string), `correlation-id` (UUID). Consumers MUST NOT
+  silently skip messages with missing headers — missing headers indicate a producer-side contract
+  violation and must be surfaced (deadletter or halt), never absorbed. Source:
+  `claude/new-rules/_archives/20260408-020000-kafka-header-contract.md`.
+
+- Phase 1 gate source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

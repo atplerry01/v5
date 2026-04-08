@@ -298,3 +298,17 @@ ENFORCEMENT:
   applied and a Postgres-backed adapter is provided.
 - Any runtime-side type that re-introduces a `WorkflowState*` mutator,
   observer, or in-memory store under `src/runtime/**` is an S1 violation.
+
+## NEW RULES INTEGRATED — 2026-04-08 (projection replay safety + mutation)
+
+- **PROJ-REPLAY-SAFE-01** (S2): Projection handlers MUST be replay-safe. Lifecycle handlers
+  (`WorkflowStepCompletedEventSchema`, `WorkflowExecutionCompletedEventSchema`,
+  `WorkflowExecutionFailedEventSchema`, and all equivalents) MUST upsert on missing read-model rows
+  rather than throwing `InvalidOperationException`. Alternatively, a documented out-of-order
+  buffering mechanism MUST exist. Throwing on missing state crashes the consumer on
+  dropped / out-of-order / partial-offset rebuild paths.
+- **PROJ-NO-INPLACE-MUTATION-01** (S2): Projection handlers MUST NOT mutate state returned from a
+  projection store in place (e.g. `existing.StepOutputs[e.StepName] = e.Output`). Either the store
+  contract guarantees a fresh-copy return, OR handlers construct a new collection before mutation.
+  `with` expressions do not clone dictionary/list members — they shallow-copy the record only.
+- Source: `claude/new-rules/_archives/20260408-091500-domain.md`.

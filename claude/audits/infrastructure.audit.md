@@ -208,3 +208,14 @@ blocking_violations: {count of CRITICAL/HIGH}
 - **CHECK-INFRA-CLOCK-01** (S-CLOCK-01): Verify IClock present in shared kernel and consumed by all timestamp generators outside domain aggregates.
 - **CHECK-INFRA-TOPICS-01**: Bootstrap MUST apply event-store + outbox + chain migrations to event store DB (not just event-store migrations). Missing migration sets in initdb.d / bootstrap = S2.
 - **CHECK-INFRA-PLACEHOLDER-01**: Every in-memory repository in production composition is marked as placeholder AND has corresponding scripts/migrations/*.sql ready.
+
+## NEW CHECKS INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **CHECK-INFRA-HSID-INITDB-01** (S3): Assert the compose postgres `initdb.d` mount covers the HSID
+  migration at `infrastructure/data/postgres/hsid/migrations/001_hsid_sequences.sql`, either by
+  folding it into the event-store migrations directory or adding a second mount. Host crashing with
+  `HSID FATAL` on first run = FAIL. DRIFT-8.
+- **CHECK-DOCS-STARTUP-SAFETY-01** (S3): `docs/start-up.md` must not contain destructive global
+  docker commands (e.g. `docker rm -f $(docker ps -aq)`). Startup cleanup MUST be scoped via
+  `docker compose -f infrastructure/deployment/docker-compose.yml down`. DRIFT-7.
+- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

@@ -173,3 +173,15 @@ PROMPT_CONTAINER_GUARD_VIOLATION:
   actual: <detected issue>
   remediation: <fix instruction>
 ```
+
+## NEW RULES INTEGRATED — 2026-04-07 (prompt reconciliation pre-execution)
+
+- **PROMPT-RECONCILE-01** (S2): Pasted prompts MUST be reconciled against existing repository surface
+  area BEFORE code emission. For every type / interface / method / path / topic named in the prompt,
+  verify the canonical equivalent in the codebase. If the prompt literal differs from the canonical
+  name (e.g. `IKafkaConsumer` vs `GenericKafkaProjectionConsumerWorker`, `t1m/` vs `T1M/`,
+  `whyce.workflow.execution.events` vs `whyce.orchestration-system.workflow.events`,
+  `IEventStore.LoadAsync` vs `LoadEventsAsync`), the canonical name MUST be used and the divergence
+  recorded inline in the project-prompt file under a RECONCILIATION section. Literal execution of an
+  unreconciled prompt is a $5 anti-drift violation.
+- Source: `claude/new-rules/_archives/20260407-220000-prompt-reconciliation-pre-execution.md`.

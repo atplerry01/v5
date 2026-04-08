@@ -231,3 +231,43 @@ Runtime MUST follow canonical execution order:
 6. Persistence
 7. Chain
 8. Kafka Publish
+
+## NEW RULES INTEGRATED — 2026-04-07 (policy eventification)
+
+- **POLICY-PIPELINE-INTEGRATION-01** (S0): Policy events MUST flow through the RuntimeControlPlane event
+  fabric (persist → chain → publish → outbox). PolicyMiddleware MUST NOT call EventStore, ChainAnchorService,
+  or KafkaProducer directly. Policy events are returned via CommandResult.EmittedEvents and processed by the
+  fabric. Extends rule 7 (Chain/Publish authority).
+- Source: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`.
+
+## NEW RULES INTEGRATED — 2026-04-07 (workflow resume replay service)
+
+- **R-WF-RESUME-01** (S2): `RuntimeCommandDispatcher` MUST NOT reference `Whycespace.Domain.*` types in
+  order to implement `WorkflowResumeCommand`. Workflow aggregate reconstruction from the event store MUST be
+  delegated to `IWorkflowExecutionReplayService` (contract in `src/shared/contracts/runtime/`, implementation
+  under `src/engines/T1M/lifecycle/` or `src/platform/host/adapters/`). Extends rule 11.R-DOM-01. Until the
+  service exists, `WorkflowResumeCommand` returns a structured failure.
+- Source: `claude/new-rules/_archives/20260407-210000-workflow-resume-replay-service.md`.
+
+## NEW RULES INTEGRATED — 2026-04-07 (workflow resume payload)
+
+- **R-WF-PAYLOAD-01** (S2): `WorkflowExecutionStartedEvent` MUST persist the original
+  `WorkflowStartCommand.Payload` and `WorkflowStepCompletedEvent` MUST persist step `Output`. Resume
+  paths rely on these for correct reconstruction. H9 closed the persistence half.
+- **R-WF-PAYLOAD-TYPED-01** (S2): Because `Payload` / `Output` are statically typed as `object?` and
+  Postgres-backed replay round-trips them as `JsonElement`, a payload-type registry (event-type →
+  payload CLR type) MUST be consulted by `EventDeserializer` when materializing Payload/Output.
+  Steps performing `(MyPayloadType)context.Payload` otherwise fail on Postgres-backed resume. Remediation
+  pending.
+- Source: `claude/new-rules/_archives/20260407-230000-workflow-resume-payload-and-test-coverage.md`.
+
+## NEW RULES INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **R-EVENT-AUDIT-COLS-01** (S1): All persisted domain events MUST carry the audit envelope fields
+  (`execution_hash`, `correlation_id`, `causation_id`, `policy_decision_hash`, `policy_version`) as
+  first-class columns on the `events` table. Values present in API response / `outbox.payload` but
+  absent from `events` = violation. DRIFT-3.
+- **R-CHAIN-CORRELATION-01** (S2): The `correlation_id` written to `whyce_chain` MUST equal the
+  `correlationId` returned in the API `auditEmission` for the same command. No layer between the
+  dispatcher and the chain anchor may rewrite correlation IDs. DRIFT-5.
+- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

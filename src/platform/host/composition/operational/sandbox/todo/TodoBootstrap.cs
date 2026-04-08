@@ -41,9 +41,10 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 
         // Projection layer (consumers receive events from Kafka ONLY)
         // phase1.5-S1 (CFG-R3): no fallback — env var is required.
-        var projectionsCs = configuration.GetValue<string>("Postgres__ProjectionsConnectionString")
+        // phase1.6-CFG-K1: Section:Key form (see InfrastructureComposition.cs)
+        var projectionsCs = configuration.GetValue<string>("Postgres:ProjectionsConnectionString")
             ?? throw new InvalidOperationException(
-                "Postgres__ProjectionsConnectionString is required. No fallback.");
+                "Postgres:ProjectionsConnectionString is required. No fallback.");
         services.AddSingleton(sp => new TodoProjectionHandler(projectionsCs));
         services.AddSingleton<TodoProjectionConsumer>();
 
@@ -53,12 +54,12 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         // Kafka projection consumer — generic worker (Phase B2b).
         // Per-domain config (topic, group, projection table) lives here in the bootstrap module;
         // the worker itself contains zero domain references.
-        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka__BootstrapServers")
-            ?? throw new InvalidOperationException("Kafka__BootstrapServers is required. No fallback.");
+        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
+            ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
         // phase1.5-S1 (CFG-R3): no fallback — env var is required.
-        var postgresProjectionsCs = configuration.GetValue<string>("Postgres__ProjectionsConnectionString")
+        var postgresProjectionsCs = configuration.GetValue<string>("Postgres:ProjectionsConnectionString")
             ?? throw new InvalidOperationException(
-                "Postgres__ProjectionsConnectionString is required. No fallback.");
+                "Postgres:ProjectionsConnectionString is required. No fallback.");
 
         const string topic = "whyce.operational.sandbox.todo.events";
         const string consumerGroup = "whyce.projection.operational.sandbox.todo";

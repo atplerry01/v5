@@ -19,14 +19,15 @@ public static class ObservabilityComposition
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var postgresEventStoreCs = configuration.GetValue<string>("Postgres__ConnectionString")
-            ?? throw new InvalidOperationException("Postgres__ConnectionString is required. No fallback.");
-        var redisConnectionString = configuration.GetValue<string>("Redis__ConnectionString")
-            ?? throw new InvalidOperationException("Redis__ConnectionString is required. No fallback.");
-        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka__BootstrapServers")
-            ?? throw new InvalidOperationException("Kafka__BootstrapServers is required. No fallback.");
-        var opaEndpoint = configuration.GetValue<string>("OPA__Endpoint")
-            ?? throw new InvalidOperationException("OPA__Endpoint is required. No fallback.");
+        // phase1.6-CFG-K1: Section:Key form (see InfrastructureComposition.cs)
+        var postgresEventStoreCs = configuration.GetValue<string>("Postgres:ConnectionString")
+            ?? throw new InvalidOperationException("Postgres:ConnectionString is required. No fallback.");
+        var redisConnectionString = configuration.GetValue<string>("Redis:ConnectionString")
+            ?? throw new InvalidOperationException("Redis:ConnectionString is required. No fallback.");
+        var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
+            ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
+        var opaEndpoint = configuration.GetValue<string>("OPA:Endpoint")
+            ?? throw new InvalidOperationException("OPA:Endpoint is required. No fallback.");
 
         services.AddSingleton<IHealthCheck>(_ =>
             new PostgreSqlHealthCheck(postgresEventStoreCs));
@@ -45,13 +46,13 @@ public static class ObservabilityComposition
 
         services.AddSingleton<IHealthCheck>(_ =>
         {
-            var endpoint = configuration.GetValue<string>("MinIO__Endpoint")
-                ?? throw new InvalidOperationException("MinIO__Endpoint is required. No fallback.");
-            var accessKey = configuration.GetValue<string>("MinIO__AccessKey")
-                ?? throw new InvalidOperationException("MinIO__AccessKey is required. No fallback.");
-            var secretKey = configuration.GetValue<string>("MinIO__SecretKey")
-                ?? throw new InvalidOperationException("MinIO__SecretKey is required. No fallback.");
-            var useSsl = configuration.GetValue<bool>("MinIO__UseSsl", false);
+            var endpoint = configuration.GetValue<string>("MinIO:Endpoint")
+                ?? throw new InvalidOperationException("MinIO:Endpoint is required. No fallback.");
+            var accessKey = configuration.GetValue<string>("MinIO:AccessKey")
+                ?? throw new InvalidOperationException("MinIO:AccessKey is required. No fallback.");
+            var secretKey = configuration.GetValue<string>("MinIO:SecretKey")
+                ?? throw new InvalidOperationException("MinIO:SecretKey is required. No fallback.");
+            var useSsl = configuration.GetValue<bool>("MinIO:UseSsl", false);
 
             var client = new MinioClient()
                 .WithEndpoint(endpoint)

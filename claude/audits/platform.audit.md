@@ -55,3 +55,11 @@ wall clock.
 | S3 violation | -1 per occurrence |
 | Floor | 0 |
 | Pass threshold | >= 80 |
+
+## NEW CHECKS INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **CHECK-PLAT-DISPATCH-ONLY-01** (S1): Grep `src/platform/api/controllers/**` for
+  `_intentHandler.HandleAsync` or any direct `IIntentHandler` invocation in action methods. Any match
+  = violation. Assert every `[HttpPost|HttpPut|HttpPatch|HttpDelete]` action body invokes
+  `_dispatcher.DispatchAsync` and returns `CommandResult`. DRIFT-4.
+- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

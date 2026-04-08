@@ -213,3 +213,12 @@ Verify every policy decision is anchored to WhyceChain.
 
 MAP: see claude/traceability/guard-traceability.map.md
 - Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
+
+## NEW CHECKS INTEGRATED — 2026-04-07 (policy eventification)
+
+- **CHECK-POLICY-EVENT-REQUIRED-01** (S0): For every `PolicyDecisionHash` observed in chain/outbox, assert a
+  corresponding `PolicyEvaluatedEvent` or `PolicyDeniedEvent` exists in the event store carrying
+  DecisionHash, IdentityId, PolicyName, CorrelationId, CausationId. Missing = violation.
+- **CHECK-POLICY-NO-SILENT-DECISION-01** (S0): Scan for DecisionHash values with no matching policy event
+  row. Any match = violation.
+- Source: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`.

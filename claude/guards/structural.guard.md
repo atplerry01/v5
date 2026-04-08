@@ -166,3 +166,14 @@ STRUCTURAL_GUARD_VIOLATION:
 - **STR-AUTH-01**: Every controller action with HTTP verb POST/PUT/PATCH/DELETE MUST be protected by [Authorize] (controller or action) OR by global authentication middleware registered before MVC routing. A structural scan MUST fail the build for any unprotected mutating endpoint.
 - **STR-HEALTH-01**: Health-check adapter implementations live in src/infrastructure/health/. Contracts (IHealthCheck, HealthCheckResult) live in src/shared/contracts/infrastructure/health/. HealthAggregator lives in infrastructure and is exposed only via platform API.
 - **STR-OBS-01**: Observability middleware (metrics/logging/tracing) lives ONLY in src/runtime/observability/. MUST NOT contain business logic or domain references.
+
+## NEW RULES INTEGRATED — 2026-04-08 (guard-registry drift)
+
+- **STR-GUARD-REGISTRY-01** (S2): CLAUDE.md $1a guard list drifts from on-disk `claude/guards/*.guard.md`.
+  The canonical loading semantics MUST be "load every `*.guard.md` under `/claude/guards/`" rather than
+  an explicit enumeration, so the set self-heals against future guard additions. Any explicit
+  enumeration in CLAUDE.md $1a MUST match the on-disk set exactly, or be replaced with the glob
+  directive. Phase-1 authored guards (clean-code, composition-loader, dependency-graph, determinism,
+  deterministic-id, hash-determinism, platform, program-composition, replay-determinism, runtime-order)
+  are canonical. Source:
+  `claude/new-rules/_archives/20260408-090519-guards.md`.

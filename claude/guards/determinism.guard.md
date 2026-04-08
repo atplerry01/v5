@@ -131,3 +131,17 @@ and an existing guard overlap, the stricter rule wins.
 - **DET-ADAPTER-01**: Block list extended to src/platform/host/adapters/**. Forbidden: Guid.NewGuid(), DateTime.Now, DateTime.UtcNow, DateTimeOffset.Now, DateTimeOffset.UtcNow. Use IIdGenerator.Generate(seed) with deterministic seed derived from aggregate id/version/stream coordinate, and IClock.UtcNow.
 - **DET-EXCEPTION-01**: The IClock implementation (SystemClock) is the ONLY permitted reader of DateTimeOffset.UtcNow. SQL NOW() / CURRENT_TIMESTAMP is permitted ONLY for audit columns the application does NOT read back into deterministic logic.
 - **DET-SEED-01**: PostgresEventStoreAdapter row id MUST derive from "{aggregateId}:{version}" via IIdGenerator. Kafka projection envelopes MUST stamp Timestamp from IClock.UtcNow, not consume-moment wall clock.
+
+## NEW RULES INTEGRATED — 2026-04-07 (HSID v2.1 parallel seam)
+
+- **DET-DUAL-SEAM-01** (S1): The "single permitted ID seam" wording is reconciled. TWO deterministic
+  identity seams are now canonical with non-overlapping responsibilities:
+  (1) `IIdGenerator.Generate(seed)` — returns `Guid`, used for internal adapter/row/hash IDs, sole
+  implementation `DeterministicIdGenerator` (SHA256 of seed → Guid).
+  (2) `IDeterministicIdEngine.Generate(...)` — returns compact string
+  `PPP-LLLL-TTT-TOPOLOGY-SEQ` for external-facing correlation IDs, sole implementation
+  `Whyce.Engines.T0U.Determinism.DeterministicIdEngine`. Both must remain free of `Guid.NewGuid`,
+  `DateTime*.UtcNow`, `Random`, `Environment.Tick*`.
+- **DET-HSID-CALLSITE-01** (S1): `IDeterministicIdEngine.Generate(...)` MUST NOT be called outside
+  `src/runtime/control-plane/` and `src/engines/T0U/determinism/`.
+- Source: `claude/new-rules/_archives/20260407-200000-hsid-v2.1-parallel-seam.md`.

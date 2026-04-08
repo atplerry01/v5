@@ -253,3 +253,23 @@ Verify policy executes before aggregate load.
 
 MAP: see claude/traceability/guard-traceability.map.md
 - Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
+
+## NEW CHECKS INTEGRATED — 2026-04-07 / 2026-04-08
+
+- **CHECK-POLICY-PIPELINE-INTEGRATION-01** (S0): Grep `src/runtime/middleware/policy/**` for any direct
+  reference to `EventStore`, `ChainAnchorService`, or `KafkaProducer` / `IKafkaProducer`. Any match =
+  violation. Policy events must flow via `CommandResult.EmittedEvents`.
+- **CHECK-R-WF-RESUME-01** (S2): `src/runtime/dispatcher/RuntimeCommandDispatcher.cs` must not contain any
+  `using Whycespace.Domain.*` added for workflow resume; resume must invoke `IWorkflowExecutionReplayService`
+  from `src/shared/contracts/runtime/`. Until the service exists, the dispatcher must return a structured
+  failure for `WorkflowResumeCommand`.
+- Sources: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`,
+  `claude/new-rules/_archives/20260407-210000-workflow-resume-replay-service.md`.
+
+## NEW CHECKS INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
+
+- **CHECK-R-EVENT-AUDIT-COLS-01** (S1): `\\d public.events` must include `execution_hash`,
+  `correlation_id`, `causation_id`, `policy_decision_hash`, `policy_version` columns. Missing = FAIL.
+- **CHECK-R-CHAIN-CORRELATION-01** (S2): For each command in a test run, compare the API
+  `auditEmission.correlationId` to `whyce_chain.correlation_id`. Any mismatch = FAIL.
+- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

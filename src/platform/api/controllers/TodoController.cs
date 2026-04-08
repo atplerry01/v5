@@ -30,9 +30,11 @@ public sealed class TodoController : ControllerBase
         _redis = redis;
         // phase1.5-S1 (CFG-R3, CFG-R4): no fallback — env var is required.
         // Indexer access replaced with GetValue<T>() to match the canonical pattern.
-        _projectionsConnectionString = configuration.GetValue<string>("Projections__ConnectionString")
+        // phase1.6-CFG-K1: Section:Key form (env var Projections__ConnectionString
+        // is rewritten to config key Projections:ConnectionString by .NET).
+        _projectionsConnectionString = configuration.GetValue<string>("Projections:ConnectionString")
             ?? throw new InvalidOperationException(
-                "Projections__ConnectionString is required. No fallback.");
+                "Projections:ConnectionString is required. No fallback.");
     }
 
     [HttpPost("create")]

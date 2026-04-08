@@ -137,3 +137,13 @@ TESTS_GUARD_VIOLATION:
 - **T-BUILD-01**: tests/integration/ MUST compile on every CI run. A red integration project halts merge. The CI gate fails when "dotnet build tests/integration/Whycespace.Tests.Integration.csproj" fails.
 - **T-DOUBLES-01**: All in-memory test doubles (InMemoryChainAnchor, InMemoryOutbox, InMemoryEventStore, etc.) MUST take IClock and IIdGenerator constructor parameters. No Guid.NewGuid() / DateTimeOffset.UtcNow inside test doubles.
 - **T-PLACEHOLDER-01**: In-memory repository implementations used in production composition MUST be clearly marked as placeholders AND have a corresponding migration script in scripts/migrations/ ready for swap.
+
+## NEW RULES INTEGRATED — 2026-04-07 (workflow resume test coverage)
+
+- **T1M-RESUME-TEST-COVERAGE-01** (S2): A `T1MWorkflowHarness` test fixture MUST exist under
+  `tests/integration/orchestration-system/workflow/` wiring `T1MWorkflowEngine`, `WorkflowStepExecutor`,
+  in-memory `IWorkflowRegistry`, and a real `IEventStore`. Required scenarios: resume midway
+  (cursor = 2 of 4 → executes steps 2,3); resume completed → fails with "not in resumable state";
+  resume after failure → re-runs the failed step per chosen policy. `NoOpWorkflowEngine` stubs do not
+  satisfy this rule.
+- Source: `claude/new-rules/_archives/20260407-230000-workflow-resume-payload-and-test-coverage.md`.

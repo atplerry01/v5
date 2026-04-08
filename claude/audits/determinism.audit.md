@@ -67,3 +67,12 @@ Verify policy decisions produce deterministic hashes.
 
 MAP: see claude/traceability/guard-traceability.map.md
 - Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
+
+## NEW CHECKS INTEGRATED — 2026-04-07 (HSID v2.1 parallel seam)
+
+- **CHECK-DET-DUAL-SEAM-01** (S1): Assert both `IIdGenerator` and `IDeterministicIdEngine` exist with
+  exactly one implementation each. Neither implementation may call `Guid.NewGuid`, `DateTime.UtcNow`,
+  `Random`, or `Environment.Tick*`.
+- **CHECK-DET-HSID-CALLSITE-01** (S1): Grep repo for `IDeterministicIdEngine` callers; any match
+  outside `src/runtime/control-plane/` or `src/engines/T0U/determinism/` = violation.
+- Source: `claude/new-rules/_archives/20260407-200000-hsid-v2.1-parallel-seam.md`.

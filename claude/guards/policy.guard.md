@@ -158,3 +158,13 @@ POLICY_GUARD_VIOLATION:
 ## NEW RULES INTEGRATED — 2026-04-07
 
 - **POL-AUDIT-01**: After every WHYCEPOLICY evaluation (allow OR deny), runtime pipeline MUST emit a PolicyEvaluatedEvent / PolicyDeniedEvent containing DecisionHash, IdentityId, PolicyName, IsAllowed. Decision must be independently auditable as an event, not only via chain DecisionHash.
+
+## NEW RULES INTEGRATED — 2026-04-07 (policy eventification)
+
+- **POLICY-EVENT-REQUIRED-01** (S0): Every WHYCEPOLICY evaluation (allow OR deny) MUST emit a domain event
+  (PolicyEvaluatedEvent or PolicyDeniedEvent) carrying DecisionHash, IdentityId, PolicyName, CorrelationId,
+  CausationId. A DecisionHash without a corresponding event is a governance violation. Extends POL-AUDIT-01.
+- **POLICY-NO-SILENT-DECISION-01** (S0): A policy evaluation that produces a DecisionHash but does not appear
+  as a domain event in EventStore is forbidden. Audit trail must be queryable via the event stream, not only
+  via chain anchors.
+- Source: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`.

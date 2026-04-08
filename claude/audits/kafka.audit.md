@@ -218,3 +218,25 @@ Verify topic naming follows canonical format.
 
 MAP: see claude/traceability/guard-traceability.map.md
 - Each CHECK in this audit maps to a Guard Rule ID, Enforcement Point, and Evidence as defined in the master traceability map.
+
+## NEW CHECKS INTEGRATED — 2026-04-08
+
+- **CHECK-K-TOPIC-COVERAGE-01** (S0): At startup AND in audit runs, diff
+  `SELECT DISTINCT topic FROM outbox` against `kafka-topics.sh --list`. Any outbox topic missing from
+  the broker = FAIL. DRIFT-1.
+- **CHECK-K-OUTBOX-ISOLATION-01** (S0): Inspect `KafkaOutboxPublisher.cs`. Assert per-row try/catch
+  with row-level status update on produce failure. Assert `PublishBatchAsync` does not propagate a
+  single-row exception to `ExecuteAsync`. DRIFT-2.
+- **CHECK-K-DLQ-PUBLISH-01** (S2, CHECK-07.2 clarification): For every row transitioning to
+  `status='deadletter'`, verify a matching produce to `{classification}.{context}.{domain}.deadletter`
+  with required headers (`event-type`, `correlation-id`, `dlq-reason`, original topic). Source:
+  `claude/new-rules/_archives/20260408-010000-kafka-dlq-publish.md`.
+- **CHECK-K-HEADER-CONTRACT-01** (S1, under KDIM-04 Outbox Pattern Enforcement): Sample produced
+  Kafka messages; assert presence and UUID parseability of `event-id` and `aggregate-id`, plus
+  `event-type` and `correlation-id`. Verify publisher reads these from discrete outbox columns, not
+  from a JSON-parse of `payload`. Assert `GenericKafkaProjectionConsumerWorker` does not silently
+  commit offset on missing headers. Source:
+  `claude/new-rules/_archives/20260408-020000-kafka-header-contract.md`.
+- **CHECK-K-TOPIC-DOC-CONSISTENCY-01** (S3): Grep `claude/**` for `whyce\\.[a-z-]+` strings and assert
+  each matches a topic in `create-topics.sh`. DRIFT-6.
+- Phase 1 gate source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.

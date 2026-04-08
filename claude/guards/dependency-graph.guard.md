@@ -200,3 +200,12 @@ permission explicitly inside dependency-graph.guard.md.
 on `Whycespace.Host.csproj` references. DG-R7-01 (projections → runtime)
 remains the sole outstanding tracked violation under this guard, pending
 the `IProjectionHandler` relocation in Prompt B Step B-1.
+
+## NEW RULES INTEGRATED — 2026-04-07 (baseline scan addendum)
+
+- **DG-BASELINE-01** (S0): Dual violations logged — (R7) Projections →
+  Runtime and (R5 ×4) Platform/Host fan-in to Runtime/Engines/Projections/
+  Domain. LOCK blocked until remediated (invert dependencies via shared/
+  domain contracts and route Host composition through systems facades) OR
+  narrow exception documented inline. See
+  `claude/new-rules/_archives/20260407-160000-dependency-graph.md`.
