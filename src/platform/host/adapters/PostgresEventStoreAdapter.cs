@@ -71,16 +71,28 @@ public sealed class PostgresEventStoreAdapter : IEventStore
             await lockCmd.ExecuteNonQueryAsync();
         }
 
-        // Compute current max version for this aggregate inside the transaction so
-        // concurrent appends serialize correctly. Ignores caller-supplied expectedVersion;
-        // determinism comes from the stored stream, not the in-memory engine snapshot.
+        // Compute current max version for this aggregate inside the transaction.
+        // Combined with the H8a advisory lock above, this is the linearization
+        // point for per-aggregate version assignment.
+        int currentMax;
         await using (var maxCmd = new NpgsqlCommand(
             "SELECT COALESCE(MAX(version), -1) FROM events WHERE aggregate_id = @id",
             conn, tx))
         {
             maxCmd.Parameters.AddWithValue("id", aggregateId);
             var scalar = await maxCmd.ExecuteScalarAsync();
-            expectedVersion = scalar is int v ? v : Convert.ToInt32(scalar);
+            currentMax = scalar is int v ? v : Convert.ToInt32(scalar);
+        }
+
+        // phase1-gate-H8b: optimistic concurrency enforcement.
+        // Sentinel -1 means "no check" — preserves the prior behavior for any
+        // caller that has not yet been migrated to assert a version. When the
+        // caller DOES assert a positive version and it disagrees with what the
+        // store actually has, we throw a named exception BEFORE the INSERT so
+        // nothing is persisted and the transaction rolls back cleanly.
+        if (expectedVersion != -1 && expectedVersion != currentMax)
+        {
+            throw new ConcurrencyConflictException(aggregateId, expectedVersion, currentMax);
         }
 
         // phase1-gate-H7-H9-safe (#8): single multi-row INSERT instead of one
@@ -95,7 +107,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
 
             for (var i = 0; i < events.Count; i++)
             {
-                var version = expectedVersion + i + 1;
+                var version = currentMax + i + 1;
                 var domainEvent = events[i];
                 var eventType = domainEvent.GetType().Name;
                 var aggregateType = ExtractAggregateType(domainEvent);

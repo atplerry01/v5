@@ -119,7 +119,9 @@ public sealed class EventFabric : IEventFabric
         var topic = _topicNameResolver.Resolve(envelopes[0], "events");
 
         // Step 2: Persist to EventStore (source of truth)
-        await _eventStoreService.AppendAsync(aggregateId, domainEvents);
+        // phase1-gate-H8b: forward the dispatcher-captured ExpectedVersion as
+        // the optimistic concurrency assertion. null → -1 sentinel (no check).
+        await _eventStoreService.AppendAsync(aggregateId, domainEvents, context.ExpectedVersion ?? -1);
 
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
         await _chainAnchorService.AnchorAsync(context.CorrelationId, domainEvents, policyHash);

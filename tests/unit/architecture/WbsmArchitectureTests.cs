@@ -156,6 +156,19 @@ public sealed class WbsmArchitectureTests
     // ─────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Event_store_adapter_enforces_expected_version_check()
+    {
+        var path = Path.Combine(SrcRoot, "platform", "host", "adapters", "PostgresEventStoreAdapter.cs");
+        var content = File.ReadAllText(path);
+
+        // The H8b enforcement block must be present. Pinning the canonical
+        // form prevents a future refactor from silently reverting to the
+        // pre-H8b "ignore parameter" pattern.
+        Assert.Contains("expectedVersion != -1", content);
+        Assert.Contains("ConcurrencyConflictException", content);
+    }
+
+    [Fact]
     public void Outbox_publisher_keys_kafka_messages_by_aggregate_id_not_correlation_id()
     {
         var path = Path.Combine(SrcRoot, "platform", "host", "adapters", "KafkaOutboxPublisher.cs");

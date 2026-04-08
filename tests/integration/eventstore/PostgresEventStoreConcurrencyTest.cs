@@ -1,5 +1,6 @@
 using Npgsql;
 using Whyce.Platform.Host.Adapters;
+using Whyce.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Integration.EventStore;
@@ -121,6 +122,85 @@ public sealed class PostgresEventStoreConcurrencyTest
         {
             await CleanupAsync(connectionString, aggA);
             await CleanupAsync(connectionString, aggB);
+        }
+    }
+
+    [Fact]
+    public async Task Stale_Writer_With_Wrong_Expected_Version_Throws_ConcurrencyConflictException()
+    {
+        if (SkipIfNoDatabase()) return;
+
+        var connectionString = ConnectionString!;
+        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        var aggregateId = IdGen.Generate($"H8b:Stale:{Guid.NewGuid()}");
+
+        try
+        {
+            // Establish two events: stream now has versions 0 and 1.
+            await adapter.AppendEventsAsync(
+                aggregateId,
+                new object[] { new ConcurrencyProbeEvent("v0"), new ConcurrencyProbeEvent("v1") },
+                expectedVersion: -1);
+
+            // A stale writer asserts it expected version 0 (i.e. it observed
+            // an aggregate with one event) when in fact the current version
+            // is 1. The adapter must throw BEFORE inserting anything.
+            var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
+                adapter.AppendEventsAsync(
+                    aggregateId,
+                    new object[] { new ConcurrencyProbeEvent("stale") },
+                    expectedVersion: 0));
+
+            Assert.Equal(aggregateId, ex.AggregateId);
+            Assert.Equal(0, ex.ExpectedVersion);
+            Assert.Equal(1, ex.ActualVersion);
+
+            // Stream must be unchanged — the rejected append must not have
+            // persisted any rows.
+            var versions = await ReadVersionsAsync(connectionString, aggregateId);
+            Assert.Equal(new[] { 0, 1 }, versions.ToArray());
+
+            // A correct writer (expected = 1) succeeds and produces version 2.
+            await adapter.AppendEventsAsync(
+                aggregateId,
+                new object[] { new ConcurrencyProbeEvent("v2") },
+                expectedVersion: 1);
+            versions = await ReadVersionsAsync(connectionString, aggregateId);
+            Assert.Equal(new[] { 0, 1, 2 }, versions.ToArray());
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, aggregateId);
+        }
+    }
+
+    [Fact]
+    public async Task ExpectedVersion_Negative_One_Bypasses_The_Check()
+    {
+        if (SkipIfNoDatabase()) return;
+
+        var connectionString = ConnectionString!;
+        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        var aggregateId = IdGen.Generate($"H8b:Sentinel:{Guid.NewGuid()}");
+
+        try
+        {
+            // -1 sentinel: caller asserts nothing. Must succeed regardless
+            // of stream state. This protects unmigrated callers from
+            // breaking when H8b is rolled out.
+            await adapter.AppendEventsAsync(aggregateId,
+                new object[] { new ConcurrencyProbeEvent("a") }, -1);
+            await adapter.AppendEventsAsync(aggregateId,
+                new object[] { new ConcurrencyProbeEvent("b") }, -1);
+            await adapter.AppendEventsAsync(aggregateId,
+                new object[] { new ConcurrencyProbeEvent("c") }, -1);
+
+            var versions = await ReadVersionsAsync(connectionString, aggregateId);
+            Assert.Equal(new[] { 0, 1, 2 }, versions.ToArray());
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, aggregateId);
         }
     }
 

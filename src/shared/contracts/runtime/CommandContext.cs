@@ -116,6 +116,31 @@ public sealed record CommandContext
         }
     }
 
+    // --- H8b Optimistic Concurrency (write-once, set by RuntimeCommandDispatcher
+    //     after the engine loads the aggregate via LoadFromHistory) ---
+
+    private int? _expectedVersion;
+    /// <summary>
+    /// The aggregate version observed at command-execution time, captured
+    /// from <c>AggregateRoot.Version</c> after <c>LoadFromHistory</c>. The
+    /// EventFabric forwards this to <see cref="IEventStore.AppendEventsAsync"/>
+    /// where it gates an optimistic concurrency check. <c>null</c> (and the
+    /// canonical sentinel <c>-1</c>) mean "no check" — used by creation
+    /// commands and any caller that has not yet been migrated to assert a
+    /// version. Write-once to preserve replay determinism.
+    /// </summary>
+    public int? ExpectedVersion
+    {
+        get => _expectedVersion;
+        set
+        {
+            if (_expectedVersion is not null)
+                throw new InvalidOperationException(
+                    "ExpectedVersion is write-once. Already locked to " + _expectedVersion + ".");
+            _expectedVersion = value;
+        }
+    }
+
     private string? _policyVersion;
     public string? PolicyVersion
     {

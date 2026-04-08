@@ -224,6 +224,12 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
 
         var engine = (IEngine)_serviceProvider.GetRequiredService(engineType);
 
+        // phase1-gate-H8b: capture the aggregate version observed at engine
+        // load time so the EventFabric can forward it to the event store as
+        // an optimistic concurrency assertion. Creation commands that never
+        // invoke the loader leave loadedVersion null, which the fabric will
+        // forward as the -1 sentinel ("no check") preserving prior behavior.
+        int? loadedVersion = null;
         var engineContext = new EngineContext(
             command,
             context.AggregateId,
@@ -232,10 +238,16 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
                 var aggregate = (AggregateRoot)Activator.CreateInstance(type, nonPublic: true)!;
                 var events = await _eventStore.LoadEventsAsync(aggregateId);
                 aggregate.LoadFromHistory(events);
+                loadedVersion = aggregate.Version;
                 return aggregate;
             });
 
         await engine.ExecuteAsync(engineContext);
+
+        if (loadedVersion is not null && context.ExpectedVersion is null)
+        {
+            context.ExpectedVersion = loadedVersion;
+        }
 
         var emittedEvents = engineContext.EmittedEvents;
         if (emittedEvents.Count == 0)
