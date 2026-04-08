@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Whyce.Shared.Contracts.Infrastructure.Messaging;
 
 namespace Whyce.Platform.Host.Adapters;
 
@@ -18,8 +19,6 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public sealed class KafkaOutboxPublisher : BackgroundService
 {
-    private const int DefaultMaxRetryCount = 5;
-
     // phase1-gate-S6: observability meter. Counters are exported via any
     // registered MeterListener (OTel, Prometheus exporter, dotnet-counters, ...).
     public static readonly Meter Meter = new("Whyce.Outbox", "1.0");
@@ -34,17 +33,31 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     private readonly int _maxRetryCount;
     private readonly ILogger<KafkaOutboxPublisher>? _logger;
 
+    // phase1.6-S1.5 (OUTBOX-CONFIG-01): retry budget arrives as a typed
+    // OutboxOptions record from the composition root, which reads it from
+    // configuration. There is no longer a hardcoded constant or a default
+    // parameter on this constructor — the option is required, and its
+    // single source of truth is OutboxOptions.MaxRetry (which itself
+    // carries a conservative default for the case where the config key
+    // is unset).
     public KafkaOutboxPublisher(
         string connectionString,
         IProducer<string, string> producer,
+        OutboxOptions options,
         TimeSpan? pollInterval = null,
-        ILogger<KafkaOutboxPublisher>? logger = null,
-        int maxRetryCount = DefaultMaxRetryCount)
+        ILogger<KafkaOutboxPublisher>? logger = null)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.MaxRetry < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.MaxRetry,
+                "OutboxOptions.MaxRetry must be at least 1.");
+
         _connectionString = connectionString;
         _producer = producer;
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
-        _maxRetryCount = maxRetryCount;
+        _maxRetryCount = options.MaxRetry;
         _logger = logger;
     }
 

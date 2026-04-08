@@ -104,6 +104,58 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // OUTBOX-CONFIG-01 (phase1.6-S1.5)
+    // ─────────────────────────────────────────────────────────────────────
+    // KafkaOutboxPublisher MAX_RETRY is now externalised to
+    // OutboxOptions.MaxRetry, populated from Outbox__MaxRetry config in
+    // InfrastructureComposition. This invariant pins three things:
+    //   1. No `MAX_RETRY`-style constant exists anywhere in src/.
+    //   2. KafkaOutboxPublisher does not contain a `private const int Default*Retry`
+    //      that could silently shadow the option.
+    //   3. The publisher constructor accepts an OutboxOptions parameter
+    //      (compile-time check via reflection — catches refactors that
+    //      drop the parameter and re-introduce a constant).
+
+    [Fact]
+    public void No_MAX_RETRY_constants_anywhere_in_src()
+    {
+        // Forbid any `(public|private|internal|protected|const) ... MAX_RETRY`
+        // declaration form, plus the literal identifier `MAX_RETRY` (in case
+        // a future refactor uses an UPPER_SNAKE local). Also catch the
+        // pre-S1.5 form `DefaultMaxRetryCount` to prevent regression.
+        var hits = ScanCode(
+            SrcRoot,
+            new Regex(@"\b(MAX_RETRY|DefaultMaxRetryCount|MaxRetryCount\s*=\s*\d+)\b"));
+
+        Assert.True(hits.Count == 0,
+            "OUTBOX-CONFIG-01: hardcoded retry constants are forbidden under src/. " +
+            "Use OutboxOptions.MaxRetry resolved from configuration. " +
+            "(phase1.6-S1.5) Hits:\n" + string.Join("\n", hits));
+    }
+
+    [Fact]
+    public void KafkaOutboxPublisher_constructor_takes_OutboxOptions()
+    {
+        // Source-scan check: the publisher source must contain
+        // `OutboxOptions options` as a constructor parameter (not defaulted).
+        // We use a source scan instead of reflection because the unit test
+        // project deliberately does not reference Whyce.Platform.Host —
+        // adding that reference would couple the architecture invariants
+        // to the platform layer. The source check catches the same
+        // refactor surface (drop the param, re-introduce a constant)
+        // without the project-reference cost.
+        var path = Path.Combine(SrcRoot, "platform", "host", "adapters", "KafkaOutboxPublisher.cs");
+        Assert.True(File.Exists(path), $"KafkaOutboxPublisher.cs must exist at {path}");
+        var content = File.ReadAllText(path);
+
+        Assert.Contains("OutboxOptions options", content);
+        // No defaulted form: forbid `OutboxOptions options = ...` and
+        // `OutboxOptions? options = null`. Either would let a caller
+        // silently fall back to the pre-S1.5 hardcoded behavior.
+        Assert.DoesNotMatch(new Regex(@"OutboxOptions\??\s+options\s*="), content);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // CTX-REPLAY-RESET-01 (phase1.6-S1.4)
     // ─────────────────────────────────────────────────────────────────────
     // CommandContext exposes an internal replay reset seam

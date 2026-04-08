@@ -7,6 +7,7 @@ using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Chain;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using OutboxOptionsRecord = Whyce.Shared.Contracts.Infrastructure.Messaging.OutboxOptions;
 using Whyce.Shared.Contracts.Infrastructure.Policy;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
 using Whyce.Shared.Contracts.Runtime;
@@ -86,11 +87,23 @@ public static class InfrastructureComposition
             return new ProducerBuilder<string, string>(config).Build();
         });
 
+        // --- Outbox tunables (phase1.6-S1.5 / OUTBOX-CONFIG-01) ---
+        // Read from configuration with the OutboxOptions default as the
+        // fallback. The default matches the pre-S1.5 hardcoded value (5),
+        // so unconfigured deployments are byte-identical to the previous
+        // behavior. Validation lives in the OutboxOptions/publisher
+        // constructor — composition only resolves the value.
+        var outboxMaxRetry = configuration.GetValue<int?>("Outbox__MaxRetry")
+            ?? new OutboxOptionsRecord().MaxRetry;
+        var outboxOptions = new OutboxOptionsRecord { MaxRetry = outboxMaxRetry };
+        services.AddSingleton(outboxOptions);
+
         // --- Kafka Outbox Publisher (background relay: Postgres outbox → Kafka) ---
         services.AddHostedService(sp =>
             new KafkaOutboxPublisher(
                 postgresOutboxCs,
-                sp.GetRequiredService<IProducer<string, string>>()));
+                sp.GetRequiredService<IProducer<string, string>>(),
+                sp.GetRequiredService<OutboxOptionsRecord>()));
 
         return services;
     }
