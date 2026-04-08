@@ -156,6 +156,63 @@ public sealed class WbsmArchitectureTests
     // ─────────────────────────────────────────────────────────────────────
 
     // ─────────────────────────────────────────────────────────────────────
+    // API edge hardening — ConcurrencyConflictException must travel
+    // untouched from the event store to the platform/api middleware
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Concurrency_conflict_exception_handler_exists_and_targets_the_right_type()
+    {
+        var handlerPath = Path.Combine(SrcRoot, "platform", "api", "middleware",
+            "ConcurrencyConflictExceptionHandler.cs");
+        Assert.True(File.Exists(handlerPath),
+            "ConcurrencyConflictExceptionHandler.cs must exist at " + handlerPath);
+
+        var content = File.ReadAllText(handlerPath);
+        Assert.Contains("IExceptionHandler", content);
+        Assert.Contains("ConcurrencyConflictException", content);
+        Assert.Contains("urn:whyce:error:concurrency-conflict", content);
+        Assert.Contains("Status409Conflict", content);
+    }
+
+    [Fact]
+    public void No_upstream_layer_catches_ConcurrencyConflictException()
+    {
+        // The exception must travel untouched from PostgresEventStoreAdapter
+        // through runtime / engines / projections / non-middleware platform
+        // to the IExceptionHandler in src/platform/api/middleware/. Any catch
+        // upstream silently breaks the H8b -> 409 mapping.
+        var roots = new[]
+        {
+            Path.Combine(SrcRoot, "runtime"),
+            Path.Combine(SrcRoot, "engines"),
+            Path.Combine(SrcRoot, "projections"),
+        };
+
+        var hits = new System.Collections.Generic.List<string>();
+        foreach (var root in roots)
+        {
+            hits.AddRange(ScanCode(root,
+                new Regex(@"catch\s*\(\s*ConcurrencyConflictException\b")));
+            hits.AddRange(ScanCode(root,
+                new Regex(@"\bis\s+ConcurrencyConflictException\b")));
+        }
+
+        // Same scan over src/platform EXCLUDING the middleware directory.
+        var middlewarePrefix = Path.Combine(SrcRoot, "platform", "api", "middleware")
+            + Path.DirectorySeparatorChar;
+        var platformHits = ScanCode(Path.Combine(SrcRoot, "platform"),
+                new Regex(@"catch\s*\(\s*ConcurrencyConflictException\b|\bis\s+ConcurrencyConflictException\b"))
+            .Where(line => !line.StartsWith(middlewarePrefix, System.StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        hits.AddRange(platformHits);
+
+        Assert.True(hits.Count == 0,
+            "ConcurrencyConflictException must travel untouched from the event store " +
+            "to the API middleware. Catches found:\n" + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // Projection hardening — workflow read model immutability + replay safety
     // ─────────────────────────────────────────────────────────────────────
 

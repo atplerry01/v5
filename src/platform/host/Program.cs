@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
+using Whyce.Platform.Api.Middleware;
 using Whyce.Platform.Host.Bootstrap;
 using Whyce.Platform.Host.Composition;
 using Whyce.Platform.Host.Composition.Loader;
@@ -24,6 +25,12 @@ foreach (var module in BootstrapModuleCatalog.All)
 // Add*Composition sequence. See composition-loader.guard.md.
 builder.Services.LoadModules(builder.Configuration);
 
+// phase1-gate-api-edge: register the IExceptionHandler that maps
+// ConcurrencyConflictException -> HTTP 409 + RFC 7807 ProblemDetails.
+// This is the only seam where the H8b exception crosses the HTTP boundary.
+builder.Services.AddExceptionHandler<ConcurrencyConflictExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 var app = builder.Build();
 
 // HSID v2.1 H7 — fail-fast infrastructure gate. Verifies the hsid_sequences
@@ -38,6 +45,11 @@ using (var scope = app.Services.CreateScope())
 // HTTP observability middleware (Prometheus) — before routing
 app.UseMiddleware<Whyce.Runtime.Observability.HttpMetricsMiddleware>();
 app.UseRouting();
+
+// phase1-gate-api-edge: invoke the registered IExceptionHandler chain
+// (currently just ConcurrencyConflictExceptionHandler -> 409). Must be
+// before MapControllers so it sits in front of the controller pipeline.
+app.UseExceptionHandler();
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>
