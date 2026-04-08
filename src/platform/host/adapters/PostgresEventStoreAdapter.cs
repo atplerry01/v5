@@ -55,6 +55,22 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
+        // phase1-gate-H8a: per-aggregate exclusive advisory lock. Two-key form
+        // namespaces the lock to ('events', aggregate_id) so it cannot collide
+        // with locks taken by other adapters on the same Postgres instance.
+        // Auto-released on COMMIT or ROLLBACK. Concurrent appends to the SAME
+        // aggregate serialize here; appends to DIFFERENT aggregates run in
+        // parallel. This closes the SELECT MAX(version) → INSERT TOCTOU race
+        // that the previous Read Committed implementation relied on the PK
+        // collision to (accidentally) catch.
+        await using (var lockCmd = new NpgsqlCommand(
+            "SELECT pg_advisory_xact_lock(hashtext('events'), hashtext(@agg::text))",
+            conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue("agg", aggregateId);
+            await lockCmd.ExecuteNonQueryAsync();
+        }
+
         // Compute current max version for this aggregate inside the transaction so
         // concurrent appends serialize correctly. Ignores caller-supplied expectedVersion;
         // determinism comes from the stored stream, not the in-memory engine snapshot.
