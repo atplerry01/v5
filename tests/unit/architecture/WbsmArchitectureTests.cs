@@ -104,6 +104,87 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // CTX-REPLAY-RESET-01 (phase1.6-S1.4)
+    // ─────────────────────────────────────────────────────────────────────
+    // CommandContext exposes an internal replay reset seam
+    // (EnableReplayMode / ResetForReplay / DisableReplayMode / IsReplayMode)
+    // intended for a future deterministic replay tool. There is no
+    // production caller today; the seam is exposed only to the unit test
+    // assembly via InternalsVisibleTo. This test scans all of src/ and
+    // asserts that no production code under src/ references any of the
+    // four members.
+    //
+    // When a production caller is eventually added (a separate, explicit
+    // gate), the engineer adding it MUST extend this test with a tightly
+    // scoped allowlist of file paths AND update the InternalsVisibleTo
+    // declaration in src/shared/Whycespace.Shared.csproj. Both changes
+    // are required — adding the IVT alone (or adding a caller without
+    // updating the allowlist) will fail this invariant.
+
+    [Fact]
+    public void CommandContext_replay_reset_seam_has_no_production_callers()
+    {
+        // Allowlist: production files permitted to call the seam. Empty
+        // today by design. Update both this list AND the IVT in
+        // Whycespace.Shared.csproj when adding a real caller.
+        var allowlist = System.Array.Empty<string>();
+
+        var pattern = new Regex(
+            @"\b(ResetForReplay|EnableReplayMode|DisableReplayMode|IsReplayMode)\b");
+
+        var hits = ScanCode(SrcRoot, pattern)
+            // Exclude the CommandContext source file itself — it OWNS the
+            // seam, it isn't a caller. The reflection check below pins
+            // that the members exist on the right type.
+            .Where(line => !line.Contains(
+                Path.Combine("shared", "contracts", "runtime", "CommandContext.cs"),
+                System.StringComparison.OrdinalIgnoreCase))
+            .Where(line => !allowlist.Any(a =>
+                line.Contains(a, System.StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        Assert.True(hits.Count == 0,
+            "CommandContext replay reset seam has no allowlisted production " +
+            "callers. To add one, extend the allowlist in this test AND " +
+            "verify the IVT in src/shared/Whycespace.Shared.csproj is " +
+            "scoped only to assemblies that need it. (phase1.6-S1.4 / " +
+            "CTX-REPLAY-RESET-01) Hits:\n" + string.Join("\n", hits));
+    }
+
+    [Fact]
+    public void CommandContext_replay_reset_seam_members_are_internal()
+    {
+        // Reflection check that pins the access modifier of every seam
+        // member. If a future refactor accidentally promotes any of these
+        // to public, this test fails immediately — the seam must never
+        // leak past the IVT boundary.
+        var ctxType = typeof(Whyce.Shared.Contracts.Runtime.CommandContext);
+        var members = new[]
+        {
+            "EnableReplayMode",
+            "DisableReplayMode",
+            "ResetForReplay",
+            "get_IsReplayMode",
+        };
+
+        foreach (var name in members)
+        {
+            var method = ctxType.GetMethod(
+                name,
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.NotNull(method);
+            Assert.False(method!.IsPublic,
+                $"CommandContext.{name} must be internal, not public. " +
+                "Replay reset seam must not leak past the IVT boundary. " +
+                "(phase1.6-S1.4 / CTX-REPLAY-RESET-01)");
+            Assert.True(method.IsAssembly,
+                $"CommandContext.{name} must be internal (IsAssembly == true). " +
+                "Replay reset seam must not be exposed to derived types or " +
+                "via protected access. (phase1.6-S1.4 / CTX-REPLAY-RESET-01)");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // E-LIFECYCLE-FACTORY-CALL-SITE-01 (phase1.6-S1.2)
     // ─────────────────────────────────────────────────────────────────────
     // T1M engines must not invoke aggregate command methods directly. The

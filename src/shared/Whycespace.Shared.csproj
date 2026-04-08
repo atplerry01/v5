@@ -7,4 +7,15 @@
     <RootNamespace>Whyce</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- phase1.6-S1.4: expose the internal CommandContext replay reset seam
+         (EnableReplayMode / ResetForReplay / DisableReplayMode / IsReplayMode)
+         to the unit test assembly only. There is no production caller of
+         this seam today; the architecture invariant in WbsmArchitectureTests
+         (CommandContext_replay_reset_seam_has_no_production_callers) bans
+         any caller under src/. Adding a production caller is a separate
+         gate that must update both this IVT and that invariant. -->
+    <InternalsVisibleTo Include="Whycespace.Tests.Unit" />
+  </ItemGroup>
+
 </Project>
