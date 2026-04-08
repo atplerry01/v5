@@ -487,6 +487,145 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // CONFIG SAFETY (phase1.5 / config-safety.guard.md)
+    // ─────────────────────────────────────────────────────────────────────
+    // Pin three rules from claude/guards/config-safety.guard.md:
+    //   CFG-R1 — no credentials in committed appsettings*.json
+    //   CFG-R2 — no hardcoded endpoint defaults in committed appsettings*.json
+    //   CFG-R3 — no `?? "Host=...;Password=..."` style fallbacks in C# code
+    //
+    // The composition root reads required infrastructure config from
+    // environment variables and throws InvalidOperationException when
+    // missing. There is no fallback. appsettings.json contains only
+    // logging + feature flags + domain-shaped constants.
+
+    [Fact]
+    public void Appsettings_json_contains_no_credentials()
+    {
+        var path = Path.Combine(SrcRoot, "platform", "host", "appsettings.json");
+        Assert.True(File.Exists(path), $"appsettings.json must exist at {path}");
+        var content = File.ReadAllText(path);
+
+        var forbidden = new[]
+        {
+            "Password=", "Pwd=", "SecretKey", "AccessKey", "ApiKey", "Token=",
+        };
+        var hits = forbidden.Where(f =>
+            content.Contains(f, System.StringComparison.OrdinalIgnoreCase)).ToList();
+
+        Assert.True(hits.Count == 0,
+            "CFG-R1: appsettings.json must contain zero credential-shaped tokens. " +
+            "Move all credentials to environment variables. Forbidden tokens found: "
+            + string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void Appsettings_json_contains_no_endpoint_defaults()
+    {
+        var path = Path.Combine(SrcRoot, "platform", "host", "appsettings.json");
+        var content = File.ReadAllText(path);
+
+        var forbidden = new[]
+        {
+            "localhost", "127.0.0.1", "0.0.0.0",
+            ":5432", ":5434", ":6379", ":9092", ":29092", ":8181", ":9000",
+        };
+        var hits = forbidden.Where(f =>
+            content.Contains(f, System.StringComparison.OrdinalIgnoreCase)).ToList();
+
+        Assert.True(hits.Count == 0,
+            "CFG-R2: appsettings.json must contain zero hardcoded endpoint defaults. " +
+            "All endpoints must come from environment variables. Hits: "
+            + string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void No_hardcoded_connection_string_fallbacks_in_composition_code()
+    {
+        // CFG-R3: forbid the `?? "Host=..."` / `?? "Server=..."` pattern
+        // anywhere under src/. The canonical pattern is
+        //   `configuration.GetValue<string>("X")
+        //       ?? throw new InvalidOperationException("X is required");`
+        var hits = ScanCode(
+            SrcRoot,
+            new Regex(@"\?\?\s*""(?:Host|Server|Data Source|Endpoint)\s*="));
+
+        Assert.True(hits.Count == 0,
+            "CFG-R3: hardcoded connection-string / endpoint fallbacks are forbidden. " +
+            "Use the no-fallback pattern: " +
+            "`configuration.GetValue<string>(...) ?? throw new InvalidOperationException(...)`. " +
+            "Hits:\n" + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // STUB ELIMINATION (phase1.5 / stub-detection.guard.md)
+    // ─────────────────────────────────────────────────────────────────────
+    // Pin two rules from claude/guards/stub-detection.guard.md:
+    //   STUB-R1 — no NotImplementedException on the production path
+    //   STUB-R2 — no TODO/FIXME/HACK/XXX comments in production code
+    // (STUB-R3 placeholder registry deferred until claude/registry/placeholders.json
+    // exists; STUB-R4 silent-catch deferred to follow-up.)
+
+    [Fact]
+    public void Production_path_throws_no_NotImplementedException()
+    {
+        var roots = new[]
+        {
+            Path.Combine(SrcRoot, "domain"),
+            Path.Combine(SrcRoot, "engines"),
+            Path.Combine(SrcRoot, "runtime"),
+            Path.Combine(SrcRoot, "platform", "api"),
+        };
+
+        var hits = new System.Collections.Generic.List<string>();
+        foreach (var root in roots)
+        {
+            hits.AddRange(ScanCode(
+                root,
+                new Regex(@"throw\s+new\s+NotImplementedException\b")));
+        }
+
+        Assert.True(hits.Count == 0,
+            "STUB-R1: NotImplementedException is forbidden on the production path " +
+            "(domain, engines, runtime, platform/api). Implement the method or " +
+            "throw a structured domain exception with explicit reason. Hits:\n"
+            + string.Join("\n", hits));
+    }
+
+    [Fact]
+    public void Production_code_contains_no_TODO_FIXME_HACK_comments()
+    {
+        // Scans only line comments. XML doc comments (///) are also scanned
+        // because TODO/FIXME/HACK in a doc comment is still a hidden backlog
+        // item that should be a tracked issue or new-rules entry.
+        //
+        // Note: XXX is intentionally NOT in the pattern. It clashes with the
+        // HSID v2.1 topology spec "CCC + XXX + SSSSSS" used as a placeholder
+        // letter in domain doc comments and produces false positives.
+        var pattern = new Regex(@"//.*\b(TODO|FIXME|HACK)\b");
+
+        var hits = new System.Collections.Generic.List<string>();
+        foreach (var file in Directory.EnumerateFiles(SrcRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (pattern.IsMatch(lines[i]))
+                    hits.Add($"{file}:{i + 1}: {lines[i].Trim()}");
+            }
+        }
+
+        Assert.True(hits.Count == 0,
+            "STUB-R2: TODO/FIXME/HACK/XXX comments are forbidden in production code. " +
+            "Convert to a GitHub issue or a claude/new-rules/ entry. Hits:\n"
+            + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────
 
