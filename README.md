@@ -55,7 +55,7 @@ Runtime persists, anchors, publishes, projects, and returns the final result upw
 - deteministic id ->
 - HSID means
 - runtime workflow and workflow-state fix
-
+- standardized some shoulds -  engines, projection, domain, api, infra etc
 - T1M/step/todo
 - kafka need to follow domain classification
 - upgrade runtime
