@@ -90,6 +90,12 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 var result = consumer.Consume(_pollTimeout);
                 if (result is null) continue;
 
+                // phase1.6-S2.3: distinguish missing vs explicitly-empty headers.
+                // ExtractHeader now returns null when the key is absent and an
+                // empty string when the key is present with an empty value.
+                // The DLQ reason strings carry the distinction so operators can
+                // tell a producer-side schema bug ("present but blank") apart
+                // from a producer-side wiring bug ("never set the header at all").
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var correlationId = ExtractHeader(result.Message.Headers, "correlation-id");
                 var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");
@@ -99,20 +105,37 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 // phase1-gate-S3: header enforcement. Malformed messages are
                 // routed to the deadletter topic — never silently committed and
                 // never allowed to crash the consumer.
-                if (string.IsNullOrEmpty(eventType))
+                if (eventType is null)
                 {
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
-                        "missing event-type header", stoppingToken);
+                        "absent event-type header", stoppingToken);
+                    consumer.Commit(result);
+                    continue;
+                }
+                if (eventType.Length == 0)
+                {
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message,
+                        "empty event-type header (present but blank)", stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(eventIdHeader) || string.IsNullOrEmpty(aggregateIdHeader))
+                if (eventIdHeader is null || aggregateIdHeader is null)
                 {
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
-                        $"missing event-id/aggregate-id headers (event-type={eventType})",
+                        $"absent event-id/aggregate-id headers (event-type={eventType})",
+                        stoppingToken);
+                    consumer.Commit(result);
+                    continue;
+                }
+                if (eventIdHeader.Length == 0 || aggregateIdHeader.Length == 0)
+                {
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message,
+                        $"empty event-id/aggregate-id headers (present but blank, event-type={eventType})",
                         stoppingToken);
                     consumer.Commit(result);
                     continue;
@@ -162,7 +185,10 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 // avoid clobbering the materialized read model.
                 if (handlers.Count == 0)
                 {
-                    await _writer.WriteAsync(eventType, @event, correlationId, stoppingToken);
+                    // phase1.6-S2.3: writer expects a non-null correlation id
+                    // string. Absent correlation header is non-fatal here —
+                    // the writer parses Guid.Empty out of an empty string.
+                    await _writer.WriteAsync(eventType, @event, correlationId ?? string.Empty, stoppingToken);
                 }
 
                 consumer.Commit(result);
@@ -186,10 +212,20 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         consumer.Close();
     }
 
-    private static string ExtractHeader(Headers headers, string key)
+    /// <summary>
+    /// phase1.6-S2.3: returns null when the header key is absent (so the
+    /// caller can DLQ with reason "absent"), an empty string when the key
+    /// is present with a zero-byte value (DLQ reason "present but blank"),
+    /// or the UTF-8 decoded value otherwise. Do NOT normalize null → empty
+    /// here — the operator distinction between "producer never set this
+    /// header" and "producer set it to an empty value" is the entire reason
+    /// this method is structured this way.
+    /// </summary>
+    private static string? ExtractHeader(Headers headers, string key)
     {
         var header = headers.FirstOrDefault(h => h.Key == key);
-        return header is null ? string.Empty : Encoding.UTF8.GetString(header.GetValueBytes());
+        if (header is null) return null;
+        return Encoding.UTF8.GetString(header.GetValueBytes());
     }
 
     /// <summary>
@@ -220,6 +256,10 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             // aggregate-id header (set by KafkaOutboxPublisher); fall back to the
             // original key if the header is missing or unparseable so that
             // malformed-header DLQ paths are still routable.
+            // phase1.6-S2.3: ExtractHeader now returns null for absent
+            // headers (vs empty for present-but-blank). Treat both as
+            // "not usable as a partition key" and fall through to
+            // original.Key so the DLQ row still routes to a partition.
             var aggregateIdHeader = ExtractHeader(original.Headers ?? new Headers(), "aggregate-id");
             var dlqKey = !string.IsNullOrEmpty(aggregateIdHeader) ? aggregateIdHeader : original.Key;
             var dlqMessage = new Message<string, string>

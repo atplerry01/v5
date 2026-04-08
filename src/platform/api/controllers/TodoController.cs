@@ -59,8 +59,6 @@ public sealed class TodoController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
     {
-        Console.WriteLine($"[GET] Querying projection for: {id}");
-
         await using var conn = new NpgsqlConnection(_projectionsConnectionString);
         await conn.OpenAsync();
 
@@ -75,7 +73,6 @@ public sealed class TodoController : ControllerBase
 
         await using var reader = await cmd.ExecuteReaderAsync();
         var found = await reader.ReadAsync();
-        Console.WriteLine($"[GET] Row found: {found}");
         if (!found) return NotFound();
 
         var lastEventType = reader.GetString(2);

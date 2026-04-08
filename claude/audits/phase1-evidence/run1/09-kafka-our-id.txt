@@ -1,0 +1,36 @@
+SKIPPED — phase1.6-S2.6 process gap
+
+What this file was supposed to capture:
+  Live Kafka message headers from a successful produce of a real domain
+  event under run1 of the phase-1 gate evidence pack. The intent was to
+  inspect `event-id`, `aggregate-id`, `event-type`, and `correlation-id`
+  on a wire-level message and confirm they match the row in the outbox
+  + the ExecutionHash on the chain anchor block.
+
+Why this file is empty:
+  The capture was scheduled under the original phase-1 gate run on
+  2026-04-08 but was never executed before the gate report was sealed.
+  The file was created (touch) as a placeholder and the entry in
+  VERDICT.md referenced it without the operator noticing the body was
+  zero bytes. The phase-1 audit sweep
+  (claude/audits/sweeps/20260408-103326-full-system.md, finding P.1)
+  flagged this as a process gap, not a code defect.
+
+Code path verification (in lieu of runtime evidence):
+  - KafkaOutboxPublisher.cs:130-141 sets the four headers explicitly on
+    every produce. Reviewed under phase1-gate and confirmed correct.
+  - GenericKafkaProjectionConsumerWorker.cs:93-96 reads the same four
+    header keys from the consumer side. Reviewed and tightened in
+    phase1.6-S2.3 (missing vs empty distinction).
+  - Architecture invariant
+    `Outbox_publisher_keys_kafka_messages_by_aggregate_id_not_correlation_id`
+    pins the partition key end of the contract.
+  - Architecture invariant
+    `KafkaOutboxPublisher_uses_TopicNameResolver_for_DLQ` (phase1.6-S1.6)
+    pins the DLQ end.
+
+Action item before promoting dev_wip to main:
+  Re-run the phase-1 evidence capture against a live whyce-kafka
+  container with `kafka-console-consumer --property print.headers=true`
+  and overwrite this file with the actual byte stream. Until then, this
+  SKIPPED marker stands.

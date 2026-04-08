@@ -35,13 +35,13 @@ public sealed class PostgresProjectionWriter : IPostgresProjectionWriter
 
     public async Task WriteAsync(string eventType, object @event, string correlationId, CancellationToken ct)
     {
-        Console.WriteLine($"[PROJECTION] Writing {eventType}");
+        // phase1.6-S2.1: silent skip when AggregateId is not extractable.
+        // The generic writer is a fallback for raw-payload projections; the
+        // canonical observability surface for skip/write events is the
+        // ProjectionDispatcher metrics (PROJECTION_INVOKED_COUNTER), not
+        // ad-hoc console output.
         var aggregateId = ExtractAggregateId(@event);
-        if (aggregateId is null)
-        {
-            Console.WriteLine($"[PROJECTION] SKIP {eventType}: AggregateId not extractable from {@event.GetType().Name}");
-            return;
-        }
+        if (aggregateId is null) return;
 
         var state = JsonSerializer.Serialize(@event, @event.GetType());
 
