@@ -67,28 +67,36 @@ public sealed class PostgresEventStoreAdapter : IEventStore
             expectedVersion = scalar is int v ? v : Convert.ToInt32(scalar);
         }
 
-        for (var i = 0; i < events.Count; i++)
+        // phase1-gate-H7-H9-safe (#8): single multi-row INSERT instead of one
+        // command per event. Same INSERT semantics, same parameters, same
+        // determinism — collapses N round-trips into 1.
+        if (events.Count > 0)
         {
-            var version = expectedVersion + i + 1;
-            var domainEvent = events[i];
-            var eventType = domainEvent.GetType().Name;
-            var aggregateType = ExtractAggregateType(domainEvent);
-            var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType());
+            var sql = new System.Text.StringBuilder(
+                "INSERT INTO events (id, aggregate_id, aggregate_type, event_type, payload, version, created_at) VALUES ");
 
-            await using var cmd = new NpgsqlCommand(
-                """
-                INSERT INTO events (id, aggregate_id, aggregate_type, event_type, payload, version, created_at)
-                VALUES (@id, @agg, @aggType, @evtType, @payload::jsonb, @ver, NOW())
-                """,
-                conn, tx);
+            await using var cmd = new NpgsqlCommand { Connection = conn, Transaction = tx };
 
-            cmd.Parameters.AddWithValue("id", _idGenerator.Generate($"{aggregateId}:{version}"));
-            cmd.Parameters.AddWithValue("agg", aggregateId);
-            cmd.Parameters.AddWithValue("aggType", aggregateType);
-            cmd.Parameters.AddWithValue("evtType", eventType);
-            cmd.Parameters.AddWithValue("payload", payload);
-            cmd.Parameters.AddWithValue("ver", version);
+            for (var i = 0; i < events.Count; i++)
+            {
+                var version = expectedVersion + i + 1;
+                var domainEvent = events[i];
+                var eventType = domainEvent.GetType().Name;
+                var aggregateType = ExtractAggregateType(domainEvent);
+                var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType());
 
+                if (i > 0) sql.Append(", ");
+                sql.Append($"(@id{i}, @agg{i}, @aggType{i}, @evtType{i}, @payload{i}::jsonb, @ver{i}, NOW())");
+
+                cmd.Parameters.AddWithValue($"id{i}", _idGenerator.Generate($"{aggregateId}:{version}"));
+                cmd.Parameters.AddWithValue($"agg{i}", aggregateId);
+                cmd.Parameters.AddWithValue($"aggType{i}", aggregateType);
+                cmd.Parameters.AddWithValue($"evtType{i}", eventType);
+                cmd.Parameters.AddWithValue($"payload{i}", payload);
+                cmd.Parameters.AddWithValue($"ver{i}", version);
+            }
+
+            cmd.CommandText = sql.ToString();
             await cmd.ExecuteNonQueryAsync();
         }
 

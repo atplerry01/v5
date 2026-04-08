@@ -29,10 +29,11 @@ public sealed class TodoProjectionHandler :
 
     private readonly string _connectionString;
 
-    // Carries the current envelope's correlation id into the per-type
-    // HandleAsync overloads. Safe because ExecutionPolicy is Inline —
+    // Carries the current envelope's correlation id + event id into the
+    // per-type HandleAsync overloads. Safe because ExecutionPolicy is Inline —
     // each envelope is fully processed before the next is dispatched.
     private Guid _currentCorrelationId = Guid.Empty;
+    private Guid _currentEventId = Guid.Empty;
 
     public TodoProjectionHandler(string connectionString)
     {
@@ -44,6 +45,7 @@ public sealed class TodoProjectionHandler :
     public Task HandleAsync(IEventEnvelope envelope)
     {
         _currentCorrelationId = envelope.CorrelationId;
+        _currentEventId = envelope.EventId;
         return envelope.Payload switch
         {
             TodoCreatedEventSchema created => HandleAsync(created),
@@ -99,22 +101,31 @@ public sealed class TodoProjectionHandler :
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
+        // phase1-gate-H7-H9-safe (#11, #12): write last_event_id and gate the
+        // ON CONFLICT update on it. If the same event_id is replayed (consumer
+        // rewind, retry storm) the WHERE clause becomes false and the row is
+        // a no-op — current_version no longer double-increments and state is
+        // not re-merged. The INSERT path also writes last_event_id so the
+        // first apply is captured. Idempotency is per-event, not per-batch.
         var sql = $"""
             INSERT INTO {Schema}.{Table}
-                (aggregate_id, aggregate_type, current_version, state, last_event_type, correlation_id, projected_at, created_at)
+                (aggregate_id, aggregate_type, current_version, state, last_event_id, last_event_type, correlation_id, projected_at, created_at)
             VALUES
-                (@aggId, @aggType, 1, @state::jsonb, @eventType, @corrId, NOW(), NOW())
+                (@aggId, @aggType, 1, @state::jsonb, @lastEventId, @eventType, @corrId, NOW(), NOW())
             ON CONFLICT (aggregate_id) DO UPDATE SET
                 current_version = {Schema}.{Table}.current_version + 1,
                 state = @state::jsonb,
+                last_event_id = @lastEventId,
                 last_event_type = @eventType,
                 projected_at = NOW()
+            WHERE {Schema}.{Table}.last_event_id IS DISTINCT FROM @lastEventId
             """;
 
         await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("aggId", aggregateId);
         cmd.Parameters.AddWithValue("aggType", AggregateType);
         cmd.Parameters.AddWithValue("state", stateJson);
+        cmd.Parameters.AddWithValue("lastEventId", _currentEventId);
         cmd.Parameters.AddWithValue("eventType", lastEventType);
         cmd.Parameters.AddWithValue("corrId", _currentCorrelationId);
 

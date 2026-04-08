@@ -70,9 +70,19 @@ public static class InfrastructureComposition
             new PostgresOutboxAdapter(postgresOutboxCs));
 
         // --- Kafka producer (for outbox relay) ---
+        // phase1-gate-H7-H9-safe:
+        //   • EnableIdempotence: dedup on broker, implies Acks=All + MaxInFlight≤5,
+        //     prevents duplicate writes on transient producer retries.
+        //   • CompressionType.Lz4: batch-level compression for JSON payloads,
+        //     consumer auto-decompresses, no client changes required.
         services.AddSingleton<IProducer<string, string>>(_ =>
         {
-            var config = new ProducerConfig { BootstrapServers = kafkaBootstrapServers };
+            var config = new ProducerConfig
+            {
+                BootstrapServers = kafkaBootstrapServers,
+                EnableIdempotence = true,
+                CompressionType = CompressionType.Lz4,
+            };
             return new ProducerBuilder<string, string>(config).Build();
         });
 
