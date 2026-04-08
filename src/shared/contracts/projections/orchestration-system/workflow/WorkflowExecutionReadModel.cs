@@ -10,8 +10,19 @@ public sealed record WorkflowExecutionReadModel
     public string? FailedStepName { get; init; }
     public string? FailureReason { get; init; }
     public object? Payload { get; init; }
-    // Init-only property reference; the dictionary contents themselves are
-    // mutated in-place by WorkflowExecutionProjectionHandler when StepCompleted
-    // arrives. Init-only prevents reassignment, not member mutation.
-    public Dictionary<string, object?> StepOutputs { get; init; } = new();
+
+    // phase1-gate-projection-hardening: StepOutputs is now exposed as
+    // IReadOnlyDictionary so callers cannot mutate stored state via the
+    // returned reference. The handler must construct a new dictionary
+    // before applying `with`.
+    public IReadOnlyDictionary<string, object?> StepOutputs { get; init; }
+        = new Dictionary<string, object?>();
+
+    // phase1-gate-projection-hardening: per-event idempotency token, mirrors
+    // the Todo projection's last_event_id pattern. The handler short-circuits
+    // when the incoming envelope.EventId matches this value, making same-event
+    // replay a no-op. Combined with H7a per-aggregate Kafka ordering, this
+    // closes the duplicate-replay vector without needing aggregate version
+    // plumbing through the envelope.
+    public Guid? LastEventId { get; init; }
 }

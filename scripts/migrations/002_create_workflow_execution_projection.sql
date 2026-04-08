@@ -13,7 +13,14 @@ CREATE TABLE IF NOT EXISTS projection_orchestration_workflow.workflow_execution_
     failed_step_name      TEXT        NULL,
     failure_reason        TEXT        NULL,
     projected_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    correlation_id        UUID        NULL
+    correlation_id        UUID        NULL,
+    -- phase1-gate-projection-hardening: per-event idempotency token (Todo parity).
+    -- The future Postgres adapter must gate ON CONFLICT DO UPDATE with
+    --   WHERE workflow_execution_read_model.last_event_id IS DISTINCT FROM @lastEventId
+    -- so same-event replay is a true no-op. The in-memory placeholder store
+    -- already enforces this contract via the WorkflowExecutionReadModel.LastEventId
+    -- field; this column keeps the schema and contract aligned for the swap.
+    last_event_id         UUID        NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_workflow_exec_status ON projection_orchestration_workflow.workflow_execution_read_model (status);

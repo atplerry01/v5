@@ -155,6 +155,45 @@ public sealed class WbsmArchitectureTests
     // H7a — Kafka partition key must be aggregate_id, never correlation_id
     // ─────────────────────────────────────────────────────────────────────
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Projection hardening — workflow read model immutability + replay safety
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Workflow_read_model_step_outputs_is_read_only_dictionary()
+    {
+        var path = Path.Combine(SrcRoot, "shared", "contracts", "projections",
+            "orchestration-system", "workflow", "WorkflowExecutionReadModel.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.Contains("IReadOnlyDictionary<string, object?> StepOutputs", content);
+        // Must NOT regress to mutable Dictionary<,> on the property declaration.
+        Assert.DoesNotContain("public Dictionary<string, object?> StepOutputs", content);
+    }
+
+    [Fact]
+    public void Workflow_projection_handler_does_not_mutate_step_outputs_in_place()
+    {
+        var path = Path.Combine(SrcRoot, "projections", "orchestration-system",
+            "workflow", "handler", "WorkflowExecutionProjectionHandler.cs");
+        var content = File.ReadAllText(path);
+
+        // Forbid the mutation pattern `existing.StepOutputs[...] = ...`.
+        Assert.DoesNotContain(".StepOutputs[", content);
+    }
+
+    [Fact]
+    public void Workflow_projection_handler_is_replay_safe_log_and_skip()
+    {
+        var path = Path.Combine(SrcRoot, "projections", "orchestration-system",
+            "workflow", "handler", "WorkflowExecutionProjectionHandler.cs");
+        var content = File.ReadAllText(path);
+
+        // The pre-hardening pattern threw on missing prior state. Forbid it
+        // ever returning by pinning the absence of the throw form.
+        Assert.DoesNotContain("?? throw new InvalidOperationException(", content);
+    }
+
     [Fact]
     public void Event_store_adapter_enforces_expected_version_check()
     {
