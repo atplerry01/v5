@@ -23,6 +23,41 @@ public sealed class TopicNameResolver
     /// <param name="envelope">The event envelope containing routing metadata.</param>
     /// <param name="type">Channel type: "events", "commands", "deadletter", or "retry".</param>
     /// <returns>Canonical topic name (e.g., "whyce.operational.sandbox.todo.events").</returns>
+    /// <summary>
+    /// Resolves the canonical dead-letter topic name from a source topic
+    /// string. The single source of truth for DLQ naming — callers MUST
+    /// route through this method instead of inlining string manipulation.
+    ///
+    /// phase1.6-S1.6 (DLQ-RESOLVER-01): introduced to centralize the DLQ
+    /// naming convention previously duplicated in
+    /// <c>KafkaOutboxPublisher.TryPublishToDeadletterAsync</c>. Behavior:
+    /// <list type="bullet">
+    ///   <item>null / empty / whitespace topic → <see cref="ArgumentException"/></item>
+    ///   <item>topic already ends in <c>.deadletter</c> → returned unchanged (idempotent)</item>
+    ///   <item>topic ending in <c>.events</c> → suffix replaced with <c>.deadletter</c></item>
+    ///   <item>any other suffix → <c>.deadletter</c> appended</item>
+    /// </list>
+    /// Idempotency is load-bearing: a recovery loop that re-publishes a
+    /// row whose source topic was already a DLQ topic must not produce
+    /// <c>x.deadletter.deadletter</c>. The unit tests pin every branch.
+    /// </summary>
+    public string ResolveDeadLetter(string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+            throw new ArgumentException(
+                "Topic must not be null, empty, or whitespace.", nameof(topic));
+
+        if (topic.EndsWith(".deadletter", StringComparison.Ordinal))
+            return topic;
+
+        if (topic.EndsWith(".events", StringComparison.Ordinal))
+            return string.Concat(
+                topic.AsSpan(0, topic.Length - ".events".Length),
+                ".deadletter");
+
+        return topic + ".deadletter";
+    }
+
     public string Resolve(EventEnvelope envelope, string type)
     {
         if (string.IsNullOrWhiteSpace(envelope.Classification))

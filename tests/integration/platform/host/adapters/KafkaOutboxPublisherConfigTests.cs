@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using NSubstitute;
 using Whyce.Platform.Host.Adapters;
+using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
 
 namespace Whycespace.Tests.Integration.Platform.Host.Adapters;
@@ -33,6 +34,12 @@ public sealed class KafkaOutboxPublisherConfigTests
     private static IProducer<string, string> Producer() =>
         Substitute.For<IProducer<string, string>>();
 
+    // phase1.6-S1.6: TopicNameResolver is a sealed concrete class with no
+    // dependencies, so a real instance is the simplest test seed. There
+    // is no behavior to mock — every method is a deterministic pure
+    // function over its inputs.
+    private static TopicNameResolver Resolver() => new();
+
     [Fact]
     public void OutboxOptions_Default_MaxRetry_Matches_Pre_S1_5_Hardcoded_Constant()
     {
@@ -52,7 +59,22 @@ public sealed class KafkaOutboxPublisherConfigTests
             new KafkaOutboxPublisher(
                 connectionString: "Host=ignored",
                 producer: Producer(),
+                topicNameResolver: Resolver(),
                 options: null!));
+    }
+
+    [Fact]
+    public void Publisher_Constructor_Rejects_Null_TopicNameResolver()
+    {
+        // phase1.6-S1.6 (DLQ-RESOLVER-01): the resolver is a REQUIRED
+        // dependency. Without it the publisher cannot construct a DLQ
+        // topic by any path — there is no inline string fallback.
+        Assert.Throws<ArgumentNullException>(() =>
+            new KafkaOutboxPublisher(
+                connectionString: "Host=ignored",
+                producer: Producer(),
+                topicNameResolver: null!,
+                options: new OutboxOptions()));
     }
 
     [Fact]
@@ -62,6 +84,7 @@ public sealed class KafkaOutboxPublisherConfigTests
             new KafkaOutboxPublisher(
                 connectionString: "Host=ignored",
                 producer: Producer(),
+                topicNameResolver: Resolver(),
                 options: new OutboxOptions { MaxRetry = 0 }));
 
         Assert.Contains("at least 1", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -74,6 +97,7 @@ public sealed class KafkaOutboxPublisherConfigTests
             new KafkaOutboxPublisher(
                 connectionString: "Host=ignored",
                 producer: Producer(),
+                topicNameResolver: Resolver(),
                 options: new OutboxOptions { MaxRetry = -1 }));
     }
 
@@ -83,6 +107,7 @@ public sealed class KafkaOutboxPublisherConfigTests
         var publisher = new KafkaOutboxPublisher(
             connectionString: "Host=ignored",
             producer: Producer(),
+            topicNameResolver: Resolver(),
             options: new OutboxOptions { MaxRetry = 17 });
 
         Assert.NotNull(publisher);

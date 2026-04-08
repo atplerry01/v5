@@ -99,10 +99,15 @@ public static class InfrastructureComposition
         services.AddSingleton(outboxOptions);
 
         // --- Kafka Outbox Publisher (background relay: Postgres outbox → Kafka) ---
+        // phase1.6-S1.6 (DLQ-RESOLVER-01): TopicNameResolver is registered
+        // as a singleton by ProjectionComposition; resolve it from DI here
+        // and thread it through. The publisher uses it for dead-letter
+        // topic resolution — there is no inline string manipulation left.
         services.AddHostedService(sp =>
             new KafkaOutboxPublisher(
                 postgresOutboxCs,
                 sp.GetRequiredService<IProducer<string, string>>(),
+                sp.GetRequiredService<TopicNameResolver>(),
                 sp.GetRequiredService<OutboxOptionsRecord>()));
 
         return services;

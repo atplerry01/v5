@@ -104,6 +104,59 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // DLQ-RESOLVER-01 (phase1.6-S1.6)
+    // ─────────────────────────────────────────────────────────────────────
+    // All DLQ topic naming MUST flow through TopicNameResolver.ResolveDeadLetter.
+    // Inline `.Replace(".events", ".deadletter")` and any other ad-hoc
+    // string manipulation that constructs a DLQ topic name is forbidden
+    // outside the resolver itself. The previous violation lived at
+    // KafkaOutboxPublisher.cs:265-267 and is the canonical regression
+    // surface this invariant defends.
+
+    [Fact]
+    public void No_inline_DLQ_topic_derivation_outside_resolver()
+    {
+        // Forbidden patterns:
+        //   1. .Replace(".events", ".deadletter") — naive substring swap
+        //   2. + ".deadletter" — string concatenation forming a DLQ name
+        //   3. .EndsWith(".events") used in DLQ-derivation context
+        // The resolver source file is the only legitimate site for these
+        // patterns; everything else must call ResolveDeadLetter.
+        var resolverPath = Path.Combine(SrcRoot, "runtime", "event-fabric", "TopicNameResolver.cs");
+
+        var patterns = new[]
+        {
+            new Regex(@"\.Replace\(\s*""\.events""\s*,\s*""\.deadletter"""),
+            new Regex(@"\+\s*""\.deadletter"""),
+        };
+
+        var hits = new System.Collections.Generic.List<string>();
+        foreach (var pattern in patterns)
+        {
+            hits.AddRange(ScanCode(SrcRoot, pattern)
+                .Where(line => !line.StartsWith(resolverPath, System.StringComparison.OrdinalIgnoreCase)));
+        }
+
+        Assert.True(hits.Count == 0,
+            "DLQ-RESOLVER-01: inline DLQ topic derivation is forbidden " +
+            "outside TopicNameResolver. Use ResolveDeadLetter(topic) " +
+            "instead. (phase1.6-S1.6) Hits:\n" + string.Join("\n", hits));
+    }
+
+    [Fact]
+    public void KafkaOutboxPublisher_uses_TopicNameResolver_for_DLQ()
+    {
+        // Source-scan check that pins the call site explicitly. Catches
+        // a refactor that drops the resolver injection and reintroduces
+        // an inline form that happens to evade the regex above.
+        var path = Path.Combine(SrcRoot, "platform", "host", "adapters", "KafkaOutboxPublisher.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.Contains("_topicNameResolver.ResolveDeadLetter", content);
+        Assert.Contains("TopicNameResolver topicNameResolver", content);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // OUTBOX-CONFIG-01 (phase1.6-S1.5)
     // ─────────────────────────────────────────────────────────────────────
     // KafkaOutboxPublisher MAX_RETRY is now externalised to

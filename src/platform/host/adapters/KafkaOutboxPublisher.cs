@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Whyce.Runtime.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
 
 namespace Whyce.Platform.Host.Adapters;
@@ -29,6 +30,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
     private readonly string _connectionString;
     private readonly IProducer<string, string> _producer;
+    private readonly TopicNameResolver _topicNameResolver;
     private readonly TimeSpan _pollInterval;
     private readonly int _maxRetryCount;
     private readonly ILogger<KafkaOutboxPublisher>? _logger;
@@ -40,13 +42,21 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     // single source of truth is OutboxOptions.MaxRetry (which itself
     // carries a conservative default for the case where the config key
     // is unset).
+    //
+    // phase1.6-S1.6 (DLQ-RESOLVER-01): the dead-letter topic name is now
+    // resolved through the canonical TopicNameResolver instead of inline
+    // string manipulation. The resolver is required (not nullable, not
+    // defaulted) so the publisher cannot construct a DLQ topic by any
+    // other path.
     public KafkaOutboxPublisher(
         string connectionString,
         IProducer<string, string> producer,
+        TopicNameResolver topicNameResolver,
         OutboxOptions options,
         TimeSpan? pollInterval = null,
         ILogger<KafkaOutboxPublisher>? logger = null)
     {
+        ArgumentNullException.ThrowIfNull(topicNameResolver);
         ArgumentNullException.ThrowIfNull(options);
         if (options.MaxRetry < 1)
             throw new ArgumentOutOfRangeException(
@@ -56,6 +66,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         _connectionString = connectionString;
         _producer = producer;
+        _topicNameResolver = topicNameResolver;
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
         _maxRetryCount = options.MaxRetry;
         _logger = logger;
@@ -262,9 +273,10 @@ public sealed class KafkaOutboxPublisher : BackgroundService
         var willBeDeadlettered = (entry.RetryCount + 1) >= _maxRetryCount;
         if (!willBeDeadlettered) return;
 
-        var deadletterTopic = entry.Topic.EndsWith(".events")
-            ? string.Concat(entry.Topic.AsSpan(0, entry.Topic.Length - ".events".Length), ".deadletter")
-            : entry.Topic + ".deadletter";
+        // phase1.6-S1.6 (DLQ-RESOLVER-01): route through the canonical
+        // TopicNameResolver. The previous inline string manipulation is
+        // removed; all DLQ naming is now owned by a single seam.
+        var deadletterTopic = _topicNameResolver.ResolveDeadLetter(entry.Topic);
 
         try
         {
