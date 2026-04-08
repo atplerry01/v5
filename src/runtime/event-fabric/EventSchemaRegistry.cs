@@ -36,7 +36,7 @@ public sealed class EventSchemaRegistry
     }
 
     /// <summary>
-    /// Registers an event type with its version and dual CLR types (Phase B2b).
+    /// Registers an event type with its version and dual CLR types.
     /// StoredEventType is the type used by the event store replay path (domain event).
     /// InboundEventType is the type used by inbound consumers (Kafka, after payload mapping — schema contract).
     /// </summary>
@@ -112,7 +112,7 @@ public sealed record EventSchemaEntry
     public required EventVersion Version { get; init; }
     public required string SchemaHash { get; init; }
 
-    // Phase B2b: dual CLR types for the two deserialization paths.
+    // Dual CLR types for the two deserialization paths.
     // - StoredEventType: domain event type used by PostgresEventStoreAdapter replay
     // - InboundEventType: schema contract type used by Kafka consumers (post payload mapping)
     // Nullable so existing Register(string [, EventVersion]) overloads remain valid.

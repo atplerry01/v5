@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Whyce.Runtime.EventFabric;
+using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Runtime;
@@ -14,8 +15,8 @@ namespace Whyce.Platform.Host.Composition.Constitutional.Policy;
 ///
 /// Scope: schema only. No engines, projections, or workflows are owned by the
 /// constitutional policy domain — those layers are populated by per-feature
-/// bootstrap modules. Sits in <c>src/platform/host/composition/**</c> which is
-/// the canonical exempt zone for domain-typed wiring (per rule 11.R-DOM-01).
+/// bootstrap modules. Schema identity binding lives in the runtime-side
+/// PolicyDecisionSchemaModule (Phase 1.5 §5.1.2 BPV-D01).
 /// </summary>
 public sealed class ConstitutionalPolicyBootstrap : IDomainBootstrapModule
 {
@@ -26,17 +27,7 @@ public sealed class ConstitutionalPolicyBootstrap : IDomainBootstrapModule
 
     public void RegisterSchema(EventSchemaRegistry schema)
     {
-        schema.Register(
-            "PolicyEvaluatedEvent",
-            EventVersion.Default,
-            typeof(Whycespace.Domain.ConstitutionalSystem.Policy.Decision.PolicyEvaluatedEvent),
-            typeof(Whycespace.Domain.ConstitutionalSystem.Policy.Decision.PolicyEvaluatedEvent));
-
-        schema.Register(
-            "PolicyDeniedEvent",
-            EventVersion.Default,
-            typeof(Whycespace.Domain.ConstitutionalSystem.Policy.Decision.PolicyDeniedEvent),
-            typeof(Whycespace.Domain.ConstitutionalSystem.Policy.Decision.PolicyDeniedEvent));
+        DomainSchemaCatalog.RegisterConstitutionalPolicyDecision(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)

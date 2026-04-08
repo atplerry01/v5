@@ -1,7 +1,7 @@
 namespace Whyce.Runtime.Projection;
 
 /// <summary>
-/// Generic projection table writer (Phase B2b). One instance per projection table —
+/// Generic projection table writer. One instance per projection table —
 /// domain bootstrap modules construct it with their schema/table/aggregate-type config
 /// and inject it into the generic Kafka consumer worker.
 ///

@@ -40,11 +40,23 @@ All files under `src/runtime/`, and all files that interact with runtime (platfo
     **11.R-DOM-01 (S1) — NO DOMAIN-NAMED SYMBOLS OR PATHS IN RUNTIME / HOST / ADAPTERS**
 
     No file under `src/runtime/**`, `src/platform/host/**`, or `src/platform/host/adapters/**` may:
-    - Reference a concrete domain type (`using Whycespace.Domain.*` for any classification/context/domain)
+    - Reference a concrete domain type via a `using` directive
+      (`using Whycespace.Domain.*` for any classification/context/domain)
+    - Reference a concrete domain type via a **fully-qualified type
+      expression** (`typeof(Whycespace.Domain.X.Y)`, cast
+      `(Whycespace.Domain.X.Y)e`, parameter, generic argument, field
+      type, or return type)
+    - Reference a concrete domain type via a **namespace alias**
+      (`using <Alias> = Whycespace.Domain.<…>;`)
     - Reference a concrete domain event/schema type by name in a `using`, parameter, generic argument, switch case, or string literal
     - Contain folders nested by `{classification}/{context}/{domain}/` (e.g. `runtime/policies/operational-system/sandbox/todo/`)
     - Hold static dictionaries, switch/case branches, or constructor dependencies keyed on a single domain
     - Hardcode domain-specific topic names, consumer-group names, projection table names, or schema mapper bodies
+
+    The fully-qualified and alias clauses were added under Phase 1.5
+    §5.1.2 Step C-G after BPV-D01 exposed eleven live binding sites in
+    `src/platform/host/composition/**` that bypassed the original `using`
+    predicate.
 
     **ALLOWED PATTERNS** in runtime/host/adapters:
     - Generic registries (`EventHandlerRegistry`, `ProjectionHandlerRegistry`, `EventSchemaRegistry`) keyed by string event-type
@@ -58,12 +70,32 @@ All files under `src/runtime/`, and all files that interact with runtime (platfo
     - `src/platform/api/**` (controllers and request DTOs are domain-shaped by design)
     - `src/systems/**` (per-domain bootstrap modules and intent handlers)
     - `src/shared/contracts/**` (cross-layer contracts may carry domain identifiers)
+    - `src/runtime/event-fabric/domain-schemas/**` — the canonical
+      schema-binding seam (Phase 1.5 §5.1.2 BPV-D01 remediation). This
+      directory is the *only* permitted runtime location for typed
+      `Whycespace.Domain.*` references. Per-domain `*SchemaModule.cs`
+      files own the binding from domain CLR event types to
+      `EventSchemaRegistry`, plus payload-mapper closures. Host
+      composition modules consume this seam via
+      `DomainSchemaCatalog.Register*` static dispatchers and never
+      learn the underlying domain types.
+    - `src/runtime/dispatcher/RuntimeCommandDispatcher.cs` may import
+      `Whycespace.Domain.SharedKernel.Primitives.Kernel` for primitive
+      kernel types (`AggregateId` and similar). Per-context domain types
+      remain forbidden.
 
-    **CHECK:** `grep -R "Todo\|<DomainName>" src/runtime/ src/platform/host/` MUST return zero matches for any registered domain. Severity is S1 — block merge, fail CI, must resolve in current PR.
+    **CHECK:** `grep -R "Todo\|<DomainName>" src/runtime/ src/platform/host/` MUST return zero matches for any registered domain *outside* the exempt paths above. Severity is S1 — block merge, fail CI, must resolve in current PR.
 
-    **STATUS: FULLY ENFORCED as of Phase B2b (2026-04-07).** Zero exemptions. Verified by:
-    - `grep -R "Todo" src/runtime/` → 0 matches
-    - `grep -R "Todo" src/platform/host/` → matches only inside `src/platform/host/composition/**` (exempt by design)
+    **STATUS: FULLY ENFORCED as of Phase 1.5 §5.1.2 Step C (2026-04-08).**
+    `src/platform/host/composition/**` is **no longer** an implicit
+    exempt zone — it was cleared of all eleven typed domain references
+    by BPV-D01 remediation. The only runtime exemption is
+    `src/runtime/event-fabric/domain-schemas/**`, listed explicitly above.
+    Verified by:
+    - `grep -R "Whycespace\.Domain\." src/platform/host/` → only the
+      intent-comment in `composition/runtime/RuntimeComposition.cs:80`.
+    - `bash scripts/dependency-check.sh` → `Violations: 0`, `Status: PASS`
+      (with the strengthened fully-qualified predicate active).
 
     **Phase history:**
     - **B1**: eliminated `src/runtime/projection/bridges/TodoProjectionBridge.cs` (`TodoProjectionHandler` now implements envelope-based `IProjectionHandler` directly) and `src/runtime/policies/operational-system/sandbox/todo/TodoPolicyDefinition.cs` (constants relocated to `src/shared/contracts/policy/TodoPolicyIds.cs`).

@@ -114,8 +114,8 @@ Objective:
 Close all known dependency violations before Phase 2 expansion.
 
 Todo:
-- Remediate src/projections → runtime dependency violation
-- Remediate platform/host dependency overreach
+- ~~Remediate src/projections → runtime dependency violation~~ — Step B verification-only: csproj already clean (remediated 2026-04-07 under DG-R7-01); no using-level leakage from src/projections into runtime/engines/systems/domain/platform.
+- Remediate platform/host dependency overreach — Step C: removed host → domain csproj reference (sole typed usage in PostgresOutboxAdapter replaced with reflection-based unwrap). Remaining host → runtime/engines/systems/projections references reclassified as JUSTIFIED composition-root edges under DG-R5-EXCEPT-01 (post-domain-removal).
 - Reconfirm canonical dependency graph
 - Add enforcement checks to prevent regression
 - Regenerate dependency audit after fixes
@@ -128,11 +128,24 @@ Deliverables:
 
 Evidence Required:
 - Clean dependency audit
-- Build proof
+- Build proof (pending — running Whycespace.Host process must be stopped before clean rebuild)
 - No forbidden dependency edges
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08) — Steps A–E complete and final verification complete.
+
+Closure Note:
+- D1 closed by removing host → domain (Step C: PostgresOutboxAdapter typed unwrap replaced with reflection; <ProjectReference> to Whycespace.Domain.csproj removed from Whycespace.Host.csproj).
+- D2 closed and JUSTIFIED (host → engines is composition-root DI under DG-R5-EXCEPT-01).
+- D3 closed and JUSTIFIED (host → runtime/systems/projections is composition-root DI under DG-R5-EXCEPT-01).
+- D4 closed through documentation and audit alignment (Step D: dependency-graph.guard.md DG-R5-EXCEPT-01 narrowed, DG-R5-HOST-DOMAIN-FORBIDDEN added; dependency-graph.audit.md baseline rewritten; README §5.1.1 updated).
+- H1 closed: running Whycespace.Host (PID 32648) terminated; `dotnet build src/platform/host/Whycespace.Host.csproj` succeeded with 0 warnings, 0 errors, transitively building the full 8-project dependency closure.
+- H3 closed: scripts/dependency-check.sh C4 rule narrowed with a single explicit whitelist clause for canonical domain `**/adapter/**` paths; script now exits 0 with 0 violations.
+
+Final Evidence:
+- Clean build: GREEN (0 warnings, 0 errors, all 8 projects).
+- scripts/dependency-check.sh: GREEN (0 violations, exit 0).
+- Post-fix dependency graph: clean — no host → domain; no projections → runtime; no using-level leakage in host or projections.
 
 ## 5.1.2 Boundary Purity Validation
 Objective:
@@ -157,7 +170,19 @@ Evidence Required:
 - Verified routing ownership
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08) — Steps A, B, C, and C-G complete.
+
+Closure Note:
+- BPV-D01 closed: 11 typed `Whycespace.Domain.*` bindings in host composition modules (TodoBootstrap, ConstitutionalPolicyBootstrap, WorkflowExecutionBootstrap) survived §5.1.1 PASS via fully-qualified and alias forms. Structural remediation moved schema identity binding into a runtime-side seam at `src/runtime/event-fabric/domain-schemas/**` (`ISchemaModule` + `EventSchemaRegistrySink` + per-domain `*SchemaModule.cs` + host-facing `DomainSchemaCatalog`). Host bootstraps now dispatch via one-line catalog calls and contain zero typed domain references.
+- BPV-D02 closed: workflow-name constant relocated from `src/systems/midstream/wss/workflows/todo/TodoLifecycleWorkflow.cs` to `src/shared/contracts/application/todo/TodoLifecycleWorkflowNames.cs`; downstream handler import updated; obsolete midstream stub deleted.
+- Step C-G governance hardening: `scripts/dependency-check.sh` and the `DG-R5-HOST-DOMAIN-FORBIDDEN` / `R-DOM-01` predicates strengthened to detect `using`, fully-qualified, and namespace-alias forms (comment lines excluded). `src/runtime/event-fabric/domain-schemas/**` documented as the only canonical runtime location permitted to hold typed domain references. Folklore-vs-canon contradiction captured in `claude/new-rules/20260408-180000-guards.md`.
+
+Final Evidence:
+- Final audit: [claude/audits/boundary-purity.audit.md](claude/audits/boundary-purity.audit.md) — PASS.
+- Build: GREEN (0 warnings, 0 errors, all 8 projects).
+- `bash scripts/dependency-check.sh` → `Violations: 0`, `Status: PASS` (strengthened predicate active).
+- `grep -RIn "Whycespace\.Domain\." src/platform/host/` → only the canonical intent-comment in `composition/runtime/RuntimeComposition.cs:80`.
+- Zero csproj changes across the entire workstream.
 
 ## 5.1.3 Canonical Documentation Alignment
 Objective:
@@ -179,7 +204,24 @@ Evidence Required:
 - Explicit PASS/WAIVED state per drift item
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08) — Step A, Step B Set 1, Step C Set 1, Step B Set 2, and Step C Set 2 complete.
+
+Closure Note:
+- §5.1.3 established CURRENT TRUTH / HISTORICAL BASELINE / ARCHIVAL RECORD as the canonical discipline model for implementation-adjacent documentation.
+- CLAUDE.md $1a/$1b corrected from stale enumerations (12 guards, 11 audits) to discovery directives covering the actual `claude/guards/**` (30 files including the `domain-aligned/` subtree) and `claude/audits/**` (21 active definitions). The `claude/` directory description was rewritten to match `ls claude/` and to align with $2 (canonical prompt store is `project-prompts/`, not `prompts/`).
+- `dependency-graph.guard.md` self-supersession closed in three coordinated edits: R5 body now cross-references DG-R5-EXCEPT-01; CODE-LEVEL CHECKS name `scripts/dependency-check.sh` as authoritative and split `platform/api` from `platform/host`; LOCK CONDITIONS reference R1–R7 plus the DG-* additions. `dependency-graph.audit.md` C2 + INPUTS aligned with the script.
+- 13 stale `Phase B2a/B2b` source-comment markers across 9 files in `src/platform/host/**` and `src/runtime/event-fabric/**` cleaned up.
+- Three `claude/new-rules/20260408-103326-*.md` captures (`activation`, `determinism`, `engines`) gained explicit `STATUS: PROPOSED` blocks with verification evidence.
+- Stale/unclassified artifacts removed: `claude/audits.zip` (133 KB, 2026-04-07 export, superseded by live tree) and `claude/project-prompts/phase2/` (empty placeholder).
+- Two non-blocking S3 review items explicitly deferred outside the PASS gate: `docs/validation/e2e-validation-report.md` scaffold classification and three prose-form new-rules captures with implicit STATUS lines.
+
+Final Evidence:
+- Final audit: [claude/audits/canonical-alignment.audit.md](claude/audits/canonical-alignment.audit.md) — PASS.
+- Build: GREEN (0 warnings, 0 errors, all 8 projects).
+- `bash scripts/dependency-check.sh` → `Violations: 0`, `Status: PASS` (strengthened predicate from §5.1.2 Step C-G remains active; documentation now accurately describes what it enforces).
+- Folklore sweep: `grep -RIn "Phase B[0-9]" src/ --include="*.cs"` → 0 matches.
+- TODO/FIXME sweep: `grep -RIn "TODO\|FIXME" src/ --include="*.cs"` → 0 matches.
+- Ten drift items closed (DOC-D01 through DOC-D10). Zero S0/S1 findings across the entire workstream.
 
 ---
 
@@ -794,9 +836,9 @@ Status:
 
 | ID | Topic | Objective | Status | Evidence Required | Blocker To Phase 2 |
 |---|---|---|---|---|---|
-| 5.1.1 | Dependency Graph Remediation | Close architectural drift | NOT STARTED | Audit + Build | YES |
-| 5.1.2 | Boundary Purity Validation | Enforce layer purity | NOT STARTED | Audit | YES |
-| 5.1.3 | Canonical Documentation Alignment | Match code to canon | NOT STARTED | Alignment Audit | YES |
+| 5.1.1 | Dependency Graph Remediation | Close architectural drift | PASS (2026-04-08) | Audit + Build | YES |
+| 5.1.2 | Boundary Purity Validation | Enforce layer purity | PASS (2026-04-08) | Audit + Build + Strengthened dep-check | YES |
+| 5.1.3 | Canonical Documentation Alignment | Match code to canon | PASS (2026-04-08) | Alignment Audit + Build + dep-check + Folklore Sweep | YES |
 | 5.2.1 | Admission Control and Backpressure | Safe overload handling | NOT STARTED | Stress Proof | YES |
 | 5.2.2 | Concurrency Control and Resource Bounds | Stable concurrent execution | NOT STARTED | Concurrency Proof | YES |
 | 5.2.3 | Timeout, Cancellation, and Circuit Protection | Prevent hanging and collapse | NOT STARTED | Failure Proof | YES |

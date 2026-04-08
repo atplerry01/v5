@@ -12,7 +12,7 @@ namespace Whyce.Platform.Host.Composition;
 /// Per-domain bootstrap contract. Owns ALL wiring for a single classification/context/domain
 /// so that Program.cs is free of domain-specific knowledge.
 ///
-/// Lifecycle (Phase B2a):
+/// Lifecycle:
 ///   1. Program.cs constructs the static module list and calls RegisterServices on each
 ///      (passing IServiceCollection and IConfiguration) — happens before builder.Build().
 ///   2. Each module is also DI-registered as IDomainBootstrapModule so factories below
@@ -22,8 +22,10 @@ namespace Whyce.Platform.Host.Composition;
 ///      INSIDE the factory closure, BEFORE calling Lock() — preserving the
 ///      lock-after-build immutability guarantee.
 ///
-/// Phase B2b will introduce schema CLR-type extensions and a generic Kafka consumer;
-/// this contract may grow accordingly. Phase B2a only relocates wiring without behavior change.
+/// Schema CLR-type extensions and the generic Kafka consumer are part of this contract.
+/// Phase 1.5 §5.1.2 BPV-D01 further moved typed-domain schema binding behind the
+/// runtime-side DomainSchemaCatalog seam; host modules now dispatch via that seam
+/// rather than typing domain events directly.
 /// </summary>
 public interface IDomainBootstrapModule
 {

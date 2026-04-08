@@ -10,7 +10,7 @@ using Whyce.Shared.Kernel.Domain;
 namespace Whyce.Platform.Host.Adapters;
 
 /// <summary>
-/// Generic Kafka projection consumer worker (Phase B2b).
+/// Generic Kafka projection consumer worker.
 /// Replaces the per-domain KafkaProjectionConsumerWorker — this file contains ZERO domain references.
 ///
 /// Per-domain configuration (topic, consumer group, projection table) is supplied by the

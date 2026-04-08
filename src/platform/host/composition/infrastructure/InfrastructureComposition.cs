@@ -63,16 +63,45 @@ public static class InfrastructureComposition
             new StackExchangeRedisClient(sp.GetRequiredService<IConnectionMultiplexer>()));
 
         // --- Policy evaluator (OPA) ---
-        services.AddSingleton<IPolicyEvaluator>(_ =>
-            new OpaPolicyEvaluator(new HttpClient { Timeout = TimeSpan.FromSeconds(5) }, opaEndpoint));
+        // phase1.5-S5.2.1 / PC-2 (OPA-CONFIG-01): bind OpaOptions from
+        // configuration following the phase1.6-S1.5 OutboxOptions
+        // precedent — a plain record constructed at the composition root,
+        // no IOptions<T> indirection. The HttpClient.Timeout is left at
+        // the .NET default; the per-call envelope is enforced by the
+        // evaluator's linked CTS sized from OpaOptions.RequestTimeoutMs.
+        var opaOptions = new OpaOptions
+        {
+            Endpoint = opaEndpoint,
+            RequestTimeoutMs = configuration.GetValue<int?>("Opa:RequestTimeoutMs")
+                ?? new OpaOptions().RequestTimeoutMs,
+            BreakerThreshold = configuration.GetValue<int?>("Opa:BreakerThreshold")
+                ?? new OpaOptions().BreakerThreshold,
+            BreakerWindowSeconds = configuration.GetValue<int?>("Opa:BreakerWindowSeconds")
+                ?? new OpaOptions().BreakerWindowSeconds,
+            OpenStateBehavior = configuration.GetValue<string>("Opa:OpenStateBehavior")
+                ?? new OpaOptions().OpenStateBehavior,
+        };
+        services.AddSingleton(opaOptions);
+        services.AddSingleton<IPolicyEvaluator>(sp =>
+            new OpaPolicyEvaluator(
+                new HttpClient(),
+                sp.GetRequiredService<OpaOptions>(),
+                sp.GetRequiredService<IClock>()));
 
         // --- Idempotency, outbox, workflow state ---
         services.AddSingleton<IIdempotencyStore>(_ =>
             new PostgresIdempotencyStoreAdapter(postgresEventStoreCs));
         services.AddSingleton<ISequenceStore>(_ =>
             new PostgresSequenceStoreAdapter(postgresEventStoreCs));
-        services.AddSingleton<IOutbox>(_ =>
-            new PostgresOutboxAdapter(postgresOutboxCs));
+        // phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): the outbox depth
+        // snapshot is a singleton seam written by OutboxDepthSampler
+        // and read by PostgresOutboxAdapter. Both are registered below.
+        services.AddSingleton<IOutboxDepthSnapshot, OutboxDepthSnapshot>();
+        services.AddSingleton<IOutbox>(sp =>
+            new PostgresOutboxAdapter(
+                postgresOutboxCs,
+                sp.GetRequiredService<IOutboxDepthSnapshot>(),
+                sp.GetRequiredService<OutboxOptionsRecord>()));
 
         // --- Kafka producer (for outbox relay) ---
         // phase1-gate-H7-H9-safe:
@@ -97,10 +126,35 @@ public static class InfrastructureComposition
         // so unconfigured deployments are byte-identical to the previous
         // behavior. Validation lives in the OutboxOptions/publisher
         // constructor — composition only resolves the value.
-        var outboxMaxRetry = configuration.GetValue<int?>("Outbox:MaxRetry")
-            ?? new OutboxOptionsRecord().MaxRetry;
-        var outboxOptions = new OutboxOptionsRecord { MaxRetry = outboxMaxRetry };
+        // phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): bind the new
+        // depth/sampling/saturation tunables alongside the existing
+        // MaxRetry. Defaults from the OutboxOptions record itself, so
+        // an unconfigured deployment is safer (real watermark + real
+        // sampler) than the pre-S5.2.1 unbounded behavior.
+        var outboxDefaults = new OutboxOptionsRecord();
+        var outboxOptions = new OutboxOptionsRecord
+        {
+            MaxRetry = configuration.GetValue<int?>("Outbox:MaxRetry") ?? outboxDefaults.MaxRetry,
+            HighWaterMark = configuration.GetValue<int?>("Outbox:HighWaterMark")
+                ?? outboxDefaults.HighWaterMark,
+            SamplingIntervalSeconds = configuration.GetValue<int?>("Outbox:SamplingIntervalSeconds")
+                ?? outboxDefaults.SamplingIntervalSeconds,
+            SaturationResponse = configuration.GetValue<string>("Outbox:SaturationResponse")
+                ?? outboxDefaults.SaturationResponse,
+            RetryAfterSeconds = configuration.GetValue<int?>("Outbox:RetryAfterSeconds")
+                ?? outboxDefaults.RetryAfterSeconds,
+        };
         services.AddSingleton(outboxOptions);
+
+        // phase1.5-S5.2.1 / PC-3: outbox depth sampler — periodic probe
+        // that publishes the latest count(*) and oldest-pending-age to
+        // the shared snapshot and exports both as gauges on the
+        // Whyce.Outbox meter.
+        services.AddHostedService(sp =>
+            new OutboxDepthSampler(
+                postgresOutboxCs,
+                sp.GetRequiredService<IOutboxDepthSnapshot>(),
+                sp.GetRequiredService<OutboxOptionsRecord>()));
 
         // --- Kafka Outbox Publisher (background relay: Postgres outbox → Kafka) ---
         // phase1.6-S1.6 (DLQ-RESOLVER-01): TopicNameResolver is registered

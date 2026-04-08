@@ -5,27 +5,25 @@ using Whyce.Engines.T2E.Operational.Todo;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Projections.OperationalSystem.Sandbox.Todo;
 using Whyce.Runtime.EventFabric;
+using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Kernel.Domain;
 using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Events.Todo;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
 
 namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
 
 /// <summary>
-/// Phase B2a: full domain wiring for operational/sandbox/todo.
-/// Owns every Todo-specific DI registration, schema entry, projection mapping,
-/// engine binding, and workflow definition that previously lived in Program.cs.
+/// Full domain wiring for operational/sandbox/todo. Owns every Todo-specific
+/// DI registration, schema entry, projection mapping, engine binding, and
+/// workflow definition that would otherwise live in Program.cs.
 ///
-/// Behavior is intentionally identical to the prior inline wiring — only the
-/// composition site moves. Phase B2b will:
-///   - Add EventSchemaEntry.ClrType + register CLR types here
-///   - Replace KafkaProjectionConsumerWorker with a generic worker
-///   - Remove EventTypeResolver and resolve via the schema registry instead
+/// Schema identity binding is delegated to the runtime-side
+/// DomainSchemaCatalog seam (Phase 1.5 §5.1.2 BPV-D01); host stays free of
+/// typed domain-event references.
 /// </summary>
 public sealed class TodoBootstrap : IDomainBootstrapModule
 {
@@ -51,7 +49,7 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         // Systems.Downstream — Todo intent handler
         services.AddTransient<ITodoIntentHandler, TodoIntentHandler>();
 
-        // Kafka projection consumer — generic worker (Phase B2b).
+        // Kafka projection consumer — generic worker.
         // Per-domain config (topic, group, projection table) lives here in the bootstrap module;
         // the worker itself contains zero domain references.
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
@@ -85,41 +83,9 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 
     public void RegisterSchema(EventSchemaRegistry schema)
     {
-        // Phase B2b: dual CLR types — stored = domain event (event store replay),
-        // inbound = schema contract (Kafka consumer post payload mapping).
-        schema.Register(
-            "TodoCreatedEvent",
-            EventVersion.Default,
-            typeof(Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoCreatedEvent),
-            typeof(TodoCreatedEventSchema));
-        schema.Register(
-            "TodoUpdatedEvent",
-            EventVersion.Default,
-            typeof(Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoUpdatedEvent),
-            typeof(TodoUpdatedEventSchema));
-        schema.Register(
-            "TodoCompletedEvent",
-            EventVersion.Default,
-            typeof(Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoCompletedEvent),
-            typeof(TodoCompletedEventSchema));
-
-        // Payload mappers: domain events → shared schema contracts (projection layer isolation).
-        // Used by EventFabric outbound publish path; deserialization for inbound now uses InboundEventType above.
-        schema.RegisterPayloadMapper("TodoCreatedEvent", e =>
-        {
-            var evt = (Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoCreatedEvent)e;
-            return new TodoCreatedEventSchema(evt.AggregateId.Value, evt.Title);
-        });
-        schema.RegisterPayloadMapper("TodoUpdatedEvent", e =>
-        {
-            var evt = (Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoUpdatedEvent)e;
-            return new TodoUpdatedEventSchema(evt.AggregateId.Value, evt.Title);
-        });
-        schema.RegisterPayloadMapper("TodoCompletedEvent", e =>
-        {
-            var evt = (Whycespace.Domain.OperationalSystem.Sandbox.Todo.TodoCompletedEvent)e;
-            return new TodoCompletedEventSchema(evt.AggregateId.Value);
-        });
+        // Phase 1.5 §5.1.2 BPV-D01: schema identity binding lives in the
+        // runtime-side TodoSchemaModule. Host stays free of typed domain refs.
+        DomainSchemaCatalog.RegisterOperationalSandboxTodo(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)

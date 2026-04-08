@@ -34,7 +34,7 @@ internal sealed class FlexibleGuidConverter : JsonConverter<Guid>
 }
 
 /// <summary>
-/// Schema-driven event deserializer (Phase B2b).
+/// Schema-driven event deserializer.
 /// Replaces the static EventTypeResolver and the per-domain switch in KafkaProjectionConsumerWorker.
 ///
 /// Two paths:

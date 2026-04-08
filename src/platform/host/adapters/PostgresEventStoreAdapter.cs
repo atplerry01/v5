@@ -10,7 +10,7 @@ namespace Whyce.Platform.Host.Adapters;
 /// PostgreSQL-backed event store. Persists domain events as JSONB rows
 /// in the canonical events table (see 001_event_store.sql).
 ///
-/// Phase B2b: deserialization is now schema-driven via EventDeserializer
+/// Deserialization is schema-driven via EventDeserializer
 /// (no static EventTypeResolver, no per-domain Type dictionary).
 /// </summary>
 public sealed class PostgresEventStoreAdapter : IEventStore

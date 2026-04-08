@@ -1,6 +1,5 @@
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Runtime;
-using Whyce.Systems.Midstream.Wss.Workflows.Todo;
 
 namespace Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
 
@@ -18,7 +17,7 @@ public sealed class TodoIntentHandler : ITodoIntentHandler
     public async Task<TodoSystemResult> HandleAsync(CreateTodoIntent intent)
     {
         var result = await _workflowDispatcher.StartWorkflowAsync(
-            TodoLifecycleWorkflow.CreateWorkflowName,
+            TodoLifecycleWorkflowNames.Create,
             intent,
             TodoRoute);
 

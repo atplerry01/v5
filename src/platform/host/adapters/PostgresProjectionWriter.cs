@@ -5,7 +5,7 @@ using Whyce.Runtime.Projection;
 namespace Whyce.Platform.Host.Adapters;
 
 /// <summary>
-/// Generic Postgres projection table writer (Phase B2b).
+/// Generic Postgres projection table writer.
 /// Configured per-instance with schema name, table name, and aggregate type — domain
 /// bootstrap modules construct one writer per projection table they own.
 ///

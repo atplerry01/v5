@@ -58,10 +58,17 @@ below. Upward references are FORBIDDEN. Cycles are FORBIDDEN.
 
 ### R5 — PLATFORM ISOLATION
 - Path: `src/platform/**`
-- Allowed references: `systems` only
-- Forbidden: `runtime`, `engines`, `domain`, `projections` (direct)
-- NOTE: composition root may require exceptions; any exception MUST be
-  declared explicitly in this guard. None are currently granted.
+- Default rule: `src/platform/api` may reference `systems` and `shared`
+  only. Forbidden in `platform/api`: `runtime`, `engines`, `domain`,
+  `projections`.
+- **Composition-root exception:** `src/platform/host` is the composition
+  root and is governed by **DG-R5-EXCEPT-01** (lines below). It MAY
+  reference `runtime`, `engines`, `systems`, `projections`, and
+  infrastructure adapters for DI registration purposes only. It MUST
+  NOT reference `Whycespace.Domain` (see **DG-R5-HOST-DOMAIN-FORBIDDEN**).
+- See DG-R5-EXCEPT-01 and DG-R5-HOST-DOMAIN-FORBIDDEN in the EXCEPTIONS
+  section below for the canonical wording. Authoritative mechanical
+  enforcement is `scripts/dependency-check.sh`.
 
 ### R6 — INFRASTRUCTURE RULE
 - Path: `src/infrastructure/**` (when present)
@@ -87,7 +94,7 @@ below. Upward references are FORBIDDEN. Cycles are FORBIDDEN.
 | systems        | src/systems       | runtime (contracts), shared                   |
 | projections    | src/projections   | domain, shared                                |
 | platform/api   | src/platform/api  | systems, shared                               |
-| platform/host  | src/platform/host | systems, shared                               |
+| platform/host  | src/platform/host | systems, shared, api, runtime, engines, projections (DI-only, DG-R5-EXCEPT-01; **NOT domain** per DG-R5-HOST-DOMAIN-FORBIDDEN) |
 
 Any `<ProjectReference>` outside this matrix = VIOLATION.
 
@@ -95,18 +102,31 @@ Any `<ProjectReference>` outside this matrix = VIOLATION.
 
 ## CODE-LEVEL CHECKS
 
-Run on every execution:
+**Authoritative enforcement:** `scripts/dependency-check.sh`. The
+script is the single source of truth for the mechanical predicates;
+the patterns below are illustrative summaries that must agree with
+the script and with DG-R5-EXCEPT-01 / DG-R5-HOST-DOMAIN-FORBIDDEN.
+
+Illustrative predicates run on every execution:
 
 ```
 grep -r "using .*Runtime"        src/domain
 grep -r "using .*Infrastructure" src/engines
 grep -r "using .*Engines"        src/systems
-grep -r "using .*Runtime"        src/platform
+grep -r "using .*Runtime"        src/platform/api      # platform/api only
 grep -r "using .*Engines"        src/projections
 grep -r "using .*Runtime"        src/projections
+grep -r "Whycespace\.Domain\."   src/platform/host     # DG-R5-HOST-DOMAIN-FORBIDDEN
 ```
 
-Any hit = VIOLATION.
+`src/platform/host` is intentionally omitted from the runtime/engines
+grep above: composition-root usings are permitted under
+DG-R5-EXCEPT-01. Only `Whycespace.Domain.*` references in
+`src/platform/host/**` are forbidden, and the script enforces all
+three forms (using directive, fully-qualified expression, namespace
+alias) per the §5.1.2 Step C-G strengthening.
+
+Any hit = VIOLATION (subject to documented exceptions below).
 
 ---
 
@@ -147,7 +167,11 @@ On any violation:
 ## LOCK CONDITIONS
 
 Guard is LOCKED only if:
-1. All rules R1–R7 pass
+1. All rules R1–R7 pass, **and** all DG-* additions pass:
+   `DG-R5-EXCEPT-01` (composition-root permission, narrowed 2026-04-08),
+   `DG-R5-HOST-DOMAIN-FORBIDDEN` (host→domain prohibition, strengthened
+   §5.1.2 Step C-G), and `DG-R7-01` (projections→runtime, remediated
+   2026-04-07).
 2. No illegal project references
 3. No circular dependencies
 4. CI runs `scripts/dependency-check.sh`
@@ -161,11 +185,20 @@ Guard is LOCKED only if:
 
 ## EXCEPTIONS (documented and granted)
 
-### DG-R5-EXCEPT-01 — Composition Root references (2026-04-07)
+### DG-R5-EXCEPT-01 — Composition Root references (2026-04-07; narrowed 2026-04-08)
 
 `src/platform/host/Whycespace.Host.csproj` MAY reference `Whycespace.Runtime`,
-`Whycespace.Engines`, `Whycespace.Projections`, `Whycespace.Domain`, and
+`Whycespace.Engines`, `Whycespace.Systems`, `Whycespace.Projections`, and
 infrastructure adapters **for DI registration purposes only**.
+
+`Whycespace.Domain` is **NOT** in the permitted list. Per Phase 1.5 §5.1.1
+Step C (2026-04-08), the sole residual host → domain typed usage in
+`src/platform/host/adapters/PostgresOutboxAdapter.cs` was replaced with a
+reflection-based `.Value` unwrap, and the `<ProjectReference>` to
+`Whycespace.Domain.csproj` was removed from `Whycespace.Host.csproj`.
+Re-introducing either the csproj reference or any `using Whycespace.Domain.*`
+inside `src/platform/host/**` is a fresh S0 violation under R5 and
+**DG-R5-HOST-DOMAIN-FORBIDDEN** (see below).
 
 **Authority:** This exception aligns with the already-canonical composition-root
 permission in [platform.guard.md G-PLATFORM-07](platform.guard.md):
@@ -198,8 +231,45 @@ permission explicitly inside dependency-graph.guard.md.
 
 **LOCK status:** With this exception logged, R5 is no longer suspended
 on `Whycespace.Host.csproj` references. DG-R7-01 (projections → runtime)
-remains the sole outstanding tracked violation under this guard, pending
-the `IProjectionHandler` relocation in Prompt B Step B-1.
+was remediated 2026-04-07. Phase 1.5 §5.1.1 Step C (2026-04-08) removed
+the `host → domain` csproj edge. No outstanding tracked violations remain
+under this guard pending verification by a clean full-solution build and
+a green `scripts/dependency-check.sh` run.
+
+---
+
+### DG-R5-HOST-DOMAIN-FORBIDDEN — host may not depend on domain (2026-04-08)
+
+**Rule:** `src/platform/host/**` may not, under any circumstance:
+1. Declare `<ProjectReference Include="..\..\domain\Whycespace.Domain.csproj" />`
+   in `Whycespace.Host.csproj`.
+2. Contain `using Whycespace.Domain.*;` in any `*.cs` file.
+3. Contain a **fully-qualified type expression** referencing
+   `Whycespace.Domain.*` — including but not limited to
+   `typeof(Whycespace.Domain.X.Y)`, parameter types, generic arguments,
+   cast expressions `(Whycespace.Domain.X.Y)e`, and field/property type
+   declarations.
+4. Contain a **namespace alias** of the form
+   `using <Alias> = Whycespace.Domain.<…>;` (e.g.
+   `using DomainEvents = Whycespace.Domain.OrchestrationSystem.Workflow.Execution;`).
+5. Re-introduce a typed dependency on any `Whycespace.Domain.SharedKernel.*`
+   primitive. Adapters that need to inspect domain event shapes MUST do so
+   via reflection or via shared contracts under `src/shared/contracts/**`.
+
+Clauses 3 and 4 were added under Phase 1.5 §5.1.2 Step C-G after BPV-D01
+exposed eleven live binding sites that bypassed clause 2 by using
+fully-qualified or aliased forms. The strengthened predicate is enforced
+mechanically by `scripts/dependency-check.sh` (see the `host_fq_hits`
+block immediately following the C2 scan).
+
+**Severity:** S0. Violations HALT execution and fail
+`scripts/dependency-check.sh`.
+
+**Authority:** Phase 1.5 §5.1.1 Step C remediation. The composition root
+must wire modules and own infrastructure adapters; it must not import
+domain primitives directly. Domain reachability remains available
+transitively via `runtime → domain` for type identity at runtime, but
+no host source file may bind to a domain symbol at compile time.
 
 ## NEW RULES INTEGRATED — 2026-04-07 (baseline scan addendum)
 

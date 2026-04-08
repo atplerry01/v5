@@ -14,7 +14,6 @@
     <ProjectReference Include="..\..\engines\Whycespace.Engines.csproj" />
     <ProjectReference Include="..\..\systems\Whycespace.Systems.csproj" />
     <ProjectReference Include="..\..\projections\Whycespace.Projections.csproj" />
-    <ProjectReference Include="..\..\domain\Whycespace.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

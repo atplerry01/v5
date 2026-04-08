@@ -3,12 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Projections.OrchestrationSystem.Workflow;
 using Whyce.Runtime.EventFabric;
+using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Events.OrchestrationSystem.Workflow;
 using Whyce.Shared.Contracts.Projections.OrchestrationSystem.Workflow;
 using Whyce.Shared.Contracts.Runtime;
-using DomainEvents = Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 
 namespace Whyce.Platform.Host.Composition.Orchestration.Workflow;
 
@@ -31,60 +30,10 @@ public sealed class WorkflowExecutionBootstrap : IDomainBootstrapModule
 
     public void RegisterSchema(EventSchemaRegistry schema)
     {
-        schema.Register(
-            "WorkflowExecutionStartedEvent",
-            EventVersion.Default,
-            typeof(DomainEvents.WorkflowExecutionStartedEvent),
-            typeof(WorkflowExecutionStartedEventSchema));
-        schema.Register(
-            "WorkflowStepCompletedEvent",
-            EventVersion.Default,
-            typeof(DomainEvents.WorkflowStepCompletedEvent),
-            typeof(WorkflowStepCompletedEventSchema));
-        schema.Register(
-            "WorkflowExecutionCompletedEvent",
-            EventVersion.Default,
-            typeof(DomainEvents.WorkflowExecutionCompletedEvent),
-            typeof(WorkflowExecutionCompletedEventSchema));
-        schema.Register(
-            "WorkflowExecutionFailedEvent",
-            EventVersion.Default,
-            typeof(DomainEvents.WorkflowExecutionFailedEvent),
-            typeof(WorkflowExecutionFailedEventSchema));
-        schema.Register(
-            "WorkflowExecutionResumedEvent",
-            EventVersion.Default,
-            typeof(DomainEvents.WorkflowExecutionResumedEvent),
-            typeof(WorkflowExecutionResumedEventSchema));
-
-        schema.RegisterPayloadMapper("WorkflowExecutionStartedEvent", e =>
-        {
-            var evt = (DomainEvents.WorkflowExecutionStartedEvent)e;
-            return new WorkflowExecutionStartedEventSchema(evt.AggregateId.Value, evt.WorkflowName, evt.Payload);
-        });
-        schema.RegisterPayloadMapper("WorkflowStepCompletedEvent", e =>
-        {
-            var evt = (DomainEvents.WorkflowStepCompletedEvent)e;
-            return new WorkflowStepCompletedEventSchema(
-                evt.AggregateId.Value, evt.StepIndex, evt.StepName, evt.ExecutionHash, evt.Output);
-        });
-        schema.RegisterPayloadMapper("WorkflowExecutionCompletedEvent", e =>
-        {
-            var evt = (DomainEvents.WorkflowExecutionCompletedEvent)e;
-            return new WorkflowExecutionCompletedEventSchema(evt.AggregateId.Value, evt.ExecutionHash);
-        });
-        schema.RegisterPayloadMapper("WorkflowExecutionFailedEvent", e =>
-        {
-            var evt = (DomainEvents.WorkflowExecutionFailedEvent)e;
-            return new WorkflowExecutionFailedEventSchema(
-                evt.AggregateId.Value, evt.FailedStepName, evt.Reason);
-        });
-        schema.RegisterPayloadMapper("WorkflowExecutionResumedEvent", e =>
-        {
-            var evt = (DomainEvents.WorkflowExecutionResumedEvent)e;
-            return new WorkflowExecutionResumedEventSchema(
-                evt.AggregateId.Value, evt.ResumedFromStepName, evt.PreviousFailureReason);
-        });
+        // Phase 1.5 §5.1.2 BPV-D01: schema identity binding lives in the
+        // runtime-side WorkflowExecutionSchemaModule. Host stays free of
+        // typed domain refs.
+        DomainSchemaCatalog.RegisterOrchestrationWorkflowExecution(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
