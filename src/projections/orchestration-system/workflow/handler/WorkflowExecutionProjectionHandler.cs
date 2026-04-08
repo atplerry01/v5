@@ -20,7 +20,8 @@ public sealed class WorkflowExecutionProjectionHandler :
     IProjectionHandler<WorkflowExecutionStartedEventSchema>,
     IProjectionHandler<WorkflowStepCompletedEventSchema>,
     IProjectionHandler<WorkflowExecutionCompletedEventSchema>,
-    IProjectionHandler<WorkflowExecutionFailedEventSchema>
+    IProjectionHandler<WorkflowExecutionFailedEventSchema>,
+    IProjectionHandler<WorkflowExecutionResumedEventSchema>
 {
     private readonly IWorkflowExecutionProjectionStore _store;
 
@@ -46,6 +47,7 @@ public sealed class WorkflowExecutionProjectionHandler :
             WorkflowStepCompletedEventSchema stepCompleted => HandleAsync(stepCompleted),
             WorkflowExecutionCompletedEventSchema completed => HandleAsync(completed),
             WorkflowExecutionFailedEventSchema failed => HandleAsync(failed),
+            WorkflowExecutionResumedEventSchema resumed => HandleAsync(resumed),
             _ => throw new InvalidOperationException(
                 $"WorkflowExecutionProjectionHandler received unmatched event type: {envelope.Payload.GetType().Name}.")
         };
@@ -128,6 +130,26 @@ public sealed class WorkflowExecutionProjectionHandler :
             Status = "Failed",
             FailedStepName = e.FailedStepName,
             FailureReason = e.Reason,
+            LastEventId = _currentEventId
+        });
+    }
+
+    public async Task HandleAsync(WorkflowExecutionResumedEventSchema e)
+    {
+        // phase1.6-stabilization S0.1: resume transitions the read model from
+        // Failed back to Running. The failure context (step + reason) is
+        // preserved in the event log; the read model represents *current*
+        // state, so failed-step / failure-reason are cleared. Same E2 log-and-
+        // skip + idempotency guards as the other handlers.
+        var existing = await _store.GetAsync(e.AggregateId);
+        if (existing is null) return;
+        if (existing.LastEventId == _currentEventId) return;
+
+        await _store.UpsertAsync(existing with
+        {
+            Status = "Running",
+            FailedStepName = null,
+            FailureReason = null,
             LastEventId = _currentEventId
         });
     }

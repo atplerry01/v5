@@ -51,6 +51,11 @@ public sealed class WorkflowExecutionBootstrap : IDomainBootstrapModule
             EventVersion.Default,
             typeof(DomainEvents.WorkflowExecutionFailedEvent),
             typeof(WorkflowExecutionFailedEventSchema));
+        schema.Register(
+            "WorkflowExecutionResumedEvent",
+            EventVersion.Default,
+            typeof(DomainEvents.WorkflowExecutionResumedEvent),
+            typeof(WorkflowExecutionResumedEventSchema));
 
         schema.RegisterPayloadMapper("WorkflowExecutionStartedEvent", e =>
         {
@@ -74,6 +79,12 @@ public sealed class WorkflowExecutionBootstrap : IDomainBootstrapModule
             return new WorkflowExecutionFailedEventSchema(
                 evt.AggregateId.Value, evt.FailedStepName, evt.Reason);
         });
+        schema.RegisterPayloadMapper("WorkflowExecutionResumedEvent", e =>
+        {
+            var evt = (DomainEvents.WorkflowExecutionResumedEvent)e;
+            return new WorkflowExecutionResumedEventSchema(
+                evt.AggregateId.Value, evt.ResumedFromStepName, evt.PreviousFailureReason);
+        });
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
@@ -83,6 +94,7 @@ public sealed class WorkflowExecutionBootstrap : IDomainBootstrapModule
         projection.Register("WorkflowStepCompletedEvent", handler);
         projection.Register("WorkflowExecutionCompletedEvent", handler);
         projection.Register("WorkflowExecutionFailedEvent", handler);
+        projection.Register("WorkflowExecutionResumedEvent", handler);
     }
 
     public void RegisterEngines(IEngineRegistry engine) { }

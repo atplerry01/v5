@@ -10,3 +10,6 @@ public sealed record WorkflowExecutionCompletedEventSchema(Guid AggregateId, str
 
 public sealed record WorkflowExecutionFailedEventSchema(
     Guid AggregateId, string FailedStepName, string Reason);
+
+public sealed record WorkflowExecutionResumedEventSchema(
+    Guid AggregateId, string ResumedFromStepName, string PreviousFailureReason);
