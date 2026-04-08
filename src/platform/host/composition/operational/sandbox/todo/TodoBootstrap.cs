@@ -40,8 +40,10 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         services.AddTransient<TodoEngine>();
 
         // Projection layer (consumers receive events from Kafka ONLY)
+        // phase1.5-S1 (CFG-R3): no fallback — env var is required.
         var projectionsCs = configuration.GetValue<string>("Postgres__ProjectionsConnectionString")
-            ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
+            ?? throw new InvalidOperationException(
+                "Postgres__ProjectionsConnectionString is required. No fallback.");
         services.AddSingleton(sp => new TodoProjectionHandler(projectionsCs));
         services.AddSingleton<TodoProjectionConsumer>();
 
@@ -53,8 +55,10 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         // the worker itself contains zero domain references.
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka__BootstrapServers")
             ?? throw new InvalidOperationException("Kafka__BootstrapServers is required. No fallback.");
+        // phase1.5-S1 (CFG-R3): no fallback — env var is required.
         var postgresProjectionsCs = configuration.GetValue<string>("Postgres__ProjectionsConnectionString")
-            ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
+            ?? throw new InvalidOperationException(
+                "Postgres__ProjectionsConnectionString is required. No fallback.");
 
         const string topic = "whyce.operational.sandbox.todo.events";
         const string consumerGroup = "whyce.projection.operational.sandbox.todo";

@@ -28,8 +28,11 @@ public sealed class TodoController : ControllerBase
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
         _redis = redis;
-        _projectionsConnectionString = configuration["Projections__ConnectionString"]
-            ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
+        // phase1.5-S1 (CFG-R3, CFG-R4): no fallback — env var is required.
+        // Indexer access replaced with GetValue<T>() to match the canonical pattern.
+        _projectionsConnectionString = configuration.GetValue<string>("Projections__ConnectionString")
+            ?? throw new InvalidOperationException(
+                "Projections__ConnectionString is required. No fallback.");
     }
 
     [HttpPost("create")]
