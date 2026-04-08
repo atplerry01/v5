@@ -5,7 +5,7 @@ using Npgsql;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
 using Whyce.Shared.Contracts.Runtime;
-using Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Api.Controllers;
 
@@ -14,19 +14,22 @@ namespace Whyce.Platform.Api.Controllers;
 [ApiExplorerSettings(GroupName = "operational.sandbox.todo")]
 public sealed class TodoController : ControllerBase
 {
-    private readonly ITodoIntentHandler _intentHandler;
     private readonly ISystemIntentDispatcher _dispatcher;
+    private readonly IIdGenerator _idGenerator;
+    private readonly IClock _clock;
     private readonly IRedisClient _redis;
     private readonly string _projectionsConnectionString;
 
     public TodoController(
-        ITodoIntentHandler intentHandler,
         ISystemIntentDispatcher dispatcher,
+        IIdGenerator idGenerator,
+        IClock clock,
         IRedisClient redis,
         IConfiguration configuration)
     {
-        _intentHandler = intentHandler;
         _dispatcher = dispatcher;
+        _idGenerator = idGenerator;
+        _clock = clock;
         _redis = redis;
         _projectionsConnectionString = configuration["Projections__ConnectionString"]
             ?? "Host=localhost;Port=5434;Database=whyce_projections;Username=whyce;Password=whyce";
@@ -35,10 +38,15 @@ public sealed class TodoController : ControllerBase
     [HttpPost("create")]
     public async Task<IActionResult> Create([FromBody] CreateTodoRequest request)
     {
-        var intent = new CreateTodoIntent(request.Title, request.Description ?? string.Empty, request.UserId);
-        var result = await _intentHandler.HandleAsync(intent);
-        return result.Success
-            ? Ok(new { status = result.Status, todoId = result.TodoId })
+        // phase1-gate-S1: route through dispatcher so the policy envelope,
+        // guards, outbox, and chain anchor all run — same path as Update/Complete.
+        // $9: deterministic ID, no Guid.NewGuid.
+        var aggregateId = _idGenerator.Generate(
+            $"{request.UserId}:{request.Title}:{_clock.UtcNow.Ticks}");
+        var cmd = new CreateTodoCommand(aggregateId, request.Title);
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
+        return result.IsSuccess
+            ? Ok(new { status = "created", todoId = aggregateId, correlationId = result.CorrelationId })
             : BadRequest(new { error = result.Error });
     }
 

@@ -48,6 +48,11 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             Domain = route.Domain
         };
 
-        return await _controlPlane.ExecuteAsync(command, context);
+        var result = await _controlPlane.ExecuteAsync(command, context);
+
+        // phase1-gate-S7: stamp the correlation id used by EventStore /
+        // WhyceChain / Outbox onto the response so the API caller can trace
+        // a single request through every persistence boundary.
+        return result with { CorrelationId = correlationId };
     }
 }

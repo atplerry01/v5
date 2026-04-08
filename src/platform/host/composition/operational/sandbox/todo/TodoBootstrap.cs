@@ -74,7 +74,8 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
                     projectionSchema,
                     projectionTable,
                     aggregateType),
-                sp.GetRequiredService<IClock>()));
+                sp.GetRequiredService<IClock>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)

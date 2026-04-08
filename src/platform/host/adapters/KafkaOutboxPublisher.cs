@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Diagnostics.Metrics;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -19,6 +19,14 @@ namespace Whyce.Platform.Host.Adapters;
 public sealed class KafkaOutboxPublisher : BackgroundService
 {
     private const int DefaultMaxRetryCount = 5;
+
+    // phase1-gate-S6: observability meter. Counters are exported via any
+    // registered MeterListener (OTel, Prometheus exporter, dotnet-counters, ...).
+    public static readonly Meter Meter = new("Whyce.Outbox", "1.0");
+    private static readonly Counter<long> PublishedCounter    = Meter.CreateCounter<long>("outbox.published");
+    private static readonly Counter<long> FailedCounter       = Meter.CreateCounter<long>("outbox.failed");
+    private static readonly Counter<long> DeadletteredCounter = Meter.CreateCounter<long>("outbox.deadlettered");
+    private static readonly Counter<long> DlqPublishedCounter = Meter.CreateCounter<long>("outbox.dlq_published");
 
     private readonly string _connectionString;
     private readonly IProducer<string, string> _producer;
@@ -75,10 +83,12 @@ public sealed class KafkaOutboxPublisher : BackgroundService
         // SKIP LOCKED to allow concurrent workers. 'deadletter' rows are excluded.
         await using var selectCmd = new NpgsqlCommand(
             """
-            SELECT id, correlation_id, event_type, payload, topic, retry_count
+            SELECT id, correlation_id, event_id, aggregate_id, event_type, payload, topic, retry_count
             FROM outbox
             WHERE (status = 'pending')
-               OR (status = 'failed' AND retry_count < @max_retry)
+               OR (status = 'failed'
+                   AND retry_count < @max_retry
+                   AND (next_retry_at IS NULL OR next_retry_at <= NOW()))
             ORDER BY created_at ASC
             LIMIT 100
             FOR UPDATE SKIP LOCKED
@@ -86,7 +96,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
             conn, tx);
         selectCmd.Parameters.AddWithValue("max_retry", _maxRetryCount);
 
-        var batch = new List<(Guid Id, Guid CorrelationId, string EventType, string Payload, string Topic, int RetryCount)>();
+        var batch = new List<(Guid Id, Guid CorrelationId, Guid EventId, Guid AggregateId, string EventType, string Payload, string Topic, int RetryCount)>();
         await using (var reader = await selectCmd.ExecuteReaderAsync(ct))
         {
             while (await reader.ReadAsync(ct))
@@ -94,10 +104,12 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                 batch.Add((
                     reader.GetGuid(0),
                     reader.GetGuid(1),
-                    reader.GetString(2),
-                    reader.GetString(3),
+                    reader.GetGuid(2),
+                    reader.GetGuid(3),
                     reader.GetString(4),
-                    reader.GetInt32(5)));
+                    reader.GetString(5),
+                    reader.GetString(6),
+                    reader.GetInt32(7)));
             }
         }
 
@@ -111,21 +123,17 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         foreach (var entry in batch)
         {
-            // Projection consumer requires event-id + aggregate-id headers (see
-            // GenericKafkaProjectionConsumerWorker.ExecuteAsync). The outbox table does
-            // not store these as discrete columns, so derive them here:
-            //   event-id     ← outbox row id (UUID, unique per outbox entry)
-            //   aggregate-id ← payload.AggregateId.Value (or payload.AggregateId if scalar)
-            var aggregateId = TryExtractAggregateId(entry.Payload) ?? Guid.Empty;
-
+            // phase1-gate-S2: event_id and aggregate_id are now first-class outbox
+            // columns (migration 004). No more JSON parsing of the payload at
+            // publish time — headers come straight from the row.
             var message = new Message<string, string>
             {
                 Key = entry.CorrelationId.ToString(),
                 Value = entry.Payload,
                 Headers = new Headers
                 {
-                    { "event-id", System.Text.Encoding.UTF8.GetBytes(entry.Id.ToString()) },
-                    { "aggregate-id", System.Text.Encoding.UTF8.GetBytes(aggregateId.ToString()) },
+                    { "event-id", System.Text.Encoding.UTF8.GetBytes(entry.EventId.ToString()) },
+                    { "aggregate-id", System.Text.Encoding.UTF8.GetBytes(entry.AggregateId.ToString()) },
                     { "event-type", System.Text.Encoding.UTF8.GetBytes(entry.EventType) },
                     { "correlation-id", System.Text.Encoding.UTF8.GetBytes(entry.CorrelationId.ToString()) }
                 }
@@ -140,6 +148,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                 await _producer.ProduceAsync(entry.Topic, message, ct);
                 await MarkAsPublishedAsync(conn, tx, entry.Id, ct);
                 publishedCount++;
+                PublishedCounter.Add(1, new KeyValuePair<string, object?>("topic", entry.Topic));
             }
             catch (ProduceException<string, string> ex)
             {
@@ -149,6 +158,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                     entry.Id, entry.Topic, entry.RetryCount + 1, _maxRetryCount, ex.Error.Reason);
 
                 await RecordFailureAsync(conn, tx, entry.Id, entry.RetryCount, ex.Error.Reason, ct);
+                await TryPublishToDeadletterAsync(entry, ex.Error.Reason, ct);
                 continue; // NEVER break the batch on a single bad row.
             }
             catch (Exception ex)
@@ -159,6 +169,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                     entry.Id, entry.Topic, entry.RetryCount + 1, _maxRetryCount);
 
                 await RecordFailureAsync(conn, tx, entry.Id, entry.RetryCount, ex.Message, ct);
+                await TryPublishToDeadletterAsync(entry, ex.Message, ct);
                 continue;
             }
         }
@@ -182,24 +193,36 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     {
         // Promote to 'deadletter' once retry budget exhausted; otherwise mark 'failed'
         // (which the next batch will pick up via the SELECT WHERE status='failed' AND retry_count<max).
-        var nextStatus = (currentRetryCount + 1) >= _maxRetryCount ? "deadletter" : "failed";
+        var nextAttempt = currentRetryCount + 1;
+        var nextStatus = nextAttempt >= _maxRetryCount ? "deadletter" : "failed";
+
+        // phase1-gate-S5: exponential backoff. next_retry_at gates re-selection
+        // so failed rows don't get hammered on the next 1-sec poll. Schedule:
+        //   1st fail → +1s,  2nd → +2s,  3rd → +4s,  4th → +8s ...
+        // Capped at 5 minutes to bound worst-case latency. Computed server-side
+        // via NOW() to honor $9 (no client clock).
+        var backoffSeconds = (int)Math.Min(Math.Pow(2, nextAttempt - 1), 300);
 
         await using var cmd = new NpgsqlCommand(
             """
             UPDATE outbox
-            SET status      = @status,
-                retry_count = retry_count + 1,
-                last_error  = @err
+            SET status        = @status,
+                retry_count   = retry_count + 1,
+                last_error    = @err,
+                next_retry_at = NOW() + (@backoff_seconds || ' seconds')::interval
             WHERE id = @id
             """,
             conn, tx);
         cmd.Parameters.AddWithValue("status", nextStatus);
         cmd.Parameters.AddWithValue("id", id);
         cmd.Parameters.AddWithValue("err", reason ?? string.Empty);
+        cmd.Parameters.AddWithValue("backoff_seconds", backoffSeconds.ToString());
         await cmd.ExecuteNonQueryAsync(ct);
 
+        FailedCounter.Add(1);
         if (nextStatus == "deadletter")
         {
+            DeadletteredCounter.Add(1);
             _logger?.LogError(
                 "Outbox row {OutboxId} promoted to deadletter after {Max} failed attempts. Last error: {Reason}",
                 id, _maxRetryCount, reason);
@@ -207,38 +230,59 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     }
 
     /// <summary>
-    /// Pulls AggregateId out of the JSONB payload. Tolerates two shapes:
-    ///   { "AggregateId": "guid" }
-    ///   { "AggregateId": { "Value": "guid" } }
-    /// Returns null when the field is absent or unparseable — caller falls back to Guid.Empty.
+    /// phase1-gate-S4: when an outbox row exhausts its retry budget, also
+    /// publish the original payload to the corresponding `*.deadletter` Kafka
+    /// topic with error/retry metadata headers. The DB is the source of
+    /// truth (status='deadletter'), but downstream consumers/operators get
+    /// real-time visibility via the deadletter topic.
+    ///
+    /// Failures here are caught and logged — DLQ publish must never crash
+    /// the publisher loop ($12).
     /// </summary>
-    private static Guid? TryExtractAggregateId(string payloadJson)
+    private async Task TryPublishToDeadletterAsync(
+        (Guid Id, Guid CorrelationId, Guid EventId, Guid AggregateId, string EventType, string Payload, string Topic, int RetryCount) entry,
+        string reason,
+        CancellationToken ct)
     {
+        // Only DLQ-publish on the attempt that exhausts the retry budget.
+        var willBeDeadlettered = (entry.RetryCount + 1) >= _maxRetryCount;
+        if (!willBeDeadlettered) return;
+
+        var deadletterTopic = entry.Topic.EndsWith(".events")
+            ? string.Concat(entry.Topic.AsSpan(0, entry.Topic.Length - ".events".Length), ".deadletter")
+            : entry.Topic + ".deadletter";
+
         try
         {
-            using var doc = JsonDocument.Parse(payloadJson);
-            if (!doc.RootElement.TryGetProperty("AggregateId", out var aggIdElement))
-                return null;
-
-            if (aggIdElement.ValueKind == JsonValueKind.String &&
-                Guid.TryParse(aggIdElement.GetString(), out var directGuid))
+            var dlqMessage = new Message<string, string>
             {
-                return directGuid;
-            }
+                Key = entry.CorrelationId.ToString(),
+                Value = entry.Payload,
+                Headers = new Headers
+                {
+                    { "event-id",        System.Text.Encoding.UTF8.GetBytes(entry.EventId.ToString()) },
+                    { "aggregate-id",    System.Text.Encoding.UTF8.GetBytes(entry.AggregateId.ToString()) },
+                    { "event-type",      System.Text.Encoding.UTF8.GetBytes(entry.EventType) },
+                    { "correlation-id",  System.Text.Encoding.UTF8.GetBytes(entry.CorrelationId.ToString()) },
+                    { "dlq-reason",      System.Text.Encoding.UTF8.GetBytes(reason ?? string.Empty) },
+                    { "dlq-attempts",    System.Text.Encoding.UTF8.GetBytes((entry.RetryCount + 1).ToString()) },
+                    { "dlq-source-topic", System.Text.Encoding.UTF8.GetBytes(entry.Topic) }
+                }
+            };
 
-            if (aggIdElement.ValueKind == JsonValueKind.Object &&
-                aggIdElement.TryGetProperty("Value", out var valueElement) &&
-                valueElement.ValueKind == JsonValueKind.String &&
-                Guid.TryParse(valueElement.GetString(), out var nestedGuid))
-            {
-                return nestedGuid;
-            }
+            await _producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            DlqPublishedCounter.Add(1, new KeyValuePair<string, object?>("topic", deadletterTopic));
+            _logger?.LogError(
+                "Outbox row {OutboxId} routed to deadletter topic {DeadletterTopic} after {Attempts} attempts: {Reason}",
+                entry.Id, deadletterTopic, entry.RetryCount + 1, reason);
         }
-        catch (JsonException)
+        catch (Exception ex)
         {
-            // Malformed payload — fall through to null and let caller use Guid.Empty.
+            _logger?.LogError(
+                ex,
+                "FAILED to publish outbox row {OutboxId} to deadletter topic {DeadletterTopic}. DB row remains status='deadletter' for manual recovery.",
+                entry.Id, deadletterTopic);
         }
-        return null;
     }
 
     public override void Dispose()

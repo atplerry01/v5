@@ -1,6 +1,8 @@
+using System.Diagnostics.Metrics;
 using System.Text;
 using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Kernel.Domain;
@@ -20,6 +22,12 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 {
+    // phase1-gate-S6: observability meter shared across all worker instances.
+    public static readonly Meter Meter = new("Whyce.Projection.Consumer", "1.0");
+    private static readonly Counter<long> ConsumedCounter = Meter.CreateCounter<long>("consumer.consumed");
+    private static readonly Counter<long> DlqRoutedCounter = Meter.CreateCounter<long>("consumer.dlq_routed");
+    private static readonly Counter<long> HandlerInvokedCounter = Meter.CreateCounter<long>("consumer.handler_invoked");
+
     private readonly string _kafkaBootstrapServers;
     private readonly string _topic;
     private readonly string _consumerGroup;
@@ -27,6 +35,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     private readonly ProjectionRegistry _projectionRegistry;
     private readonly IPostgresProjectionWriter _writer;
     private readonly IClock _clock;
+    private readonly ILogger<GenericKafkaProjectionConsumerWorker>? _logger;
     private readonly TimeSpan _pollTimeout;
 
     public GenericKafkaProjectionConsumerWorker(
@@ -37,6 +46,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         ProjectionRegistry projectionRegistry,
         IPostgresProjectionWriter writer,
         IClock clock,
+        ILogger<GenericKafkaProjectionConsumerWorker>? logger = null,
         TimeSpan? pollTimeout = null)
     {
         _kafkaBootstrapServers = kafkaBootstrapServers;
@@ -46,6 +56,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         _projectionRegistry = projectionRegistry;
         _writer = writer;
         _clock = clock;
+        _logger = logger;
         _pollTimeout = pollTimeout ?? TimeSpan.FromSeconds(1);
     }
 
@@ -58,6 +69,16 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };
+
+        // phase1-gate-S3: deadletter topic derived from the source topic by
+        // replacing the trailing `.events` segment with `.deadletter`. Topics
+        // are pre-provisioned by infrastructure/event-fabric/kafka/create-topics.sh.
+        var deadletterTopic = _topic.EndsWith(".events")
+            ? string.Concat(_topic.AsSpan(0, _topic.Length - ".events".Length), ".deadletter")
+            : _topic + ".deadletter";
+
+        var producerConfig = new ProducerConfig { BootstrapServers = _kafkaBootstrapServers };
+        using var deadletterProducer = new ProducerBuilder<string, string>(producerConfig).Build();
 
         using var consumer = new ConsumerBuilder<string, string>(config).Build();
         consumer.Subscribe(_topic);
@@ -75,18 +96,24 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 var aggregateIdHeader = ExtractHeader(result.Message.Headers, "aggregate-id");
                 var rawPayload = result.Message.Value;
 
+                // phase1-gate-S3: header enforcement. Malformed messages are
+                // routed to the deadletter topic — never silently committed and
+                // never allowed to crash the consumer.
                 if (string.IsNullOrEmpty(eventType))
                 {
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message,
+                        "missing event-type header", stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
 
-                // Kafka guard rule 11 + Phase-2 envelope-truth: projection envelopes MUST
-                // reflect the original event's identity. Missing identity headers indicate
-                // a malformed message; log + commit + skip (mirrors event-type behavior).
                 if (string.IsNullOrEmpty(eventIdHeader) || string.IsNullOrEmpty(aggregateIdHeader))
                 {
-                    Console.WriteLine($"[KAFKA] Missing event-id/aggregate-id headers on {_topic} for {eventType}; skipping.");
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message,
+                        $"missing event-id/aggregate-id headers (event-type={eventType})",
+                        stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
@@ -94,14 +121,17 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 if (!Guid.TryParse(eventIdHeader, out var parsedEventId) ||
                     !Guid.TryParse(aggregateIdHeader, out var parsedAggregateId))
                 {
-                    Console.WriteLine($"[KAFKA] Unparseable event-id/aggregate-id headers on {_topic} for {eventType}; skipping.");
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message,
+                        $"unparseable event-id/aggregate-id headers (event-type={eventType})",
+                        stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
 
-                Console.WriteLine($"[KAFKA] Consumed: {eventType} from {_topic}");
+                ConsumedCounter.Add(1, new KeyValuePair<string, object?>("topic", _topic));
+                _logger?.LogDebug("Consumed {EventType} from {Topic}", eventType, _topic);
                 var @event = _deserializer.DeserializeInbound(eventType, rawPayload);
-                Console.WriteLine($"[KAFKA] Deserialized: {@event?.GetType().Name}");
 
                 var envelope = new EventEnvelope
                 {
@@ -119,10 +149,11 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 };
 
                 var handlers = _projectionRegistry.ResolveHandlers(eventType).ToList();
-                Console.WriteLine($"[KAFKA] Handlers count: {handlers.Count} for {eventType}");
                 foreach (var handler in handlers)
                 {
-                    Console.WriteLine($"[KAFKA] Executing handler: {handler.GetType().Name}");
+                    HandlerInvokedCounter.Add(1,
+                        new KeyValuePair<string, object?>("event_type", eventType),
+                        new KeyValuePair<string, object?>("handler", handler.GetType().Name));
                     await handler.HandleAsync(envelope);
                 }
 
@@ -131,7 +162,6 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 // avoid clobbering the materialized read model.
                 if (handlers.Count == 0)
                 {
-                    Console.WriteLine($"[KAFKA] Writing projection for: {eventType}");
                     await _writer.WriteAsync(eventType, @event, correlationId, stoppingToken);
                 }
 
@@ -143,12 +173,12 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             }
             catch (ConsumeException ex)
             {
-                Console.WriteLine($"[KAFKA] ConsumeException on {_topic}: {ex.Error.Reason}");
+                _logger?.LogError(ex, "ConsumeException on {Topic}: {Reason}", _topic, ex.Error.Reason);
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[KAFKA] Exception on {_topic}: {ex.GetType().Name}: {ex.Message}");
+                _logger?.LogError(ex, "Unexpected error on {Topic}", _topic);
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             }
         }
@@ -160,5 +190,51 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     {
         var header = headers.FirstOrDefault(h => h.Key == key);
         return header is null ? string.Empty : Encoding.UTF8.GetString(header.GetValueBytes());
+    }
+
+    /// <summary>
+    /// phase1-gate-S3: publishes a malformed inbound message to the deadletter
+    /// topic preserving original key/value/headers and adding diagnostic
+    /// `dlq-reason` and `dlq-source-topic` headers. Failures here are caught
+    /// and logged — the consumer never crashes on a deadletter publish error.
+    /// </summary>
+    private async Task PublishToDeadletterAsync(
+        IProducer<string, string> producer,
+        string deadletterTopic,
+        Message<string, string> original,
+        string reason,
+        CancellationToken ct)
+    {
+        try
+        {
+            var headers = new Headers();
+            if (original.Headers is not null)
+            {
+                foreach (var h in original.Headers)
+                    headers.Add(h.Key, h.GetValueBytes());
+            }
+            headers.Add("dlq-reason",       Encoding.UTF8.GetBytes(reason));
+            headers.Add("dlq-source-topic", Encoding.UTF8.GetBytes(_topic));
+
+            var dlqMessage = new Message<string, string>
+            {
+                Key = original.Key,
+                Value = original.Value,
+                Headers = headers
+            };
+
+            await producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            DlqRoutedCounter.Add(1,
+                new KeyValuePair<string, object?>("source_topic", _topic),
+                new KeyValuePair<string, object?>("reason", reason));
+            _logger?.LogWarning(
+                "Routed message from {SourceTopic} to {DeadletterTopic}: {Reason}",
+                _topic, deadletterTopic, reason);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex,
+                "FAILED to publish to deadletter topic {DeadletterTopic}", deadletterTopic);
+        }
     }
 }
