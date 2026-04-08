@@ -216,9 +216,15 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             headers.Add("dlq-reason",       Encoding.UTF8.GetBytes(reason));
             headers.Add("dlq-source-topic", Encoding.UTF8.GetBytes(_topic));
 
+            // phase1-gate-H7a: enforce per-aggregate Kafka ordering. Prefer the
+            // aggregate-id header (set by KafkaOutboxPublisher); fall back to the
+            // original key if the header is missing or unparseable so that
+            // malformed-header DLQ paths are still routable.
+            var aggregateIdHeader = ExtractHeader(original.Headers ?? new Headers(), "aggregate-id");
+            var dlqKey = !string.IsNullOrEmpty(aggregateIdHeader) ? aggregateIdHeader : original.Key;
             var dlqMessage = new Message<string, string>
             {
-                Key = original.Key,
+                Key = dlqKey,
                 Value = original.Value,
                 Headers = headers
             };

@@ -126,9 +126,10 @@ public sealed class KafkaOutboxPublisher : BackgroundService
             // phase1-gate-S2: event_id and aggregate_id are now first-class outbox
             // columns (migration 004). No more JSON parsing of the payload at
             // publish time — headers come straight from the row.
+            // phase1-gate-H7a: enforce per-aggregate Kafka ordering
             var message = new Message<string, string>
             {
-                Key = entry.CorrelationId.ToString(),
+                Key = entry.AggregateId.ToString(),
                 Value = entry.Payload,
                 Headers = new Headers
                 {
@@ -254,9 +255,10 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         try
         {
+            // phase1-gate-H7a: enforce per-aggregate Kafka ordering
             var dlqMessage = new Message<string, string>
             {
-                Key = entry.CorrelationId.ToString(),
+                Key = entry.AggregateId.ToString(),
                 Value = entry.Payload,
                 Headers = new Headers
                 {

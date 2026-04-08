@@ -152,6 +152,24 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // H7a — Kafka partition key must be aggregate_id, never correlation_id
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Outbox_publisher_keys_kafka_messages_by_aggregate_id_not_correlation_id()
+    {
+        var path = Path.Combine(SrcRoot, "platform", "host", "adapters", "KafkaOutboxPublisher.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.DoesNotContain("Key = entry.CorrelationId.ToString()", content);
+        // Both the main publish path and the DLQ path must use aggregate id.
+        var aggregateKeyOccurrences = Regex.Matches(content, @"Key\s*=\s*entry\.AggregateId\.ToString\(\)").Count;
+        Assert.True(aggregateKeyOccurrences >= 2,
+            $"KafkaOutboxPublisher must key BOTH the main publish path AND the DLQ path by AggregateId. " +
+            $"Found {aggregateKeyOccurrences} occurrence(s) of `Key = entry.AggregateId.ToString()`.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // §2 Projection layer — no projection HANDLERS in runtime
     // ─────────────────────────────────────────────────────────────────────
     // Note: dispatcher / registry / writer interface / rebuilder are
