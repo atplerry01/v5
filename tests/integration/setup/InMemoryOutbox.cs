@@ -23,7 +23,7 @@ public sealed class InMemoryOutbox : IOutbox
         get { lock (_lock) return _batches.ToArray(); }
     }
 
-    public Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic)
+    public Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic, CancellationToken cancellationToken = default)
     {
         lock (_lock) _batches.Add(new Batch(correlationId, events.ToArray(), topic));
         _recorder?.Record("Outbox");

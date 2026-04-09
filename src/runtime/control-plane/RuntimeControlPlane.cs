@@ -60,7 +60,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
             "HSID enforcement failure: ITopologyResolver not configured.");
     }
 
-    public async Task<CommandResult> ExecuteAsync(object command, CommandContext context)
+    public async Task<CommandResult> ExecuteAsync(object command, CommandContext context, CancellationToken cancellationToken = default)
     {
         // HSID v2.1 PRELUDE — out-of-band of the locked 8-middleware pipeline.
         // Stamps a compact deterministic correlation ID before any middleware
@@ -68,17 +68,24 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
         // reference it.
         await StampHsidAsync(command, context);
 
-        // Build middleware pipeline wrapping the dispatch + policy guard
-        Func<Task<CommandResult>> pipeline = () => DispatchWithPolicyGuard(command, context);
+        // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): the
+        // pipeline closure shape is now Func<CancellationToken,
+        // Task<CommandResult>> so each middleware forwards the
+        // request/host-shutdown token to the next link via
+        // next(ct). The token reaches DispatchWithPolicyGuard at
+        // the terminal step and is forwarded into
+        // ICommandDispatcher.DispatchAsync.
+        Func<CancellationToken, Task<CommandResult>> pipeline =
+            ct => DispatchWithPolicyGuard(command, context, ct);
 
         for (var i = _middlewares.Count - 1; i >= 0; i--)
         {
             var middleware = _middlewares[i];
             var next = pipeline;
-            pipeline = () => middleware.ExecuteAsync(context, command, next);
+            pipeline = ct => middleware.ExecuteAsync(context, command, next, ct);
         }
 
-        var result = await pipeline();
+        var result = await pipeline(cancellationToken);
 
         // Event emission boundary — single, non-bypassable fabric invocation.
         //
@@ -100,7 +107,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
                     "Chain anchoring requires a valid decision hash.");
             }
 
-            await _eventFabric.ProcessAuditAsync(audit, context);
+            await _eventFabric.ProcessAuditAsync(audit, context, cancellationToken);
         }
 
         if (result.IsSuccess && result.EventsRequirePersistence && result.EmittedEvents.Count > 0)
@@ -119,7 +126,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
                     "Chain anchoring requires a valid decision hash.");
             }
 
-            await _eventFabric.ProcessAsync(result.EmittedEvents, context);
+            await _eventFabric.ProcessAsync(result.EmittedEvents, context, cancellationToken);
         }
 
         return result;
@@ -129,7 +136,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
     /// Defense-in-depth: Verify policy was evaluated BEFORE dispatching to engine.
     /// Guards against middleware misconfiguration (missing PolicyMiddleware).
     /// </summary>
-    private Task<CommandResult> DispatchWithPolicyGuard(object command, CommandContext context)
+    private Task<CommandResult> DispatchWithPolicyGuard(object command, CommandContext context, CancellationToken cancellationToken)
     {
         if (context.PolicyDecisionAllowed != true)
         {
@@ -145,7 +152,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
                 "No engine execution without identity resolution. No bypass allowed."));
         }
 
-        return _dispatcher.DispatchAsync(command, context);
+        return _dispatcher.DispatchAsync(command, context, cancellationToken);
     }
 
     /// <summary>

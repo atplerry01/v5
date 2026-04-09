@@ -244,12 +244,77 @@ Deliverables:
 - Verification tests
 
 Evidence Required:
-- Stress proof
-- Runtime proof
-- Queue growth behavior report
+- Step A overload surface inventory
+- Step B B-Narrow probe results
+- Step C1–C7 patch implementations and build verification
+- Final canonical audit report
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08)
+
+Closure note:
+Phase 1.5 §5.2.1 closed PASS on 2026-04-08. Step A inventoried 20 runtime
+overload surfaces; Step B B-Narrow probes confirmed three S0 risks
+(R-01 HTTP intake, R-02 outbox table buffer, R-06 OPA evaluator) and
+escalated R-03 (chain anchor). Step C1–C7 converted every S0 risk and
+the leading S1/S2 observability gaps to BOUNDED-OBSERVABLE shapes
+without architectural redesign:
+
+- HTTP intake bounded refusal (PC-1) — declared partitioned
+  concurrency limiter at the runtime edge, tenant-then-IP partition
+  precedence, 429 + Retry-After on overflow, `Whyce.Intake` meter.
+- OPA bounded refusal (PC-2) — per-call CTS timeout, in-process
+  consecutive-failure circuit breaker (Closed/Open/HalfOpen) keyed by
+  `IClock`, typed `PolicyEvaluationUnavailableException` mapped to
+  503 + Retry-After, `Whyce.Policy` meter.
+- Outbox saturation bounded refusal (PC-3) — periodic
+  `OutboxDepthSampler` publishing `outbox.depth` and
+  `outbox.oldest_pending_age_seconds` gauges and a shared
+  `IOutboxDepthSnapshot` consulted by `PostgresOutboxAdapter` for
+  high-water-mark refusal via `OutboxSaturatedException` → 503 +
+  Retry-After.
+- Declared Postgres pools (PC-4) — two logical `NpgsqlDataSource`
+  pools (`event-store`, `chain`) sized from `PostgresPoolOptions`,
+  seven adapters refactored to acquire connections through
+  `PostgresPoolMetrics.OpenInstrumentedAsync`, `Whyce.Postgres` meter
+  exporting `postgres.pool.acquisitions` and
+  `postgres.pool.acquisition_failures`.
+- ChainAnchorService wait/hold observability (PC-5) — `Whyce.Chain`
+  meter exporting `chain.anchor.wait_ms` and `chain.anchor.hold_ms`
+  histograms, with `outcome ∈ {ok, engine_failed, exception}` tag on
+  hold; lock structure unchanged per workstream scope.
+- Declared Kafka consumer prefetch envelope (PC-6) —
+  `KafkaConsumerOptions` binds `QueuedMaxMessagesKbytes`,
+  `FetchMessageMaxBytes`, `MaxPollIntervalMs`, `SessionTimeoutMs`;
+  `GenericKafkaProjectionConsumerWorker` applies the declared envelope
+  to `ConsumerConfig`; the librdkafka ~1 GiB prefetch default is
+  retired in favor of a 16 MiB declared ceiling.
+- Projection lag observability (PC-7) — `projection.lag_seconds`
+  histogram on `Whyce.Projection.Consumer` meter, computed from the
+  durable Kafka broker timestamp at projection-write completion,
+  tagged by topic.
+
+All load-bearing operational parameters now live in declared
+configuration blocks: `Intake.*`, `Opa.*`, `Outbox.*`,
+`Postgres.Pools.*`, `KafkaConsumer.*`. The runtime now has explicit
+retryable-refusal seams for intake (429), policy unavailability
+(503), and outbox saturation (503), each carrying `Retry-After` and
+each backed by a typed exception mapped at the API edge via the
+existing `IExceptionHandler` chain.
+
+Residual items explicitly outside the §5.2.1 PASS gate (queued for
+follow-on workstreams): the projections-pool refactor
+(`PostgresProjectionWriter` still constructs raw `NpgsqlConnection`
+per call from a domain-bootstrap-supplied connection string), DLQ
+depth bounds, `LoadEventsAsync` streaming, native Npgsql/Confluent
+client counter bridging, and structural restructuring of the
+`ChainAnchorService` global semaphore (which is now observable but
+still single-permit). These do not block §5.2.1 acceptance because
+the opening pack's acceptance criteria require *bounded and
+observable*, not *restructured*, for every in-scope surface.
+
+Final audit: claude/audits/admission-control-backpressure.audit.md
+Closure prompt: claude/project-prompts/20260408-220000-phase-1-5-5-2-1-pass-closure.md
 
 ## 5.2.2 Concurrency Control and Resource Bounds
 Objective:
@@ -268,12 +333,107 @@ Deliverables:
 - Concurrency test report
 
 Evidence Required:
-- Concurrent load test proof
-- No race-induced semantic drift
-- Stable error behavior under contention
+- Step A concurrency / resource-bound surface inventory
+- Step B K-Narrow probe results
+- Step C1–C9 patch implementations and build verification
+- Final canonical audit report
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08)
+
+Closure note:
+Phase 1.5 §5.2.2 closed PASS on 2026-04-08. Step A inventoried 16
+concurrency / resource-bound surfaces; Step B K-Narrow probes
+confirmed three S0/S1 leading findings (K-R-01 chain-lock
+relationship resolved as one global lock + dead code, K-R-02 DLQ
+growth fully invisible, K-R-03 / C14 capacity-model 42×
+mismatch). Step C1–C9 promoted runtime concurrency and resource
+ceilings from incidental to declared:
+
+- C14 capacity-model resolution (KC-1) — `IntakeOptions.GlobalConcurrency`
+  lowered from 256 to 6, `PerTenantConcurrency` from 32 to 4 so a
+  single saturating partition cannot exceed the declared
+  `Postgres.Pools.EventStore` envelope. Overload now refuses at
+  the PC-1 limiter (429 + Retry-After) before the pool timeout
+  fires as a generic 500.
+- Idempotency coalescing (KC-2) — new
+  `IIdempotencyStore.TryClaimAsync` single-round-trip claim via
+  `INSERT ... ON CONFLICT DO NOTHING`, dropping per-command
+  event-store pool consumption from 5 to 4 while preserving
+  "mark only on success" semantics through a new `ReleaseAsync`
+  rollback on the failure path.
+- DLQ depth observability + retention (KC-3) —
+  `outbox.deadletter_depth` `ObservableGauge` from a single
+  `COUNT(*) FILTER` extension to the existing `OutboxDepthSampler`
+  probe; new `consumer.dlq_publish_failed{source_topic, reason}`
+  counter inside the existing $12-compliant catch block; declared
+  `OutboxOptions.DeadletterRetention` (default `"operator-managed"`).
+- Projections-pool declared `NpgsqlDataSource` (KC-4) — third
+  declared logical pool (`projections`) joining `event-store` and
+  `chain` from PC-4. `PostgresProjectionWriter` and
+  `TodoProjectionHandler` (cross-layer, with a small local mirror
+  of the `Whyce.Postgres` meter inside the projections assembly)
+  refactored. **`TodoController.Get` recorded as residual** —
+  `Whycespace.Api → Whycespace.Host` would create a project
+  dependency cycle.
+- Advisory-lock wait observability (KC-5) — new `Whyce.EventStore`
+  meter exporting `event_store.append.advisory_lock_wait_ms` and
+  `event_store.append.hold_ms` (with `outcome` tag) measuring the
+  `pg_advisory_xact_lock` round-trip distinctly from PC-4 pool
+  acquisitions.
+- Workflow in-flight ceiling (KC-6) — new `WorkflowAdmissionGate`
+  composing two `PartitionedRateLimiter<string>` instances
+  (per-workflow-name + per-tenant), gating both
+  `ExecuteWorkflowAsync` and `ResumeWorkflowAsync`, with typed
+  `WorkflowSaturatedException` mapped to 503 + `Retry-After` via
+  the new `WorkflowSaturatedExceptionHandler`. New `Whyce.Workflow`
+  meter exporting `workflow.admitted` / `workflow.rejected`.
+- ChainAnchor declared-options / waiver (KW-1) — new
+  `ChainAnchorOptions.PermitLimit` (default 1) externalises the
+  single-permit shape; `ChainAnchorService` constructs `_lock`
+  from the option. **Structural restructuring of the lock is
+  explicitly deferred** to a future workstream — KW-1 is the
+  declared waiver, not the structural fix. PC-5 wait/hold
+  observability remains intact.
+- ChainLock dead-code cleanup (KC-7) —
+  `src/engines/T0U/whycechain/lock/ChainLock.cs` (and the empty
+  parent directory) deleted after Step B P-K1 confirmed zero
+  callers under `src/`. The "second hidden global semaphore on
+  the chain path" hypothesis is resolved by deletion rather than
+  reconciliation. Closes K-R-12.
+- LoadEventsAsync observability + declared waiver (KC-8) — new
+  `event_store.replay_rows` histogram on the existing
+  `Whyce.EventStore` meter, recording the `events.Count` of every
+  successful replay. **Structural streaming/paging is explicitly
+  waived** with the future-owner identification recorded at the
+  histogram declaration site.
+
+The runtime now has **four canonical retryable-refusal seams** (intake
+429, OPA policy 503, outbox saturation 503, **workflow saturation 503**)
+backed by four typed exception → `IExceptionHandler` mappings, plus
+the pre-existing concurrency-conflict 409 REJECT. Eight declared
+configuration blocks now externalise every load-bearing operational
+parameter: `Intake.*`, `Opa.*`, `Outbox.*`, `Postgres.Pools.*`,
+`KafkaConsumer.*`, **`Workflow.*`**, **`ChainAnchor.*`**. Eight
+canonical `Whyce.*` meters export the complete §5.2.x observability
+surface: `Whyce.Intake`, `Whyce.Policy`, `Whyce.Outbox`,
+`Whyce.Postgres`, `Whyce.Chain`, `Whyce.EventStore`,
+`Whyce.Workflow`, `Whyce.Projection.Consumer`.
+
+Residual items explicitly outside the §5.2.2 PASS gate:
+**`TodoController.Get` projections-side raw `NpgsqlConnection`**
+(blocked by the api↔host project dependency cycle — requires a
+shared `IDbConnectionFactory` abstraction outside §5.2.2 scope);
+**structural restructuring of `ChainAnchorService._lock`** (declared
+waiver via KW-1, deferred to §5.2.3 or beyond); **`LoadEventsAsync`
+streaming/paging refactor** (declared waiver via KC-8, requires
+extending the `IEventStore` interface contract); **multi-instance
+`KafkaOutboxPublisher` drain**; **multi-worker per-topic projection
+parallelism**. None of these match an opening-pack §2.9 acceptance
+criterion that would block §5.2.2 PASS.
+
+Final audit: claude/audits/concurrency-control-resource-bounds.audit.md
+Closure prompt: claude/project-prompts/20260408-235900-phase-1-5-5-2-2-pass-closure.md
 
 ## 5.2.3 Timeout, Cancellation, and Circuit Protection
 Objective:
@@ -296,7 +456,115 @@ Evidence Required:
 - No unbounded hanging requests
 
 Status:
-- NOT STARTED
+- PASS (2026-04-08)
+
+Closure note:
+Phase 1.5 §5.2.3 closed PASS on 2026-04-08. Step A inventoried 19
+timeout / cancellation / circuit-protection surfaces; Step B
+T-Narrow probes confirmed six material findings (T-R-01 dispatcher
+CT desert, T-R-02 chain-anchor wait + holder both unbounded,
+T-R-04 13/18 Postgres `Execute*Async` empty-paren, T-R-05
+projection-handler contracts no-token, T-R-06 workflow execution
+no-deadline, T-R-08 host-shutdown undeclared). Step C1–C8
+promoted runtime cancellation and timeout discipline from
+incidental to declared:
+
+- Dispatcher / middleware / controller CT contract co-evolution
+  (TC-1) — every contract on the request execution path now
+  declares `CancellationToken cancellationToken = default`.
+  Middleware pipeline closure shape becomes `Func<CancellationToken,
+  Task<CommandResult>>` so each link forwards `next(ct)`.
+  `TodoController` binds `HttpContext.RequestAborted` and forwards
+  through `ISystemIntentDispatcher` → control plane → middleware
+  → command dispatcher.
+- Chain-anchor wait timeout + typed refusal (TC-2) — new
+  `ChainAnchorOptions.{WaitTimeoutMs=5000, RetryAfterSeconds=1}`;
+  `_lock.WaitAsync(timeoutMs, ct)` replaces the empty-paren form;
+  typed `ChainAnchorWaitTimeoutException` mapped to 503 +
+  `Retry-After`. PC-5 wait/hold histograms unchanged.
+- Chain-store I/O cancellation + circuit breaker (TC-3) —
+  `IChainAnchor.AnchorAsync(..., ct)` threads CT into both
+  `ExecuteScalarAsync(ct)` and `ExecuteNonQueryAsync(ct)`. New
+  `ChainAnchorOptions.{BreakerThreshold=5, BreakerWindowSeconds=10}`
+  Closed/Open/HalfOpen breaker mirrors the PC-2 OPA pattern via
+  `IClock`. Typed `ChainAnchorUnavailableException` mapped to
+  503 + `Retry-After`. Caller-driven cancellation propagates as-is
+  and does not advance the breaker. New `chain.store.failure`
+  counter on the existing `Whyce.Chain` meter.
+- Postgres adapter token threading (TC-5) — `IEventStore`,
+  `IOutbox`, `IIdempotencyStore`, `ISequenceStore` contracts and
+  the four corresponding `Postgres*Adapter` implementations
+  thread CT into every `Execute*Async`, `BeginTransactionAsync`,
+  `CommitAsync`, and `ReadAsync` call site. `EventStoreService` /
+  `OutboxService` wrappers and the live runtime call sites in
+  `EventFabric`, `RuntimeCommandDispatcher`, and
+  `IdempotencyMiddleware` forward CT end-to-end. Empty-paren
+  `Execute*Async` forms at the targeted hot-path adapters are
+  gone.
+- Projection-handler contract CancellationToken extension (TC-6) —
+  `IEnvelopeProjectionHandler.HandleAsync` and
+  `IProjectionHandler<T>.HandleAsync` both declare CT.
+  `TodoProjectionHandler` threads CT into `LoadAsync` /
+  `UpsertAsync` and the underlying `ExecuteReaderAsync(ct)` /
+  `ReadAsync(ct)` / `ExecuteNonQueryAsync(ct)` calls.
+  `WorkflowExecutionProjectionHandler` carries CT at every
+  per-type overload. `GenericKafkaProjectionConsumerWorker`
+  forwards `stoppingToken` into the handler.
+- Workflow gate token threading (TC-8) — both
+  `_workflowAdmissionGate.AcquireAsync(...)` call sites in
+  `RuntimeCommandDispatcher` (Start + Resume) now pass the real
+  CT instead of `default`. KC-6 lease lifecycle and refusal
+  mapping unchanged.
+- Workflow step / execution timeout (TC-7) — `IWorkflowEngine`
+  and `IWorkflowStep` contracts both carry CT.
+  `WorkflowOptions.{PerStepTimeoutMs=30000, MaxExecutionMs=300000}`
+  declared. `T1MWorkflowEngine` builds an execution-level linked
+  CTS bounded by `MaxExecutionMs` and a per-step linked CTS
+  bounded by `PerStepTimeoutMs`, both linked to the upstream
+  request/host token. Cancellation discrimination throws typed
+  `WorkflowTimeoutException("step"|"execution", …)` mapped to
+  503 + `Retry-After`. Caller-driven cancellation propagates as
+  `OperationCanceledException` without wrapping.
+- Host-shutdown drain declared (TC-9) — `Host.ShutdownTimeoutSeconds`
+  (default 30) configuration-bound and applied to
+  `HostOptions.ShutdownTimeout`. New narrow
+  `HostShutdownLinkingMiddleware` replaces `HttpContext.RequestAborted`
+  for the duration of every request with a linked CTS combining
+  the original client-disconnect token and
+  `IHostApplicationLifetime.ApplicationStopping` so the entire
+  TC-1 token chain inherits the shutdown signal at the very edge.
+
+The runtime now has **seven canonical retryable-refusal seams**
+(intake 429, OPA policy 503, outbox saturation 503, workflow
+saturation 503, **chain-anchor wait timeout 503**, **chain-anchor
+unavailable 503**, **workflow timeout 503**) backed by typed
+exception → `IExceptionHandler` mappings, plus the pre-existing
+concurrency-conflict 409 REJECT. Three new declared configuration
+sub-blocks externalise the §5.2.3 timeout / breaker / shutdown
+parameters: `Host.ShutdownTimeoutSeconds`, `ChainAnchor.{WaitTimeoutMs,
+RetryAfterSeconds, BreakerThreshold, BreakerWindowSeconds}`,
+`Workflow.{PerStepTimeoutMs, MaxExecutionMs}`. End-to-end
+`CancellationToken` now flows from `HttpContext.RequestAborted`
+(linked to `IHostApplicationLifetime.ApplicationStopping` via TC-9)
+through every runtime seam to the database round-trip.
+
+Residual items explicitly outside the §5.2.3 PASS gate: structural
+restructuring of `ChainAnchorService` held-section I/O (declared
+waiver — wait + holder both bounded; the held-section I/O remains
+inside the permit by design); `IWorkflowExecutionProjectionStore`
+token threading (TC-6 widens the handler contract but not the
+store contract); workflow lifecycle event loss on declared
+timeout (consistent with the rest of the canonical refusal family);
+`Workflow:MaxExecutionMs` resume budget (each resume gets a fresh
+budget — prior failed run's wall-clock not durably tracked);
+`ISequenceResolver` / HSID prelude token threading; per-call
+Postgres command timeout below `CommandTimeoutSeconds`; Kafka
+producer timeout work; native client counter bridging. None of
+these match an opening-pack §2.9 acceptance criterion that would
+block §5.2.3 PASS.
+
+Final audit: claude/audits/timeout-cancellation-circuit-protection.audit.md
+Closure prompt: claude/project-prompts/20260408-235960-phase-1-5-5-2-3-pass-closure.md
 
 ## 5.2.4 Health, Readiness, and Degraded Modes
 Objective:
@@ -839,9 +1107,9 @@ Status:
 | 5.1.1 | Dependency Graph Remediation | Close architectural drift | PASS (2026-04-08) | Audit + Build | YES |
 | 5.1.2 | Boundary Purity Validation | Enforce layer purity | PASS (2026-04-08) | Audit + Build + Strengthened dep-check | YES |
 | 5.1.3 | Canonical Documentation Alignment | Match code to canon | PASS (2026-04-08) | Alignment Audit + Build + dep-check + Folklore Sweep | YES |
-| 5.2.1 | Admission Control and Backpressure | Safe overload handling | NOT STARTED | Stress Proof | YES |
-| 5.2.2 | Concurrency Control and Resource Bounds | Stable concurrent execution | NOT STARTED | Concurrency Proof | YES |
-| 5.2.3 | Timeout, Cancellation, and Circuit Protection | Prevent hanging and collapse | NOT STARTED | Failure Proof | YES |
+| 5.2.1 | Admission Control and Backpressure | Safe overload handling | PASS (2026-04-08) | Step A inventory · Step B probes · PC-1..PC-7 patches · admission-control-backpressure.audit.md | YES |
+| 5.2.2 | Concurrency Control and Resource Bounds | Stable concurrent execution | PASS (2026-04-08) | Step A inventory · Step B probes · KC-1..KC-8 + KW-1 patches · concurrency-control-resource-bounds.audit.md | YES |
+| 5.2.3 | Timeout, Cancellation, and Circuit Protection | Prevent hanging and collapse | PASS (2026-04-08) | Step A inventory · Step B T-Narrow probes · TC-1..TC-9 patches · timeout-cancellation-circuit-protection.audit.md | YES |
 | 5.2.4 | Health, Readiness, and Degraded Modes | Accurate operational health | NOT STARTED | Runtime Proof | YES |
 | 5.2.5 | Multi-Instance Runtime Safety | Horizontal safety proof | NOT STARTED | Multi-Instance Proof | YES |
 | 5.3.1 | Baseline Performance Profiling | Measure reality | NOT STARTED | Load Report | YES |

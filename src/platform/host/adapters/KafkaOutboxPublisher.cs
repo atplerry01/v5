@@ -3,7 +3,9 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Whyce.Runtime.EventFabric;
+using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Adapters;
 
@@ -28,12 +30,19 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     private static readonly Counter<long> DeadletteredCounter = Meter.CreateCounter<long>("outbox.deadlettered");
     private static readonly Counter<long> DlqPublishedCounter = Meter.CreateCounter<long>("outbox.dlq_published");
 
-    private readonly string _connectionString;
+    private readonly EventStoreDataSource _dataSource;
     private readonly IProducer<string, string> _producer;
     private readonly TopicNameResolver _topicNameResolver;
     private readonly TimeSpan _pollInterval;
     private readonly int _maxRetryCount;
+    private readonly IWorkerLivenessRegistry _liveness;
+    private readonly IClock _clock;
     private readonly ILogger<KafkaOutboxPublisher>? _logger;
+
+    // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): canonical worker
+    // name reported into the IWorkerLivenessRegistry after each
+    // successful PublishBatchAsync cycle (no exception escaped).
+    private const string WorkerName = "kafka-outbox-publisher";
 
     // phase1.6-S1.5 (OUTBOX-CONFIG-01): retry budget arrives as a typed
     // OutboxOptions record from the composition root, which reads it from
@@ -48,27 +57,38 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     // string manipulation. The resolver is required (not nullable, not
     // defaulted) so the publisher cannot construct a DLQ topic by any
     // other path.
+    // phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): the publisher's polling
+    // and retry-update transactions now flow through the declared
+    // event-store NpgsqlDataSource. Polling cadence, batch size, and
+    // retry semantics are unchanged.
     public KafkaOutboxPublisher(
-        string connectionString,
+        EventStoreDataSource dataSource,
         IProducer<string, string> producer,
         TopicNameResolver topicNameResolver,
         OutboxOptions options,
+        IWorkerLivenessRegistry liveness,
+        IClock clock,
         TimeSpan? pollInterval = null,
         ILogger<KafkaOutboxPublisher>? logger = null)
     {
+        ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(topicNameResolver);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(liveness);
+        ArgumentNullException.ThrowIfNull(clock);
         if (options.MaxRetry < 1)
             throw new ArgumentOutOfRangeException(
                 nameof(options),
                 options.MaxRetry,
                 "OutboxOptions.MaxRetry must be at least 1.");
 
-        _connectionString = connectionString;
+        _dataSource = dataSource;
         _producer = producer;
         _topicNameResolver = topicNameResolver;
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
         _maxRetryCount = options.MaxRetry;
+        _liveness = liveness;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -81,6 +101,13 @@ public sealed class KafkaOutboxPublisher : BackgroundService
             try
             {
                 var published = await PublishBatchAsync(stoppingToken);
+                // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): record
+                // a successful iteration ONLY after the batch returns
+                // without an escaping exception. Recorded once per
+                // outer loop tick — empty-batch ticks count as live
+                // because the publisher genuinely completed a healthy
+                // poll cycle.
+                _liveness.RecordSuccess(WorkerName, _clock.UtcNow);
                 if (published == 0)
                     await Task.Delay(_pollInterval, stoppingToken);
             }
@@ -99,8 +126,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
     private async Task<int> PublishBatchAsync(CancellationToken ct)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
+        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
         // Fetch pending + previously-failed-but-under-retry-budget rows with

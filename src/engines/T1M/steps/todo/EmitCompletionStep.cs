@@ -8,7 +8,7 @@ public sealed class EmitCompletionStep : IWorkflowStep
     public string Name => "EmitCompletion";
     public WorkflowStepType StepType => WorkflowStepType.Completion;
 
-    public Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context)
+    public Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context, CancellationToken cancellationToken = default)
     {
         var todoId = context.StepOutputs.TryGetValue("CreateTodo", out var id) ? id : null;
         context.WorkflowOutput = todoId;

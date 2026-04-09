@@ -5,6 +5,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Projection;
+using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whyce.Shared.Contracts.Infrastructure.Messaging;
 using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Adapters;
@@ -27,6 +29,43 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     private static readonly Counter<long> ConsumedCounter = Meter.CreateCounter<long>("consumer.consumed");
     private static readonly Counter<long> DlqRoutedCounter = Meter.CreateCounter<long>("consumer.dlq_routed");
     private static readonly Counter<long> HandlerInvokedCounter = Meter.CreateCounter<long>("consumer.handler_invoked");
+    // phase1.5-S5.2.2 / KC-3 (DLQ-OBSERVABILITY-01): consumer-side
+    // DLQ publish failure counter. Pre-KC-3 the catch block in
+    // PublishToDeadletterAsync swallowed exceptions with only a log
+    // line, so a broken DLQ topic dropped malformed messages without
+    // any operator-visible metric. KC-3 closes that gap by tagging
+    // every catch with the exception type as `reason`. Low
+    // cardinality (one tag value per .NET exception type observed).
+    private static readonly Counter<long> DlqPublishFailedCounter =
+        Meter.CreateCounter<long>("consumer.dlq_publish_failed");
+
+    // phase1.5-S5.2.1 / PC-7 (PROJECTION-LAG-01): projection lag
+    // histogram. Records, after every successful projection write, the
+    // observed delay between the broker-recorded message timestamp and
+    // the wall time at which the projection write completed.
+    //
+    // Definition (stable, documented):
+    //
+    //     projection.lag_seconds
+    //         = (clock.UtcNow - message.Timestamp.UtcDateTime).TotalSeconds
+    //
+    //     measured at the moment the projection write returns, where
+    //         message.Timestamp = the broker-assigned CreateTime of the
+    //                             Kafka record (durable, set by the
+    //                             producer or broker, not by the
+    //                             consumer loop).
+    //
+    // Why this signal: it reflects the actual staleness a read-side
+    // caller would see for the just-projected row — not consumer-loop
+    // activity, not envelope construction time. A read-after-write
+    // observer would see data exactly this old. A non-zero, growing
+    // lag is the canonical "projection is falling behind" signal.
+    //
+    // Tag is `topic` only — one worker per topic in the current
+    // architecture, so the topic is a 1:1 stable identity for the
+    // projection without exploding cardinality.
+    private static readonly Histogram<double> ProjectionLagSeconds =
+        Meter.CreateHistogram<double>("projection.lag_seconds", unit: "s");
 
     private readonly string _kafkaBootstrapServers;
     private readonly string _topic;
@@ -37,7 +76,24 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     private readonly IClock _clock;
     private readonly ILogger<GenericKafkaProjectionConsumerWorker>? _logger;
     private readonly TimeSpan _pollTimeout;
+    private readonly KafkaConsumerOptions _consumerOptions;
+    private readonly IWorkerLivenessRegistry _liveness;
 
+    // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): canonical worker
+    // name reported into the IWorkerLivenessRegistry after each loop
+    // iteration that returns from the consume/handle path without an
+    // escaping exception. Multiple per-topic worker instances all
+    // report under the same canonical name by design — HC-5 keeps
+    // the taxonomy low-cardinality.
+    private const string WorkerName = "projection-consumer";
+
+    // phase1.5-S5.2.1 / PC-6 (KAFKA-CONSUMER-CONFIG-01): the worker now
+    // takes a declared KafkaConsumerOptions and applies it to the
+    // ConsumerConfig built in ExecuteAsync. The sequential
+    // consume → handle → commit shape, the per-message commit, and the
+    // DLQ routing are all unchanged — only the buffering and session
+    // parameters move from incidental librdkafka defaults to declared
+    // configuration.
     public GenericKafkaProjectionConsumerWorker(
         string kafkaBootstrapServers,
         string topic,
@@ -46,9 +102,30 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         ProjectionRegistry projectionRegistry,
         IPostgresProjectionWriter writer,
         IClock clock,
+        KafkaConsumerOptions consumerOptions,
+        IWorkerLivenessRegistry liveness,
         ILogger<GenericKafkaProjectionConsumerWorker>? logger = null,
         TimeSpan? pollTimeout = null)
     {
+        ArgumentNullException.ThrowIfNull(consumerOptions);
+        ArgumentNullException.ThrowIfNull(liveness);
+        if (consumerOptions.QueuedMaxMessagesKbytes < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(consumerOptions), consumerOptions.QueuedMaxMessagesKbytes,
+                "KafkaConsumerOptions.QueuedMaxMessagesKbytes must be at least 1.");
+        if (consumerOptions.FetchMessageMaxBytes < 1024)
+            throw new ArgumentOutOfRangeException(
+                nameof(consumerOptions), consumerOptions.FetchMessageMaxBytes,
+                "KafkaConsumerOptions.FetchMessageMaxBytes must be at least 1024.");
+        if (consumerOptions.MaxPollIntervalMs < 1000)
+            throw new ArgumentOutOfRangeException(
+                nameof(consumerOptions), consumerOptions.MaxPollIntervalMs,
+                "KafkaConsumerOptions.MaxPollIntervalMs must be at least 1000.");
+        if (consumerOptions.SessionTimeoutMs < 1000)
+            throw new ArgumentOutOfRangeException(
+                nameof(consumerOptions), consumerOptions.SessionTimeoutMs,
+                "KafkaConsumerOptions.SessionTimeoutMs must be at least 1000.");
+
         _kafkaBootstrapServers = kafkaBootstrapServers;
         _topic = topic;
         _consumerGroup = consumerGroup;
@@ -56,19 +133,53 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         _projectionRegistry = projectionRegistry;
         _writer = writer;
         _clock = clock;
+        _consumerOptions = consumerOptions;
+        _liveness = liveness;
         _logger = logger;
         _pollTimeout = pollTimeout ?? TimeSpan.FromSeconds(1);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // phase1.5-S5.2.1 / PC-6 (KAFKA-CONSUMER-CONFIG-01): every
+        // load-bearing buffering / session / poll parameter is now
+        // declared via KafkaConsumerOptions. The four explicit
+        // assignments below replace silent inheritance of the
+        // librdkafka defaults (most importantly the ~1 GiB
+        // queued.max.messages.kbytes that Step B P-B6 flagged).
         var config = new ConsumerConfig
         {
             BootstrapServers = _kafkaBootstrapServers,
             GroupId = _consumerGroup,
             AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = false
+            EnableAutoCommit = false,
+            QueuedMaxMessagesKbytes = _consumerOptions.QueuedMaxMessagesKbytes,
+            // KafkaConsumerOptions.FetchMessageMaxBytes is the Phase
+            // 1.5 canonical name; in Confluent.Kafka 2.x the matching
+            // ConsumerConfig property is MessageMaxBytes (librdkafka
+            // message.max.bytes — the per-message ceiling). The
+            // property name moved; the semantic is identical.
+            MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
+            MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
+            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
         };
+
+        // phase1.5-S5.2.1 / PC-6: log the applied prefetch/session
+        // envelope at startup so an operator can confirm the declared
+        // configuration is in effect without having to inspect the
+        // Confluent.Kafka client state. Single line per worker
+        // instance, low cardinality, no per-message overhead.
+        _logger?.LogInformation(
+            "Kafka consumer config applied for {Topic}: " +
+            "QueuedMaxMessagesKbytes={QueuedMaxMessagesKbytes}, " +
+            "FetchMessageMaxBytes={FetchMessageMaxBytes}, " +
+            "MaxPollIntervalMs={MaxPollIntervalMs}, " +
+            "SessionTimeoutMs={SessionTimeoutMs}",
+            _topic,
+            _consumerOptions.QueuedMaxMessagesKbytes,
+            _consumerOptions.FetchMessageMaxBytes,
+            _consumerOptions.MaxPollIntervalMs,
+            _consumerOptions.SessionTimeoutMs);
 
         // phase1-gate-S3: deadletter topic derived from the source topic by
         // replacing the trailing `.events` segment with `.deadletter`. Topics
@@ -88,7 +199,16 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             try
             {
                 var result = consumer.Consume(_pollTimeout);
-                if (result is null) continue;
+                if (result is null)
+                {
+                    // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): an
+                    // empty poll is a successful loop iteration — the
+                    // consumer is healthy, the topic is just idle.
+                    // Without this an idle topic would falsely flip
+                    // the worker to "silent" after MaxSilenceSeconds.
+                    _liveness.RecordSuccess(WorkerName, _clock.UtcNow);
+                    continue;
+                }
 
                 // phase1.6-S2.3: distinguish missing vs explicitly-empty headers.
                 // ExtractHeader now returns null when the key is absent and an
@@ -177,7 +297,15 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     HandlerInvokedCounter.Add(1,
                         new KeyValuePair<string, object?>("event_type", eventType),
                         new KeyValuePair<string, object?>("handler", handler.GetType().Name));
-                    await handler.HandleAsync(envelope);
+                    // phase1.5-S5.2.3 / TC-6 (PROJECTION-CT-CONTRACT-01):
+                    // forward the worker stoppingToken into the handler so
+                    // a hung handler is unblocked at the database round-trip
+                    // when the host is shutting down, instead of waiting for
+                    // Kafka poll/session limits to intervene. No per-handler
+                    // CTS / declared timeout is introduced in this pass —
+                    // that is a future workstream once the contract carries
+                    // the token end-to-end.
+                    await handler.HandleAsync(envelope, stoppingToken);
                 }
 
                 // When a domain handler is registered for this event type, the handler
@@ -191,7 +319,30 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     await _writer.WriteAsync(eventType, @event, correlationId ?? string.Empty, stoppingToken);
                 }
 
+                // phase1.5-S5.2.1 / PC-7 (PROJECTION-LAG-01): record
+                // projection lag immediately after the write returns.
+                // Both branches converge here so the lag covers
+                // domain-handler writes and generic raw-payload writes
+                // alike. Recorded once per successfully projected
+                // message; never recorded on DLQ-routed messages
+                // (which never reach the read side).
+                var brokerTimestamp = result.Message.Timestamp.UtcDateTime;
+                var lagSeconds = (_clock.UtcNow.UtcDateTime - brokerTimestamp).TotalSeconds;
+                ProjectionLagSeconds.Record(lagSeconds,
+                    new KeyValuePair<string, object?>("topic", _topic));
+
                 consumer.Commit(result);
+
+                // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): record
+                // a successful iteration ONLY on the success path —
+                // never inside a catch block. DLQ-routed messages
+                // also reach this point because their `continue`
+                // happens before this line, so they do NOT count as
+                // a "successful loop iteration that returned from
+                // consume/handle". An idle empty-poll loop is still
+                // covered by the `result is null` continue above —
+                // see comment below for the empty-poll branch.
+                _liveness.RecordSuccess(WorkerName, _clock.UtcNow);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -279,6 +430,14 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         }
         catch (Exception ex)
         {
+            // phase1.5-S5.2.2 / KC-3: increment the publish-failure
+            // counter before logging so a broken DLQ topic produces an
+            // operator-visible signal. The exception is still
+            // swallowed ($12: the consumer never crashes on a
+            // deadletter publish error) but it is no longer silent.
+            DlqPublishFailedCounter.Add(1,
+                new KeyValuePair<string, object?>("source_topic", _topic),
+                new KeyValuePair<string, object?>("reason", ex.GetType().Name));
             _logger?.LogError(ex,
                 "FAILED to publish to deadletter topic {DeadletterTopic}", deadletterTopic);
         }

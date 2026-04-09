@@ -44,14 +44,18 @@ public sealed class EventFabric : IEventFabric
         _clock = clock;
     }
 
-    public Task ProcessAsync(IReadOnlyList<object> domainEvents, CommandContext context) =>
+    public Task ProcessAsync(
+        IReadOnlyList<object> domainEvents,
+        CommandContext context,
+        CancellationToken cancellationToken = default) =>
         ProcessInternalAsync(
             domainEvents,
             context,
             aggregateIdOverride: null,
             classificationOverride: null,
             contextOverride: null,
-            domainOverride: null);
+            domainOverride: null,
+            cancellationToken);
 
     /// <summary>
     /// Processes an audit emission with explicit routing overrides. Used by the
@@ -59,14 +63,18 @@ public sealed class EventFabric : IEventFabric
     /// to a dedicated stream and published to a dedicated topic, isolated from
     /// the command's domain aggregate stream.
     /// </summary>
-    public Task ProcessAuditAsync(AuditEmission audit, CommandContext context) =>
+    public Task ProcessAuditAsync(
+        AuditEmission audit,
+        CommandContext context,
+        CancellationToken cancellationToken = default) =>
         ProcessInternalAsync(
             audit.Events,
             context,
             aggregateIdOverride: audit.AggregateId,
             classificationOverride: audit.Classification,
             contextOverride: audit.Context,
-            domainOverride: audit.Domain);
+            domainOverride: audit.Domain,
+            cancellationToken);
 
     private async Task ProcessInternalAsync(
         IReadOnlyList<object> domainEvents,
@@ -74,7 +82,8 @@ public sealed class EventFabric : IEventFabric
         Guid? aggregateIdOverride,
         string? classificationOverride,
         string? contextOverride,
-        string? domainOverride)
+        string? domainOverride,
+        CancellationToken cancellationToken)
     {
         if (domainEvents.Count == 0) return;
 
@@ -121,12 +130,22 @@ public sealed class EventFabric : IEventFabric
         // Step 2: Persist to EventStore (source of truth)
         // phase1-gate-H8b: forward the dispatcher-captured ExpectedVersion as
         // the optimistic concurrency assertion. null → -1 sentinel (no check).
-        await _eventStoreService.AppendAsync(aggregateId, domainEvents, context.ExpectedVersion ?? -1);
+        // phase1.5-S5.2.3 / TC-5: forward CT into the event-store
+        // append so PostgresEventStoreAdapter Execute*Async calls
+        // honor cancellation.
+        await _eventStoreService.AppendAsync(aggregateId, domainEvents, context.ExpectedVersion ?? -1, cancellationToken);
 
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
-        await _chainAnchorService.AnchorAsync(context.CorrelationId, domainEvents, policyHash);
+        // phase1.5-S5.2.3 / TC-2: forward the request/host-shutdown
+        // CancellationToken so the chain anchor wait is bounded. The
+        // token is wait-only — chain-store I/O cancellation is TC-3.
+        await _chainAnchorService.AnchorAsync(
+            context.CorrelationId, domainEvents, policyHash, cancellationToken);
 
         // Step 4: Enqueue to Outbox with resolved topic (Kafka relay → consumer → projection)
-        await _outboxService.EnqueueAsync(context.CorrelationId, domainEvents, topic);
+        // phase1.5-S5.2.3 / TC-5: forward CT into the outbox enqueue
+        // so PostgresOutboxAdapter Execute*Async calls honor
+        // cancellation.
+        await _outboxService.EnqueueAsync(context.CorrelationId, domainEvents, topic, cancellationToken);
     }
 }

@@ -16,18 +16,24 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public sealed class PostgresProjectionWriter : IPostgresProjectionWriter
 {
-    private readonly string _connectionString;
+    private readonly ProjectionsDataSource _dataSource;
     private readonly string _schemaName;
     private readonly string _tableName;
     private readonly string _aggregateType;
 
+    // phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): connection
+    // lifecycle moved to the declared projections pool. Acquisitions
+    // flow through PostgresPoolMetrics.OpenInstrumentedAsync with
+    // pool="projections" tag. Query logic, ON CONFLICT semantics, and
+    // upsert behavior are unchanged.
     public PostgresProjectionWriter(
-        string connectionString,
+        ProjectionsDataSource dataSource,
         string schemaName,
         string tableName,
         string aggregateType)
     {
-        _connectionString = connectionString;
+        ArgumentNullException.ThrowIfNull(dataSource);
+        _dataSource = dataSource;
         _schemaName = schemaName;
         _tableName = tableName;
         _aggregateType = aggregateType;
@@ -45,8 +51,7 @@ public sealed class PostgresProjectionWriter : IPostgresProjectionWriter
 
         var state = JsonSerializer.Serialize(@event, @event.GetType());
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
+        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(ProjectionsDataSource.PoolName, ct);
 
         // Schema/table names cannot be parameterized — they come from constructor config,
         // not from message content, and are validated at bootstrap time.

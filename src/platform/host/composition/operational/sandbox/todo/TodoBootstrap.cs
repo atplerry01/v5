@@ -38,12 +38,16 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         services.AddTransient<TodoEngine>();
 
         // Projection layer (consumers receive events from Kafka ONLY)
-        // phase1.5-S1 (CFG-R3): no fallback — env var is required.
-        // phase1.6-CFG-K1: Section:Key form (see InfrastructureComposition.cs)
-        var projectionsCs = configuration.GetValue<string>("Postgres:ProjectionsConnectionString")
-            ?? throw new InvalidOperationException(
-                "Postgres:ProjectionsConnectionString is required. No fallback.");
-        services.AddSingleton(sp => new TodoProjectionHandler(projectionsCs));
+        // phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): the projection
+        // handler now resolves the inner NpgsqlDataSource from the
+        // declared ProjectionsDataSource singleton (registered by
+        // InfrastructureComposition). The projections assembly cannot
+        // reference the host-adapters layer, so the bootstrap unwraps
+        // .Inner here at the construction seam. Pool sizing flows
+        // from Postgres.Pools.Projections.* configuration; the
+        // pre-KC-4 raw connection string read at this site is gone.
+        services.AddSingleton(sp => new TodoProjectionHandler(
+            sp.GetRequiredService<ProjectionsDataSource>().Inner));
         services.AddSingleton<TodoProjectionConsumer>();
 
         // Systems.Downstream — Todo intent handler
@@ -54,10 +58,12 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         // the worker itself contains zero domain references.
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
             ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
-        // phase1.5-S1 (CFG-R3): no fallback — env var is required.
-        var postgresProjectionsCs = configuration.GetValue<string>("Postgres:ProjectionsConnectionString")
-            ?? throw new InvalidOperationException(
-                "Postgres:ProjectionsConnectionString is required. No fallback.");
+        // phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): the second
+        // pre-KC-4 read of Postgres:ProjectionsConnectionString
+        // (previously used to construct PostgresProjectionWriter
+        // inline) is removed. The writer now receives ProjectionsDataSource
+        // via DI from InfrastructureComposition. Single canonical
+        // source of truth for the projections pool.
 
         const string topic = "whyce.operational.sandbox.todo.events";
         const string consumerGroup = "whyce.projection.operational.sandbox.todo";
@@ -73,11 +79,17 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
                 sp.GetRequiredService<EventDeserializer>(),
                 sp.GetRequiredService<ProjectionRegistry>(),
                 new PostgresProjectionWriter(
-                    postgresProjectionsCs,
+                    sp.GetRequiredService<ProjectionsDataSource>(),
                     projectionSchema,
                     projectionTable,
                     aggregateType),
                 sp.GetRequiredService<IClock>(),
+                // phase1.5-S5.2.1 / PC-6 (KAFKA-CONSUMER-CONFIG-01):
+                // resolve the declared KafkaConsumerOptions singleton so
+                // the worker applies bounded prefetch / session / poll
+                // values instead of inheriting librdkafka defaults.
+                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
     }
 

@@ -19,7 +19,7 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         _idGenerator = idGenerator;
     }
 
-    public async Task<CommandResult> DispatchAsync(object command, DomainRoute route)
+    public async Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType();
 
@@ -52,7 +52,10 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             Domain = route.Domain
         };
 
-        var result = await _controlPlane.ExecuteAsync(command, context);
+        // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): forward
+        // the cancellation token into the control plane so the locked
+        // middleware pipeline can honor request/shutdown cancellation.
+        var result = await _controlPlane.ExecuteAsync(command, context, cancellationToken);
 
         // phase1-gate-S7: stamp the correlation id used by EventStore /
         // WhyceChain / Outbox onto the response so the API caller can trace

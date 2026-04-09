@@ -31,7 +31,7 @@ public sealed class ExecutionPipeline
         _eventFabric = eventFabric;
     }
 
-    public async Task<CommandResult> ExecuteAsync(object command, CommandContext context)
+    public async Task<CommandResult> ExecuteAsync(object command, CommandContext context, CancellationToken cancellationToken = default)
     {
         // Step 1: Open execution scope — validate pre-conditions
         if (command is null)
@@ -40,19 +40,24 @@ public sealed class ExecutionPipeline
             return CommandResult.Failure("Execution pipeline: CorrelationId is required.");
 
         // Step 2: Build and execute middleware pipeline
-        Func<Task<CommandResult>> pipeline = () => _dispatcher.DispatchAsync(command, context);
+        // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): mirror
+        // RuntimeControlPlane's token-aware closure shape so this
+        // (currently unused) helper compiles through the new
+        // IMiddleware contract.
+        Func<CancellationToken, Task<CommandResult>> pipeline =
+            ct => _dispatcher.DispatchAsync(command, context, ct);
 
         for (var i = _middlewares.Count - 1; i >= 0; i--)
         {
             var middleware = _middlewares[i];
             var next = pipeline;
-            pipeline = () => middleware.ExecuteAsync(context, command, next);
+            pipeline = ct => middleware.ExecuteAsync(context, command, next, ct);
         }
 
         CommandResult result;
         try
         {
-            result = await pipeline();
+            result = await pipeline(cancellationToken);
         }
         catch (Exception ex)
         {

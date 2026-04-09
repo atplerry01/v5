@@ -9,7 +9,7 @@ public sealed class ValidateIntentStep : IWorkflowStep
     public string Name => "ValidateIntent";
     public WorkflowStepType StepType => WorkflowStepType.Validation;
 
-    public Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context)
+    public Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context, CancellationToken cancellationToken = default)
     {
         if (context.Payload is not CreateTodoIntent intent)
         {

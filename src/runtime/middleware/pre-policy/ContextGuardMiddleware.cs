@@ -9,7 +9,11 @@ namespace Whyce.Runtime.Middleware.PrePolicy;
 /// </summary>
 public sealed class ContextGuardMiddleware : IMiddleware
 {
-    public Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         if (context.CorrelationId == Guid.Empty)
             return Task.FromResult(CommandResult.Failure("CorrelationId is required."));
@@ -26,6 +30,6 @@ public sealed class ContextGuardMiddleware : IMiddleware
         if (context.AggregateId == Guid.Empty)
             return Task.FromResult(CommandResult.Failure("AggregateId is required."));
 
-        return next();
+        return next(cancellationToken);
     }
 }

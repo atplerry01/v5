@@ -13,7 +13,10 @@ public interface ISequenceStore
     /// Atomically increment the counter for <paramref name="scope"/> and
     /// return the post-increment value (1-based).
     /// </summary>
-    Task<long> NextAsync(string scope);
+    // phase1.5-S5.2.3 / TC-5 (POSTGRES-CT-THREAD-01): the sequence store
+    // contract now consumes CT so it can reach the underlying
+    // ExecuteScalarAsync call in PostgresSequenceStoreAdapter.
+    Task<long> NextAsync(string scope, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Verify the underlying store is reachable AND the
@@ -23,5 +26,5 @@ public interface ISequenceStore
     ///
     /// Guard reference: deterministic-id.guard.md G19, G20.
     /// </summary>
-    Task<bool> HealthCheckAsync();
+    Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default);
 }

@@ -20,12 +20,24 @@ namespace Whyce.Shared.Contracts.Infrastructure.Admission;
 public sealed record IntakeOptions
 {
     /// <summary>
-    /// Maximum number of concurrently in-flight requests admitted by
-    /// the runtime intake limiter, summed across all partitions. Acts
-    /// as the per-partition concurrency ceiling under the partitioned
-    /// concurrency limiter shape. Must be at least 1. Default 256.
+    /// Per-IP-partition in-flight ceiling under the partitioned
+    /// concurrency limiter shape. Must be at least 1.
+    ///
+    /// phase1.5-S5.2.2 / KC-1 (CAPACITY-RESOLUTION-01): default lowered
+    /// from 256 to 6 to match real event-store downstream capacity.
+    /// Step B P-K3 confirmed each dispatched command performs 5
+    /// sequential acquisitions on the declared event-store pool
+    /// (idempotency exists + idempotency mark + load events + append
+    /// events + outbox enqueue), so a single IP at this ceiling can
+    /// hold at most 6 × 5 = 30 connections — within the declared
+    /// Postgres.Pools.EventStore.MaxPoolSize (32). Overload from a
+    /// single source therefore refuses at this limiter as HTTP 429 +
+    /// Retry-After (PC-1 RETRYABLE REFUSAL) before the pool's
+    /// 5-second connection-acquisition timeout fires and propagates as
+    /// a generic 500. Tighten further if the per-command acquisition
+    /// count grows.
     /// </summary>
-    public int GlobalConcurrency { get; init; } = 256;
+    public int GlobalConcurrency { get; init; } = 6;
 
     /// <summary>
     /// Maximum number of requests that may queue waiting for an
@@ -40,9 +52,14 @@ public sealed record IntakeOptions
     /// identifier is present on the request (currently the
     /// <c>X-Tenant-Id</c> header). When absent, requests are
     /// partitioned by remote IP and this value is ignored. Must be at
-    /// least 1. Default 32.
+    /// least 1.
+    ///
+    /// phase1.5-S5.2.2 / KC-1 (CAPACITY-RESOLUTION-01): default lowered
+    /// from 32 to 4 so a single tenant cannot fully consume the
+    /// event-store pool (4 × 5 = 20 connections) and other tenants
+    /// retain headroom. Companion to GlobalConcurrency.
     /// </summary>
-    public int PerTenantConcurrency { get; init; } = 32;
+    public int PerTenantConcurrency { get; init; } = 4;
 
     /// <summary>
     /// Declared response class on overflow. Locked to

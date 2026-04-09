@@ -34,7 +34,11 @@ public sealed class InMemoryChainAnchor : IChainAnchor
         }
     }
 
-    public Task<ChainBlock> AnchorAsync(Guid correlationId, IReadOnlyList<object> events, string decisionHash)
+    public Task<ChainBlock> AnchorAsync(
+        Guid correlationId,
+        IReadOnlyList<object> events,
+        string decisionHash,
+        CancellationToken cancellationToken = default)
     {
         ChainBlock block;
         lock (_lock)

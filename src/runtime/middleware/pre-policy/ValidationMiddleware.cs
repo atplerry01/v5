@@ -9,7 +9,11 @@ namespace Whyce.Runtime.Middleware.PrePolicy;
 /// </summary>
 public sealed class ValidationMiddleware : IMiddleware
 {
-    public Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         if (command is null)
             return Task.FromResult(CommandResult.Failure("Command payload is required."));
@@ -24,6 +28,6 @@ public sealed class ValidationMiddleware : IMiddleware
         if (commandType.Namespace is null || !commandType.IsClass)
             return Task.FromResult(CommandResult.Failure($"Invalid command type: {commandType.Name}"));
 
-        return next();
+        return next(cancellationToken);
     }
 }

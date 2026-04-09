@@ -21,5 +21,11 @@ namespace Whyce.Shared.Contracts.Projection;
 public interface IEnvelopeProjectionHandler
 {
     ProjectionExecutionPolicy ExecutionPolicy { get; }
-    Task HandleAsync(IEventEnvelope envelope);
+
+    // phase1.5-S5.2.3 / TC-6 (PROJECTION-CT-CONTRACT-01): envelope-based
+    // projection handler now consumes the worker's stoppingToken so a
+    // hung handler can be unblocked at the database round-trip without
+    // waiting for Kafka poll/session limits to intervene. Default keeps
+    // source compatibility for handlers that have not yet been migrated.
+    Task HandleAsync(IEventEnvelope envelope, CancellationToken cancellationToken = default);
 }

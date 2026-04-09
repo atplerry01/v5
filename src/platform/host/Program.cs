@@ -11,6 +11,26 @@ using Whyce.Shared.Contracts.Infrastructure.Admission;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// phase1.5-S5.2.3 / TC-9 (HOST-SHUTDOWN-DRAIN-01): declared graceful
+// shutdown timeout. Pre-TC-9 the host inherited the .NET default
+// (30s on .NET 8+, but undeclared and invisible to operators). TC-9
+// makes the value canonical, externalised, and audit-visible. The
+// configured ceiling is the wall-clock window the host gives in-flight
+// requests to drain after IHostApplicationLifetime.ApplicationStopping
+// fires; once it elapses, the runtime is forcibly stopped. The
+// drain-side cancellation is wired separately below via the
+// HostShutdownLinkingMiddleware which links HttpContext.RequestAborted
+// to ApplicationStopping so the request CT path established by TC-1
+// also fires on host shutdown.
+var shutdownTimeoutSeconds = builder.Configuration.GetValue<int?>("Host:ShutdownTimeoutSeconds") ?? 30;
+if (shutdownTimeoutSeconds < 1)
+    throw new InvalidOperationException(
+        $"Host:ShutdownTimeoutSeconds must be at least 1 (was {shutdownTimeoutSeconds}).");
+builder.Services.Configure<Microsoft.Extensions.Hosting.HostOptions>(opts =>
+{
+    opts.ShutdownTimeout = TimeSpan.FromSeconds(shutdownTimeoutSeconds);
+});
+
 // --- Domain bootstrap modules (classification → context → domain) ---
 // All per-domain wiring lives in BootstrapModuleCatalog. Program.cs holds zero domain knowledge.
 foreach (var module in BootstrapModuleCatalog.All)
@@ -43,6 +63,28 @@ builder.Services.AddExceptionHandler<PolicyEvaluationUnavailableExceptionHandler
 // preceding handlers; the typed exception bubbles untouched from
 // PostgresOutboxAdapter to here, never converted to a silent drop.
 builder.Services.AddExceptionHandler<OutboxSaturatedExceptionHandler>();
+// phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): map workflow
+// admission saturation to 503 + Retry-After. Same edge-handler
+// precedent as the three preceding handlers; the typed exception
+// bubbles untouched from WorkflowAdmissionGate to here, never
+// converted to partial workflow execution.
+builder.Services.AddExceptionHandler<WorkflowSaturatedExceptionHandler>();
+// phase1.5-S5.2.3 / TC-2 (CHAIN-ANCHOR-WAIT-TIMEOUT-01): map chain
+// anchor commit-serializer wait timeout to 503 + Retry-After. Same
+// edge-handler precedent as the four preceding handlers; the typed
+// exception bubbles untouched from ChainAnchorService to here, never
+// converted to an indefinite request hang.
+builder.Services.AddExceptionHandler<ChainAnchorWaitTimeoutExceptionHandler>();
+// phase1.5-S5.2.3 / TC-3 (CHAIN-STORE-CT-BREAKER-01): map chain-store
+// transport failures and breaker-open refusals to 503 + Retry-After.
+// Holder-side counterpart to the TC-2 wait-timeout handler. Same
+// edge-handler precedent as the prior typed refusals.
+builder.Services.AddExceptionHandler<ChainAnchorUnavailableExceptionHandler>();
+// phase1.5-S5.2.3 / TC-7 (WORKFLOW-TIMEOUT-01): map workflow per-step
+// / execution-level deadline expiry to 503 + Retry-After. Engine-side
+// counterpart to WorkflowSaturatedExceptionHandler. Same edge-handler
+// precedent as the prior typed refusals.
+builder.Services.AddExceptionHandler<WorkflowTimeoutExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // phase1.5-S5.2.1 / PC-1 (INTAKE-CONFIG-01): declared admission control
@@ -155,6 +197,15 @@ app.Use(async (context, next) =>
         new KeyValuePair<string, object?>("path", context.Request.Path.Value ?? string.Empty));
     await next();
 });
+
+// phase1.5-S5.2.3 / TC-9 (HOST-SHUTDOWN-DRAIN-01): link
+// HttpContext.RequestAborted with IHostApplicationLifetime.ApplicationStopping
+// so the controller-bound CancellationToken (TC-1) also fires when the
+// host begins to drain. Must run BEFORE the exception handler and
+// MapControllers so the linked token is in effect for the entire
+// downstream pipeline. Sits AFTER the rate limiter so a shutdown does
+// not perturb intake refusal accounting.
+app.UseMiddleware<Whyce.Platform.Api.Middleware.HostShutdownLinkingMiddleware>();
 
 // phase1-gate-api-edge: invoke the registered IExceptionHandler chain
 // (currently just ConcurrencyConflictExceptionHandler -> 409). Must be

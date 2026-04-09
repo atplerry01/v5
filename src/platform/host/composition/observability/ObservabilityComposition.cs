@@ -65,6 +65,40 @@ public static class ObservabilityComposition
 
         services.AddSingleton<IHealthCheck>(sp => new RuntimeHealthCheck(sp));
 
+        // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): worker
+        // liveness registry + declared silence ceiling + synthetic
+        // "workers" health check. The registry is the storage seam
+        // that the three BackgroundService workers (OutboxDepthSampler,
+        // KafkaOutboxPublisher, GenericKafkaProjectionConsumerWorker)
+        // write to via RecordSuccess after every successful loop
+        // iteration. WorkersHealthCheck reads it at probe time and
+        // contributes to the canonical RuntimeStateAggregator rule
+        // through the standard IHealthCheck fan-out.
+        var workerHealthDefaults = new WorkerHealthOptions();
+        var workerHealthOptions = new WorkerHealthOptions
+        {
+            MaxSilenceSeconds = configuration.GetValue<int?>("WorkerHealth:MaxSilenceSeconds")
+                ?? workerHealthDefaults.MaxSilenceSeconds,
+        };
+        services.AddSingleton(workerHealthOptions);
+        services.AddSingleton<WorkerLivenessRegistry>();
+        services.AddSingleton<IWorkerLivenessRegistry>(sp => sp.GetRequiredService<WorkerLivenessRegistry>());
+        services.AddSingleton<IHealthCheck>(sp => new WorkersHealthCheck(
+            sp.GetRequiredService<IWorkerLivenessRegistry>(),
+            sp.GetRequiredService<WorkerHealthOptions>(),
+            sp.GetRequiredService<Whyce.Shared.Kernel.Domain.IClock>()));
+
+        // phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
+        // canonical runtime-state aggregator. Owns the rule that
+        // pre-HC-2 lived in HealthAggregator. Depends on the concrete
+        // OpaPolicyEvaluator + WhyceChainPostgresAdapter singletons
+        // (registered in InfrastructureComposition) so it can read
+        // the new side-effect-free IsBreakerOpen getters; the
+        // existing IPolicyEvaluator / IChainAnchor interface
+        // registrations forward to the same singletons so all other
+        // consumers continue to use the interfaces unchanged.
+        services.AddSingleton<RuntimeStateAggregator>();
+        services.AddSingleton<IRuntimeStateAggregator>(sp => sp.GetRequiredService<RuntimeStateAggregator>());
         services.AddSingleton<HealthAggregator>();
         services.AddWhyceSwagger();
         services.AddControllers()

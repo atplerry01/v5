@@ -43,4 +43,25 @@ public interface IOutboxDepthSnapshot
     /// atomically. Called only by <c>OutboxDepthSampler</c>.
     /// </summary>
     void Publish(long depth, double oldestPendingAgeSeconds);
+
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01): wall-clock
+    /// time of the most recent successful <see cref="Publish"/>. Sourced
+    /// from <c>IClock.UtcNow</c> by the sampler. <see cref="DateTimeOffset.MinValue"/>
+    /// until the first publish has occurred.
+    /// </summary>
+    DateTimeOffset LastUpdatedAt { get; }
+
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01): freshness
+    /// predicate evaluated at read time only. Returns false when
+    /// <see cref="HasObservation"/> is false (no publish yet) or when
+    /// <c>(now - LastUpdatedAt).TotalSeconds &gt; maxAgeSeconds</c>.
+    /// Closes H19: a dead <c>OutboxDepthSampler</c> would otherwise
+    /// freeze the snapshot at its last value and corrupt PC-3 refusal
+    /// decisions indefinitely. The freshness check is fail-safe — a
+    /// stale snapshot must produce a refusal at the read site, never
+    /// an admit.
+    /// </summary>
+    bool IsFresh(DateTimeOffset now, int maxAgeSeconds);
 }

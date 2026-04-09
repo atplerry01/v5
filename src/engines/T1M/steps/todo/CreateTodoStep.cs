@@ -19,7 +19,7 @@ public sealed class CreateTodoStep : IWorkflowStep
     public string Name => "CreateTodo";
     public WorkflowStepType StepType => WorkflowStepType.Command;
 
-    public async Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context)
+    public async Task<WorkflowStepResult> ExecuteAsync(WorkflowExecutionContext context, CancellationToken cancellationToken = default)
     {
         if (context.Payload is not CreateTodoIntent intent)
         {
@@ -30,7 +30,10 @@ public sealed class CreateTodoStep : IWorkflowStep
         var command = new CreateTodoCommand(todoId, intent.Title);
 
         var route = new DomainRoute("operational", "sandbox", "todo");
-        var result = await _dispatcher.DispatchAsync(command, route);
+        // phase1.5-S5.2.3 / TC-7: forward the per-step linked CT into
+        // the system-intent dispatch so a hung sub-command honors the
+        // workflow step deadline.
+        var result = await _dispatcher.DispatchAsync(command, route, cancellationToken);
 
         if (!result.IsSuccess)
         {

@@ -53,6 +53,14 @@ public sealed class OutboxSaturatedExceptionHandler : IExceptionHandler
         problem.Extensions["observedDepth"] = saturated.ObservedDepth;
         problem.Extensions["highWaterMark"] = saturated.HighWaterMark;
         problem.Extensions["retryAfterSeconds"] = saturated.RetryAfterSeconds;
+        // phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01):
+        // surface the refusal reason so operators can distinguish
+        // "high_water_mark" (canonical PC-3 saturation) from
+        // "snapshot_stale" (fail-safe refusal because the
+        // OutboxDepthSampler observation has aged past
+        // OutboxOptions.SnapshotMaxAgeSeconds — closes H19). Same
+        // family, same status, same Retry-After header.
+        problem.Extensions["reason"] = saturated.Reason;
         problem.Extensions["correlationId"] = httpContext.TraceIdentifier;
 
         httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Npgsql;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Adapters;
 
@@ -13,28 +14,50 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public sealed class PostgresOutboxAdapter : IOutbox
 {
-    private readonly string _connectionString;
+    private readonly EventStoreDataSource _dataSource;
     private readonly IOutboxDepthSnapshot _depthSnapshot;
     private readonly OutboxOptions _options;
+    private readonly IClock _clock;
 
+    // phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): connection lifecycle
+    // moved to the declared event-store pool. The high-water-mark
+    // refusal path (PC-3) and the INSERT loop are unchanged.
+    //
+    // phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01): IClock is
+    // now constructor-injected so the freshness check at the refusal
+    // seam consults the canonical Whycespace clock rather than
+    // DateTime.UtcNow. Closes H19 (stale snapshot from a dead sampler
+    // silently corrupts PC-3 admission decisions).
     public PostgresOutboxAdapter(
-        string connectionString,
+        EventStoreDataSource dataSource,
         IOutboxDepthSnapshot depthSnapshot,
-        OutboxOptions options)
+        OutboxOptions options,
+        IClock clock)
     {
+        ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(depthSnapshot);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(clock);
         if (options.HighWaterMark < 1)
             throw new ArgumentOutOfRangeException(
                 nameof(options), options.HighWaterMark,
                 "OutboxOptions.HighWaterMark must be at least 1.");
+        if (options.SnapshotMaxAgeSeconds < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(options), options.SnapshotMaxAgeSeconds,
+                "OutboxOptions.SnapshotMaxAgeSeconds must be at least 1.");
 
-        _connectionString = connectionString;
+        _dataSource = dataSource;
         _depthSnapshot = depthSnapshot;
         _options = options;
+        _clock = clock;
     }
 
-    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic)
+    public async Task EnqueueAsync(
+        Guid correlationId,
+        IReadOnlyList<object> events,
+        string topic,
+        CancellationToken cancellationToken = default)
     {
         // phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): high-water-mark
         // refusal. Read the latest sampled depth from the shared
@@ -46,17 +69,42 @@ public sealed class PostgresOutboxAdapter : IOutbox
         // observation exists, depth ≥ HighWaterMark throws the typed
         // RETRYABLE REFUSAL exception which the API edge maps to 503 +
         // Retry-After.
+        // phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01):
+        // fail-safe stale-snapshot refusal. Closes H19 — pre-HC-1 a
+        // dead OutboxDepthSampler froze the snapshot at its last
+        // value, and this comparator would treat that frozen value
+        // as authoritative forever (silently admitting under a
+        // stale below-watermark observation, or silently refusing
+        // under a stale above-watermark one). The freshness check
+        // runs BEFORE the high-water-mark comparator and uses the
+        // same canonical refusal family — only the Reason tag
+        // differs ("snapshot_stale" vs "high_water_mark").
+        if (_depthSnapshot.HasObservation
+            && !_depthSnapshot.IsFresh(_clock.UtcNow, _options.SnapshotMaxAgeSeconds))
+        {
+            throw new OutboxSaturatedException(
+                observedDepth: _depthSnapshot.CurrentDepth,
+                highWaterMark: _options.HighWaterMark,
+                retryAfterSeconds: _options.RetryAfterSeconds,
+                reason: "snapshot_stale");
+        }
+
         if (_depthSnapshot.HasObservation && _depthSnapshot.CurrentDepth >= _options.HighWaterMark)
         {
             throw new OutboxSaturatedException(
                 observedDepth: _depthSnapshot.CurrentDepth,
                 highWaterMark: _options.HighWaterMark,
-                retryAfterSeconds: _options.RetryAfterSeconds);
+                retryAfterSeconds: _options.RetryAfterSeconds,
+                reason: "high_water_mark");
         }
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var tx = await conn.BeginTransactionAsync();
+        // phase1.5-S5.2.3 / TC-5 (POSTGRES-CT-THREAD-01): the outbox
+        // INSERT loop now threads the request/host-shutdown CT into
+        // BeginTransactionAsync, the per-row ExecuteNonQueryAsync, and
+        // the final CommitAsync. The high-water-mark refusal path
+        // (PC-3) and the SQL itself are unchanged.
+        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
 
         for (var i = 0; i < events.Count; i++)
         {
@@ -84,10 +132,10 @@ public sealed class PostgresOutboxAdapter : IOutbox
             cmd.Parameters.AddWithValue("idempKey", idempotencyKey);
             cmd.Parameters.AddWithValue("topic", topic);
 
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await tx.CommitAsync();
+        await tx.CommitAsync(cancellationToken);
     }
 
     private static Guid ComputeDeterministicId(Guid correlationId, string eventType, int sequenceNumber)

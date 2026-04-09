@@ -18,17 +18,19 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public sealed class PostgresSequenceStoreAdapter : ISequenceStore
 {
-    private readonly string _connectionString;
+    private readonly EventStoreDataSource _dataSource;
 
-    public PostgresSequenceStoreAdapter(string connectionString)
+    // phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): connection lifecycle
+    // moved to the declared event-store pool. Query logic unchanged.
+    public PostgresSequenceStoreAdapter(EventStoreDataSource dataSource)
     {
-        _connectionString = connectionString;
+        ArgumentNullException.ThrowIfNull(dataSource);
+        _dataSource = dataSource;
     }
 
-    public async Task<long> NextAsync(string scope)
+    public async Task<long> NextAsync(string scope, CancellationToken cancellationToken = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
 
         await using var cmd = new NpgsqlCommand(
             """
@@ -41,14 +43,15 @@ public sealed class PostgresSequenceStoreAdapter : ISequenceStore
             conn);
         cmd.Parameters.AddWithValue("scope", scope);
 
-        var result = await cmd.ExecuteScalarAsync();
+        // phase1.5-S5.2.3 / TC-5 (POSTGRES-CT-THREAD-01): hot-path
+        // ExecuteScalarAsync now honors CT.
+        var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return result is long l ? l : Convert.ToInt64(result);
     }
 
-    public async Task<bool> HealthCheckAsync()
+    public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
 
         // Strict shape check: confirm the table exists AND both required
         // columns are present. Catches partial / drifted migrations as well
@@ -63,7 +66,7 @@ public sealed class PostgresSequenceStoreAdapter : ISequenceStore
             """,
             conn);
 
-        var result = await cmd.ExecuteScalarAsync();
+        var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return result is bool b && b;
     }
 }

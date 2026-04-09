@@ -17,6 +17,11 @@
     <PackageReference Include="prometheus-net" Version="8.2.1" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <!-- phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): WorkflowAdmissionGate
+         uses System.Threading.RateLimiting.PartitionedRateLimiter. The
+         host project gets this transitively via Microsoft.AspNetCore.RateLimiting
+         (PC-1), but the runtime project needs an explicit reference. -->
+    <PackageReference Include="System.Threading.RateLimiting" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

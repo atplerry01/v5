@@ -21,7 +21,7 @@ public sealed class InMemoryEventStore : IEventStore
         _recorder = recorder;
     }
 
-    public Task<IReadOnlyList<object>> LoadEventsAsync(Guid aggregateId)
+    public Task<IReadOnlyList<object>> LoadEventsAsync(Guid aggregateId, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -31,7 +31,7 @@ public sealed class InMemoryEventStore : IEventStore
         }
     }
 
-    public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<object> events, int expectedVersion)
+    public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<object> events, int expectedVersion, CancellationToken cancellationToken = default)
     {
         if (events.Count == 0) return Task.CompletedTask;
 

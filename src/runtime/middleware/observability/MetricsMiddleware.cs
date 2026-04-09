@@ -15,14 +15,18 @@ public sealed class MetricsMiddleware : IMiddleware
     private static long _successfulCommands;
     private static long _failedCommands;
 
-    public async Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public async Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _totalCommands);
         var sw = Stopwatch.StartNew();
 
         try
         {
-            var result = await next();
+            var result = await next(cancellationToken);
             sw.Stop();
 
             if (result.IsSuccess)

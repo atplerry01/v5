@@ -12,7 +12,11 @@ public sealed class TracingMiddleware : IMiddleware
 {
     private static readonly ActivitySource Source = new("Whyce.Runtime.ControlPlane");
 
-    public async Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public async Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType().Name;
 
@@ -26,7 +30,7 @@ public sealed class TracingMiddleware : IMiddleware
 
         try
         {
-            var result = await next();
+            var result = await next(cancellationToken);
 
             activity?.SetTag("result.success", result.IsSuccess);
             if (!result.IsSuccess)

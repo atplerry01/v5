@@ -75,4 +75,45 @@ public sealed record OutboxOptions
     /// drain margin).
     /// </summary>
     public int RetryAfterSeconds { get; init; } = 5;
+
+    /// <summary>
+    /// phase1.5-S5.2.2 / KC-3 (DLQ-OBSERVABILITY-01): declared
+    /// handling policy for outbox rows that have exhausted the
+    /// retry budget and been promoted to <c>status='deadletter'</c>.
+    /// Acceptable Phase 1.5 values:
+    ///
+    ///   - <c>"operator-managed"</c> (default): deadletter rows
+    ///     accumulate until an operator inspects and acknowledges
+    ///     them out-of-band. The runtime publishes the
+    ///     <c>outbox.deadletter_depth</c> gauge so an operator can
+    ///     alert on growth. There is no automatic pruning.
+    ///   - <c>"auto-prune-after-days"</c>: a future workstream may
+    ///     introduce a periodic pruner; reserved as a declared
+    ///     option name. KC-3 does not implement the pruner —
+    ///     selecting this value today is a declared intent, not an
+    ///     active behavior.
+    ///
+    /// The field exists so deadletter growth is no longer implicit
+    /// or undefined. Step B / P-K6 confirmed there is no
+    /// <c>outbox.deadletter_depth</c> metric and no growth policy
+    /// anywhere in the runtime; KC-3 closes the observability gap
+    /// with a gauge and the policy gap with this declaration.
+    /// </summary>
+    public string DeadletterRetention { get; init; } = "operator-managed";
+
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01): maximum
+    /// age, in seconds, that the <see cref="IOutboxDepthSnapshot"/>
+    /// observation may have before <c>PostgresOutboxAdapter.EnqueueAsync</c>
+    /// fail-safes by refusing the request with
+    /// <see cref="OutboxSaturatedException"/> (<c>Reason="snapshot_stale"</c>).
+    /// Closes H19: a dead <c>OutboxDepthSampler</c> would otherwise
+    /// freeze the snapshot at its last value and corrupt PC-3 refusal
+    /// decisions indefinitely. Must be at least 1. Default 10 seconds
+    /// — twice the default <see cref="SamplingIntervalSeconds"/> (5),
+    /// which gives the sampler one full retry window before refusal
+    /// kicks in. Stale-snapshot refusal is fail-safe: a frozen
+    /// below-watermark snapshot must NEVER admit traffic.
+    /// </summary>
+    public int SnapshotMaxAgeSeconds { get; init; } = 10;
 }

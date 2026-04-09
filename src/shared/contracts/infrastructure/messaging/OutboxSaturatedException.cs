@@ -39,12 +39,44 @@ public sealed class OutboxSaturatedException : Exception
     /// </summary>
     public int RetryAfterSeconds { get; }
 
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-1 (OUTBOX-SNAPSHOT-FRESHNESS-01):
+    /// low-cardinality reason tag distinguishing the two refusal
+    /// branches inside the same canonical family. One of:
+    /// <list type="bullet">
+    ///   <item><c>"high_water_mark"</c> — fresh snapshot reported
+    ///         depth &gt;= configured HighWaterMark (the original
+    ///         PC-3 path).</item>
+    ///   <item><c>"snapshot_stale"</c> — the depth snapshot is older
+    ///         than <c>OutboxOptions.SnapshotMaxAgeSeconds</c>
+    ///         (e.g. <c>OutboxDepthSampler</c> died); fail-safe
+    ///         refusal so a frozen below-watermark observation never
+    ///         silently admits traffic. Closes H19.</item>
+    /// </list>
+    /// Both branches throw the same exception type, status code, and
+    /// edge-handler shape — only the reason tag differs. No new
+    /// refusal family is introduced.
+    /// </summary>
+    public string Reason { get; }
+
     public OutboxSaturatedException(long observedDepth, long highWaterMark, int retryAfterSeconds)
-        : base($"Outbox saturated: depth {observedDepth} ≥ HighWaterMark {highWaterMark}. " +
-               "Refusing new work. No bypass allowed.")
+        : this(observedDepth, highWaterMark, retryAfterSeconds, reason: "high_water_mark")
+    {
+    }
+
+    public OutboxSaturatedException(long observedDepth, long highWaterMark, int retryAfterSeconds, string reason)
+        : base(BuildMessage(observedDepth, highWaterMark, reason))
     {
         ObservedDepth = observedDepth;
         HighWaterMark = highWaterMark;
         RetryAfterSeconds = retryAfterSeconds;
+        Reason = reason;
     }
+
+    private static string BuildMessage(long observedDepth, long highWaterMark, string reason) =>
+        reason == "snapshot_stale"
+            ? $"Outbox depth snapshot is stale (last observation older than declared SnapshotMaxAgeSeconds). " +
+              "Refusing new work fail-safe. No bypass allowed."
+            : $"Outbox saturated: depth {observedDepth} ≥ HighWaterMark {highWaterMark}. " +
+              "Refusing new work. No bypass allowed.";
 }

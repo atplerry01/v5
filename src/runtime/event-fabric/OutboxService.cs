@@ -17,9 +17,17 @@ public sealed class OutboxService
         _outbox = outbox;
     }
 
-    public async Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> domainEvents, string topic)
+    // phase1.5-S5.2.3 / TC-5 (POSTGRES-CT-THREAD-01): forwards the
+    // request/host-shutdown CancellationToken from EventFabric down to
+    // IOutbox so the underlying Postgres adapter ExecuteNonQueryAsync
+    // calls honor cancellation.
+    public async Task EnqueueAsync(
+        Guid correlationId,
+        IReadOnlyList<object> domainEvents,
+        string topic,
+        CancellationToken cancellationToken = default)
     {
         if (domainEvents.Count == 0) return;
-        await _outbox.EnqueueAsync(correlationId, domainEvents, topic);
+        await _outbox.EnqueueAsync(correlationId, domainEvents, topic, cancellationToken);
     }
 }

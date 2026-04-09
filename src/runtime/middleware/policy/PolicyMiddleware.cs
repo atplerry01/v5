@@ -46,7 +46,11 @@ public sealed class PolicyMiddleware : IMiddleware
         _decisionEventFactory = decisionEventFactory;
     }
 
-    public async Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public async Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         // Step 1: Resolve identity via WhyceIdEngine (T0U)
         var authenticateCommand = new AuthenticateIdentityCommand(
@@ -172,7 +176,7 @@ public sealed class PolicyMiddleware : IMiddleware
             correlationId: context.CorrelationId,
             causationId: context.CausationId);
 
-        var innerResult = await next();
+        var innerResult = await next(cancellationToken);
 
         // Audit emission overrides any AuditEmission set downstream — policy
         // decision is the canonical audit for this execution.

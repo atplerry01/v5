@@ -19,6 +19,15 @@ public sealed class TodoController : ControllerBase
     private readonly IRedisClient _redis;
     private readonly string _projectionsConnectionString;
 
+    // phase1.5-S5.2.2 / KC-4 RESIDUAL: TodoController.Get is declared
+    // as residual for the projections-pool refactor. Whycespace.Api
+    // cannot reference Whycespace.Host (the host already references
+    // the api project, so adding the reverse reference would create
+    // a project dependency cycle). The narrowest layer-respecting
+    // fix is a small DbConnection-shaped abstraction in shared/contracts
+    // that the host implements, which widens scope beyond KC-4.
+    // Recorded as residual; refactored as part of a future shared
+    // persistence-abstraction workstream.
     public TodoController(
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
@@ -28,17 +37,13 @@ public sealed class TodoController : ControllerBase
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
         _redis = redis;
-        // phase1.5-S1 (CFG-R3, CFG-R4): no fallback — env var is required.
-        // Indexer access replaced with GetValue<T>() to match the canonical pattern.
-        // phase1.6-CFG-K1: Section:Key form (env var Projections__ConnectionString
-        // is rewritten to config key Projections:ConnectionString by .NET).
         _projectionsConnectionString = configuration.GetValue<string>("Projections:ConnectionString")
             ?? throw new InvalidOperationException(
                 "Projections:ConnectionString is required. No fallback.");
     }
 
     [HttpPost("create")]
-    public async Task<IActionResult> Create([FromBody] CreateTodoRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateTodoRequest request, CancellationToken cancellationToken)
     {
         // phase1-gate-S1: route through dispatcher so the policy envelope,
         // guards, outbox, and chain anchor all run — same path as Update/Complete.
@@ -52,14 +57,19 @@ public sealed class TodoController : ControllerBase
         var aggregateId = _idGenerator.Generate(
             $"todo:create:{request.UserId}:{request.Title}");
         var cmd = new CreateTodoCommand(aggregateId, request.Title);
-        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
+        // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): forward
+        // HttpContext.RequestAborted (bound by ASP.NET model binding
+        // to the cancellationToken parameter) into the system intent
+        // dispatcher so client disconnection or host shutdown can
+        // propagate through the locked middleware pipeline.
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute, cancellationToken);
         return result.IsSuccess
             ? Ok(new { status = "created", todoId = aggregateId, correlationId = result.CorrelationId })
             : BadRequest(new { error = result.Error });
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id)
+    public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
         await using var conn = new NpgsqlConnection(_projectionsConnectionString);
         await conn.OpenAsync();
@@ -102,16 +112,16 @@ public sealed class TodoController : ControllerBase
     private static readonly DomainRoute TodoRoute = new("operational", "sandbox", "todo");
 
     [HttpPost("update")]
-    public async Task<IActionResult> Update([FromBody] UpdateTodoCommand cmd)
+    public async Task<IActionResult> Update([FromBody] UpdateTodoCommand cmd, CancellationToken cancellationToken)
     {
-        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result.Error);
     }
 
     [HttpPost("complete")]
-    public async Task<IActionResult> Complete([FromBody] CompleteTodoCommand cmd)
+    public async Task<IActionResult> Complete([FromBody] CompleteTodoCommand cmd, CancellationToken cancellationToken)
     {
-        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute);
+        var result = await _dispatcher.DispatchAsync(cmd, TodoRoute, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result.Error);
     }
 }

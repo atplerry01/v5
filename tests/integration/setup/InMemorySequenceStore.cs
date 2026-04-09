@@ -13,11 +13,11 @@ public sealed class InMemorySequenceStore : ISequenceStore
 {
     private readonly ConcurrentDictionary<string, long> _counters = new();
 
-    public Task<long> NextAsync(string scope)
+    public Task<long> NextAsync(string scope, CancellationToken cancellationToken = default)
     {
         var next = _counters.AddOrUpdate(scope, 1, (_, current) => current + 1);
         return Task.FromResult(next);
     }
 
-    public Task<bool> HealthCheckAsync() => Task.FromResult(true);
+    public Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 }

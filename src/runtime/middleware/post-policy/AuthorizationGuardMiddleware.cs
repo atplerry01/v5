@@ -10,7 +10,11 @@ namespace Whyce.Runtime.Middleware.PostPolicy;
 /// </summary>
 public sealed class AuthorizationGuardMiddleware : IMiddleware
 {
-    public Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         // Authorization requires identity to have been resolved by PolicyMiddleware
         if (string.IsNullOrWhiteSpace(context.IdentityId))
@@ -23,6 +27,6 @@ public sealed class AuthorizationGuardMiddleware : IMiddleware
         if (string.IsNullOrWhiteSpace(context.PolicyDecisionHash))
             return Task.FromResult(CommandResult.Failure("Authorization failed: policy decision hash missing."));
 
-        return next();
+        return next(cancellationToken);
     }
 }

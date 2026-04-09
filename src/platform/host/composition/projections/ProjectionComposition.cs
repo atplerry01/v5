@@ -39,7 +39,8 @@ public static class ProjectionComposition
         services.AddSingleton<ChainAnchorService>(sp =>
             new ChainAnchorService(
                 sp.GetRequiredService<WhyceChainEngine>(),
-                sp.GetRequiredService<IChainAnchor>()));
+                sp.GetRequiredService<IChainAnchor>(),
+                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Admission.ChainAnchorOptions>()));
         services.AddSingleton<OutboxService>(sp =>
             new OutboxService(sp.GetRequiredService<IOutbox>()));
         services.AddSingleton<EventSchemaRegistry>(sp =>

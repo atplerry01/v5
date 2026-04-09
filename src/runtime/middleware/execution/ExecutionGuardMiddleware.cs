@@ -13,7 +13,11 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
 {
     public const string RuntimeOriginKey = "Runtime.IsFromRuntime";
 
-    public Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    public Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         // Final validation: policy decision must have been evaluated
         if (context.PolicyDecisionAllowed is not true)
@@ -31,6 +35,6 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
         // Mark context as runtime-originated — engines can verify this
         context.RuntimeOrigin = true;
 
-        return next();
+        return next(cancellationToken);
     }
 }

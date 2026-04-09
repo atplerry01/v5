@@ -91,7 +91,7 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         // single trial call (the lock keeps the trial-call decision
         // single-writer; concurrent callers during HalfOpen still see Open
         // until the trial commits one way or the other).
-        if (IsBreakerOpen())
+        if (IsBreakerOpenInternal())
         {
             BreakerOpenCounter.Add(1,
                 new KeyValuePair<string, object?>("policy_id", policyId));
@@ -202,7 +202,29 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
 
     // --- Breaker primitives ---
 
-    private bool IsBreakerOpen()
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
+    /// side-effect-free public getter for the canonical
+    /// runtime-state aggregator. Returns <c>true</c> when the
+    /// breaker is currently in the Open window (i.e.
+    /// <c>_openedAt</c> is set). Does NOT perform the HalfOpen
+    /// transition that the private call-site
+    /// <see cref="IsBreakerOpenInternal()"/> does — that side-effect is
+    /// reserved for the request-path call site so the aggregator
+    /// poll cannot accidentally admit a trial call.
+    /// </summary>
+    public bool IsBreakerOpen
+    {
+        get
+        {
+            lock (_breakerLock)
+            {
+                return _openedAt is not null;
+            }
+        }
+    }
+
+    private bool IsBreakerOpenInternal()
     {
         lock (_breakerLock)
         {

@@ -22,6 +22,7 @@ using Whyce.Runtime.Middleware.PostPolicy;
 using Whyce.Runtime.Middleware.PrePolicy;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.EventFabric;
+using Whyce.Shared.Contracts.Infrastructure.Admission;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 using Whyce.Shared.Contracts.Infrastructure.Policy;
 using Whyce.Shared.Contracts.Policy;
@@ -149,6 +150,61 @@ public static class RuntimeComposition
                 sp.GetRequiredService<IDeterministicIdEngine>(),
                 sp.GetRequiredService<ISequenceResolver>(),
                 sp.GetRequiredService<ITopologyResolver>()));
+
+        // phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): bind
+        // WorkflowOptions from configuration with the record's
+        // defaults as fallback. Register the WorkflowAdmissionGate
+        // as a singleton so its partitioned limiters retain state
+        // across requests; the dispatcher consumes it via
+        // constructor injection. Conservative defaults
+        // (PerWorkflowConcurrency=4, PerTenantConcurrency=6) sit
+        // below the §5.2.2 KC-1 intake envelope so the gate refuses
+        // before the intake limiter and the pool ever come close to
+        // saturation.
+        var workflowDefaults = new WorkflowOptions();
+        var workflowOptions = new WorkflowOptions
+        {
+            PerWorkflowConcurrency = configuration.GetValue<int?>("Workflow:PerWorkflowConcurrency")
+                ?? workflowDefaults.PerWorkflowConcurrency,
+            PerTenantConcurrency = configuration.GetValue<int?>("Workflow:PerTenantConcurrency")
+                ?? workflowDefaults.PerTenantConcurrency,
+            QueueLimit = configuration.GetValue<int?>("Workflow:QueueLimit")
+                ?? workflowDefaults.QueueLimit,
+            RetryAfterSeconds = configuration.GetValue<int?>("Workflow:RetryAfterSeconds")
+                ?? workflowDefaults.RetryAfterSeconds,
+            // phase1.5-S5.2.3 / TC-7 (WORKFLOW-TIMEOUT-01): bind the
+            // declared per-step and overall execution timeouts. Defaults
+            // match the record so an absent configuration section is
+            // still safe.
+            PerStepTimeoutMs = configuration.GetValue<int?>("Workflow:PerStepTimeoutMs")
+                ?? workflowDefaults.PerStepTimeoutMs,
+            MaxExecutionMs = configuration.GetValue<int?>("Workflow:MaxExecutionMs")
+                ?? workflowDefaults.MaxExecutionMs,
+        };
+        services.AddSingleton(workflowOptions);
+        services.AddSingleton<WorkflowAdmissionGate>();
+
+        // phase1.5-S5.2.2 / KW-1 (CHAIN-ANCHOR-DECLARED-01): bind
+        // ChainAnchorOptions from configuration. The default permit
+        // limit (1) is the only value the current chain integrity
+        // invariant supports — KW-1 makes the declaration canonical
+        // and audit-visible without changing behavior. Structural
+        // restructuring of the lock is explicitly deferred.
+        var chainAnchorDefaults = new ChainAnchorOptions();
+        var chainAnchorOptions = new ChainAnchorOptions
+        {
+            PermitLimit = configuration.GetValue<int?>("ChainAnchor:PermitLimit")
+                ?? chainAnchorDefaults.PermitLimit,
+            // phase1.5-S5.2.3 / TC-2 (CHAIN-ANCHOR-WAIT-TIMEOUT-01):
+            // bind the declared wait timeout and retry-after hint
+            // alongside the existing PermitLimit. Defaults match the
+            // record so an absent configuration section is still safe.
+            WaitTimeoutMs = configuration.GetValue<int?>("ChainAnchor:WaitTimeoutMs")
+                ?? chainAnchorDefaults.WaitTimeoutMs,
+            RetryAfterSeconds = configuration.GetValue<int?>("ChainAnchor:RetryAfterSeconds")
+                ?? chainAnchorDefaults.RetryAfterSeconds,
+        };
+        services.AddSingleton(chainAnchorOptions);
 
         // Command dispatcher (pure router) + system intent dispatcher
         services.AddSingleton<ICommandDispatcher, Whyce.Runtime.Dispatcher.RuntimeCommandDispatcher>();

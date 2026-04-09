@@ -31,45 +31,76 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
     private readonly IWorkflowEngine _workflowEngine;
     private readonly IWorkflowRegistry _workflowRegistry;
     private readonly IWorkflowExecutionReplayService _replayService;
+    private readonly WorkflowAdmissionGate _workflowAdmissionGate;
 
+    // phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): the dispatcher
+    // now consults the declared workflow admission gate before
+    // invoking the workflow engine. The gate enforces per-workflow-name
+    // and per-tenant in-flight ceilings sized from WorkflowOptions
+    // and throws WorkflowSaturatedException on overflow — the typed
+    // RETRYABLE REFUSAL path mapped to HTTP 503 + Retry-After at the
+    // API edge. Pre-KC-6 the dispatcher had no concurrency primitive
+    // at the workflow seam.
     public RuntimeCommandDispatcher(
         IEngineRegistry engineRegistry,
         IServiceProvider serviceProvider,
         IEventStore eventStore,
         IWorkflowEngine workflowEngine,
         IWorkflowRegistry workflowRegistry,
-        IWorkflowExecutionReplayService replayService)
+        IWorkflowExecutionReplayService replayService,
+        WorkflowAdmissionGate workflowAdmissionGate)
     {
+        ArgumentNullException.ThrowIfNull(workflowAdmissionGate);
         _engineRegistry = engineRegistry;
         _serviceProvider = serviceProvider;
         _eventStore = eventStore;
         _workflowEngine = workflowEngine;
         _workflowRegistry = workflowRegistry;
         _replayService = replayService;
+        _workflowAdmissionGate = workflowAdmissionGate;
     }
 
-    public async Task<CommandResult> DispatchAsync(object command, CommandContext context)
+    public async Task<CommandResult> DispatchAsync(object command, CommandContext context, CancellationToken cancellationToken = default)
     {
+        // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): the
+        // dispatcher entry now accepts a CancellationToken so the
+        // upstream pipeline can carry it through. Internal helpers
+        // (ExecuteWorkflowAsync, ResumeWorkflowAsync, ExecuteEngineAsync)
+        // continue to drop the token in this pass — engine-side and
+        // workflow-step token threading is TC-5 / TC-7 / TC-8.
         if (command is WorkflowStartCommand workflowCommand)
         {
-            return await ExecuteWorkflowAsync(workflowCommand, context);
+            return await ExecuteWorkflowAsync(workflowCommand, context, cancellationToken);
         }
 
         if (command is WorkflowResumeCommand resumeCommand)
         {
-            return await ResumeWorkflowAsync(resumeCommand, context);
+            return await ResumeWorkflowAsync(resumeCommand, context, cancellationToken);
         }
 
-        return await ExecuteEngineAsync(command, context);
+        return await ExecuteEngineAsync(command, context, cancellationToken);
     }
 
-    private async Task<CommandResult> ExecuteWorkflowAsync(WorkflowStartCommand command, CommandContext context)
+    private async Task<CommandResult> ExecuteWorkflowAsync(WorkflowStartCommand command, CommandContext context, CancellationToken cancellationToken)
     {
         var definition = BuildDefinition(command.WorkflowName);
         if (definition is null)
         {
             return CommandResult.Failure($"No workflow registered for '{command.WorkflowName}'.");
         }
+
+        // phase1.5-S5.2.2 / KC-6: acquire the workflow admission lease
+        // BEFORE constructing the execution context. The using-block
+        // releases both per-workflow-name and per-tenant permits when
+        // the engine call returns (success or failure). On overflow
+        // the gate throws WorkflowSaturatedException which bubbles
+        // untouched to the API edge handler.
+        // phase1.5-S5.2.3 / TC-8 (WORKFLOW-GATE-CT-01): forward the
+        // real request/host-shutdown CancellationToken into the
+        // admission gate so a saturated gate honors caller cancellation
+        // instead of blocking on a default token.
+        using var admissionLease = await _workflowAdmissionGate.AcquireAsync(
+            command.WorkflowName, context.TenantId, cancellationToken);
 
         var executionContext = new WorkflowExecutionContext
         {
@@ -81,7 +112,9 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
             PolicyDecision = context.PolicyDecisionHash
         };
 
-        var result = await _workflowEngine.ExecuteAsync(definition, executionContext);
+        // phase1.5-S5.2.3 / TC-7: forward CT into the workflow engine so the
+        // execution-level / per-step linked CTSs honor the upstream token.
+        var result = await _workflowEngine.ExecuteAsync(definition, executionContext, cancellationToken);
 
         // Whether success or failure, lifecycle events have been accumulated on the context
         // (Started, StepCompleted*, and either Completed or Failed). Return them so the
@@ -93,7 +126,7 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
             : CommandResult.Success(events, eventsRequirePersistence: events.Count > 0);
     }
 
-    private async Task<CommandResult> ResumeWorkflowAsync(WorkflowResumeCommand command, CommandContext context)
+    private async Task<CommandResult> ResumeWorkflowAsync(WorkflowResumeCommand command, CommandContext context, CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(command.WorkflowId, out var workflowExecutionId))
         {
@@ -107,6 +140,14 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
             return CommandResult.Failure(
                 $"No workflow execution events found for '{workflowExecutionId}'.");
         }
+
+        // phase1.5-S5.2.2 / KC-6: resume is also gated. The lease is
+        // keyed by the same workflow name as the original Start so a
+        // saturated workflow refuses both new starts and resume
+        // attempts uniformly.
+        // phase1.5-S5.2.3 / TC-8: same token threading on the resume path.
+        using var admissionLease = await _workflowAdmissionGate.AcquireAsync(
+            state.WorkflowName, context.TenantId, cancellationToken);
 
         // H8 — resume is ONLY valid from the Failed state. The dispatcher does
         // not "continue running" workflows; that path was a previous semantic
@@ -175,7 +216,9 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         // non-zero cursor produces a clean continuation: no Started re-emit,
         // loop runs from cursor through end, factory produces StepCompleted +
         // Completed/Failed events as normal.
-        var result = await _workflowEngine.ExecuteAsync(definition, executionContext);
+        // phase1.5-S5.2.3 / TC-7: forward CT into the workflow engine so the
+        // execution-level / per-step linked CTSs honor the upstream token.
+        var result = await _workflowEngine.ExecuteAsync(definition, executionContext, cancellationToken);
 
         var events = executionContext.AccumulatedEvents.AsReadOnly();
         return result.IsSuccess
@@ -215,7 +258,7 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         return Convert.ToHexStringLower(bytes);
     }
 
-    private async Task<CommandResult> ExecuteEngineAsync(object command, CommandContext context)
+    private async Task<CommandResult> ExecuteEngineAsync(object command, CommandContext context, CancellationToken cancellationToken)
     {
         var engineType = _engineRegistry.ResolveEngine(command.GetType());
         if (engineType is null)
@@ -237,7 +280,10 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
             async (type, aggregateId) =>
             {
                 var aggregate = (AggregateRoot)Activator.CreateInstance(type, nonPublic: true)!;
-                var events = await _eventStore.LoadEventsAsync(aggregateId);
+                // phase1.5-S5.2.3 / TC-5: forward CT into the
+                // event-store load so PostgresEventStoreAdapter
+                // ExecuteReaderAsync honors cancellation.
+                var events = await _eventStore.LoadEventsAsync(aggregateId, cancellationToken);
                 aggregate.LoadFromHistory(events);
                 loadedVersion = aggregate.Version;
                 return aggregate;

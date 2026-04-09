@@ -10,7 +10,7 @@ namespace Whycespace.Tests.Integration.Setup;
 /// </summary>
 public sealed class NoOpWorkflowEngine : IWorkflowEngine
 {
-    public Task<WorkflowExecutionResult> ExecuteAsync(WorkflowDefinition definition, WorkflowExecutionContext context)
+    public Task<WorkflowExecutionResult> ExecuteAsync(WorkflowDefinition definition, WorkflowExecutionContext context, CancellationToken cancellationToken = default)
         => throw new InvalidOperationException("NoOpWorkflowEngine should not be invoked in non-workflow tests.");
 }
 

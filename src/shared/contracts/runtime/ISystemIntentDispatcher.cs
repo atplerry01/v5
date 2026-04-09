@@ -2,7 +2,12 @@ namespace Whyce.Shared.Contracts.Runtime;
 
 public interface ISystemIntentDispatcher
 {
-    Task<CommandResult> DispatchAsync(object command, DomainRoute route);
+    // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): same
+    // CancellationToken propagation as ICommandDispatcher.
+    // SystemIntentDispatcher forwards the token into
+    // IRuntimeControlPlane.ExecuteAsync so the entire pipeline
+    // becomes cancelable from the controller signature inward.
+    Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

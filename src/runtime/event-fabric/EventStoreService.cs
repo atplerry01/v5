@@ -16,14 +16,24 @@ public sealed class EventStoreService
         _eventStore = eventStore;
     }
 
-    public async Task AppendAsync(Guid aggregateId, IReadOnlyList<object> domainEvents, int expectedVersion = -1)
+    // phase1.5-S5.2.3 / TC-5 (POSTGRES-CT-THREAD-01): forwards the
+    // request/host-shutdown CancellationToken from EventFabric down to
+    // IEventStore so the underlying Postgres adapter Execute*Async
+    // calls honor cancellation.
+    public async Task AppendAsync(
+        Guid aggregateId,
+        IReadOnlyList<object> domainEvents,
+        int expectedVersion = -1,
+        CancellationToken cancellationToken = default)
     {
         if (domainEvents.Count == 0) return;
-        await _eventStore.AppendEventsAsync(aggregateId, domainEvents, expectedVersion);
+        await _eventStore.AppendEventsAsync(aggregateId, domainEvents, expectedVersion, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<object>> LoadAsync(Guid aggregateId)
+    public async Task<IReadOnlyList<object>> LoadAsync(
+        Guid aggregateId,
+        CancellationToken cancellationToken = default)
     {
-        return await _eventStore.LoadEventsAsync(aggregateId);
+        return await _eventStore.LoadEventsAsync(aggregateId, cancellationToken);
     }
 }

@@ -38,22 +38,28 @@ public sealed class WorkflowExecutionProjectionHandler :
 
     public ProjectionExecutionPolicy ExecutionPolicy => ProjectionExecutionPolicy.Inline;
 
-    public Task HandleAsync(IEventEnvelope envelope)
+    // phase1.5-S5.2.3 / TC-6 (PROJECTION-CT-CONTRACT-01): the envelope
+    // handler now consumes the worker's stoppingToken and forwards it
+    // through every per-type overload. The IWorkflowExecutionProjectionStore
+    // contract is unchanged in this pass — store-level token threading
+    // is a separate workstream — so the per-type overloads accept the
+    // token but do not yet forward it into the store calls.
+    public Task HandleAsync(IEventEnvelope envelope, CancellationToken cancellationToken = default)
     {
         _currentEventId = envelope.EventId;
         return envelope.Payload switch
         {
-            WorkflowExecutionStartedEventSchema started => HandleAsync(started),
-            WorkflowStepCompletedEventSchema stepCompleted => HandleAsync(stepCompleted),
-            WorkflowExecutionCompletedEventSchema completed => HandleAsync(completed),
-            WorkflowExecutionFailedEventSchema failed => HandleAsync(failed),
-            WorkflowExecutionResumedEventSchema resumed => HandleAsync(resumed),
+            WorkflowExecutionStartedEventSchema started => HandleAsync(started, cancellationToken),
+            WorkflowStepCompletedEventSchema stepCompleted => HandleAsync(stepCompleted, cancellationToken),
+            WorkflowExecutionCompletedEventSchema completed => HandleAsync(completed, cancellationToken),
+            WorkflowExecutionFailedEventSchema failed => HandleAsync(failed, cancellationToken),
+            WorkflowExecutionResumedEventSchema resumed => HandleAsync(resumed, cancellationToken),
             _ => throw new InvalidOperationException(
                 $"WorkflowExecutionProjectionHandler received unmatched event type: {envelope.Payload.GetType().Name}.")
         };
     }
 
-    public async Task HandleAsync(WorkflowExecutionStartedEventSchema e)
+    public async Task HandleAsync(WorkflowExecutionStartedEventSchema e, CancellationToken cancellationToken = default)
     {
         // phase1-gate-projection-hardening: idempotency guard. Same-event
         // replay is a no-op.
@@ -72,7 +78,7 @@ public sealed class WorkflowExecutionProjectionHandler :
         });
     }
 
-    public async Task HandleAsync(WorkflowStepCompletedEventSchema e)
+    public async Task HandleAsync(WorkflowStepCompletedEventSchema e, CancellationToken cancellationToken = default)
     {
         var existing = await _store.GetAsync(e.AggregateId);
         // phase1-gate-projection-hardening (E2): replay-safe — log-and-skip
@@ -105,7 +111,7 @@ public sealed class WorkflowExecutionProjectionHandler :
         });
     }
 
-    public async Task HandleAsync(WorkflowExecutionCompletedEventSchema e)
+    public async Task HandleAsync(WorkflowExecutionCompletedEventSchema e, CancellationToken cancellationToken = default)
     {
         var existing = await _store.GetAsync(e.AggregateId);
         if (existing is null) return;
@@ -119,7 +125,7 @@ public sealed class WorkflowExecutionProjectionHandler :
         });
     }
 
-    public async Task HandleAsync(WorkflowExecutionFailedEventSchema e)
+    public async Task HandleAsync(WorkflowExecutionFailedEventSchema e, CancellationToken cancellationToken = default)
     {
         var existing = await _store.GetAsync(e.AggregateId);
         if (existing is null) return;
@@ -134,7 +140,7 @@ public sealed class WorkflowExecutionProjectionHandler :
         });
     }
 
-    public async Task HandleAsync(WorkflowExecutionResumedEventSchema e)
+    public async Task HandleAsync(WorkflowExecutionResumedEventSchema e, CancellationToken cancellationToken = default)
     {
         // phase1.6-stabilization S0.1: resume transitions the read model from
         // Failed back to Running. The failure context (step + reason) is
