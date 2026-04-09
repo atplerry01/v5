@@ -111,6 +111,21 @@ public static class InfrastructureComposition
         services.AddSingleton(new ChainDataSource(BuildDataSource(chainPoolOptions)));
         services.AddSingleton(new ProjectionsDataSource(BuildDataSource(projectionsPoolOptions)));
 
+        // phase1.5-S5.2.4 / HC-6 (POSTGRES-POOL-HEALTH-01): canonical
+        // catalog of declared pool name → MaxPoolSize. Read by
+        // PostgresPoolSnapshotProvider so the HC-6 snapshot's
+        // MaxConnections field reflects the declared envelope rather
+        // than a guess. The catalog must be derived from the same
+        // PostgresPoolOptions instances used to build the data
+        // sources above so the two cannot drift.
+        services.AddSingleton(new Whyce.Platform.Host.Health.PostgresPoolCatalog(
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                [eventStorePoolOptions.PoolName] = eventStorePoolOptions.MaxPoolSize,
+                [chainPoolOptions.PoolName] = chainPoolOptions.MaxPoolSize,
+                [projectionsPoolOptions.PoolName] = projectionsPoolOptions.MaxPoolSize,
+            }));
+
         var redisConnectionString = configuration.GetValue<string>("Redis:ConnectionString")
             ?? throw new InvalidOperationException("Redis:ConnectionString is required. No fallback.");
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
@@ -145,6 +160,13 @@ public static class InfrastructureComposition
             ConnectionMultiplexer.Connect(redisConnectionString));
         services.AddSingleton<IRedisClient>(sp =>
             new StackExchangeRedisClient(sp.GetRequiredService<IConnectionMultiplexer>()));
+        // phase1.5-S5.2.5 / MI-1 (DISTRIBUTED-EXECUTION-SAFETY-01):
+        // distributed execution lock backed by the same Redis
+        // singleton already registered above. Singleton-scoped so
+        // the per-process owner-token map persists across requests.
+        services.AddSingleton<Whyce.Shared.Contracts.Runtime.IExecutionLockProvider>(sp =>
+            new Whyce.Platform.Host.Runtime.RedisExecutionLockProvider(
+                sp.GetRequiredService<IConnectionMultiplexer>()));
 
         // --- Policy evaluator (OPA) ---
         // phase1.5-S5.2.1 / PC-2 (OPA-CONFIG-01): bind OpaOptions from

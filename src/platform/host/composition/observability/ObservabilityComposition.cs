@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
+using StackExchange.Redis;
 using Whyce.Platform.Api.Extensions;
 using Whyce.Platform.Api.Health;
 using Whyce.Platform.Host.Health;
 using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whyce.Shared.Kernel.Domain;
 
 namespace Whyce.Platform.Host.Composition.Observability;
 
@@ -29,14 +31,38 @@ public static class ObservabilityComposition
         var opaEndpoint = configuration.GetValue<string>("OPA:Endpoint")
             ?? throw new InvalidOperationException("OPA:Endpoint is required. No fallback.");
 
-        services.AddSingleton<IHealthCheck>(_ =>
-            new PostgreSqlHealthCheck(postgresEventStoreCs));
+        // phase1.5-S5.2.4 / HC-6 (POSTGRES-POOL-HEALTH-01): the
+        // postgres health check no longer opens a connection or
+        // issues SELECT 1. It evaluates the in-process pool snapshot
+        // produced by IPostgresPoolSnapshotProvider via the canonical
+        // PostgresPoolHealthEvaluator rule. The previous connection
+        // string parameter is no longer required.
+        services.AddSingleton<IPostgresPoolSnapshotProvider>(sp =>
+            new PostgresPoolSnapshotProvider(
+                sp.GetRequiredService<PostgresPoolCatalog>(),
+                sp.GetRequiredService<IClock>()));
+        services.AddSingleton<IHealthCheck>(sp =>
+            new PostgreSqlHealthCheck(sp.GetRequiredService<IPostgresPoolSnapshotProvider>()));
 
         services.AddSingleton<IHealthCheck>(_ =>
             new KafkaHealthCheck(kafkaBootstrapServers));
 
-        services.AddSingleton<IHealthCheck>(_ =>
-            new RedisHealthCheck(redisConnectionString));
+        // phase1.5-S5.2.4 / HC-9 (REDIS-HEALTH-01): the Redis
+        // health check no longer constructs a per-call multiplexer.
+        // It consumes the host's singleton IConnectionMultiplexer
+        // (already registered by InfrastructureComposition for
+        // MI-1 / outbox / projection paths) and a single
+        // RedisHealthOptions singleton. Lightweight Ping-only
+        // probe — no set/get round trip on the /Health hot path.
+        services.AddSingleton(new RedisHealthOptions());
+        services.AddSingleton<IHealthCheck>(sp =>
+            new RedisHealthCheck(
+                sp.GetRequiredService<IConnectionMultiplexer>(),
+                sp.GetRequiredService<RedisHealthOptions>()));
+        services.AddSingleton(sp =>
+            new RedisHealthSnapshotProvider(
+                sp.GetRequiredService<IConnectionMultiplexer>(),
+                sp.GetRequiredService<IClock>()));
 
         services.AddSingleton<IHealthCheck>(_ =>
         {
@@ -99,6 +125,14 @@ public static class ObservabilityComposition
         // consumers continue to use the interfaces unchanged.
         services.AddSingleton<RuntimeStateAggregator>();
         services.AddSingleton<IRuntimeStateAggregator>(sp => sp.GetRequiredService<RuntimeStateAggregator>());
+        // phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01):
+        // singleton in-process maintenance posture. Default state
+        // is "not in maintenance"; declared operator action calls
+        // Enter() / Exit() to flip the flag. The runtime control
+        // plane consults the IRuntimeMaintenanceModeProvider
+        // contract via DI; the host owns the only implementation.
+        services.AddSingleton<RuntimeMaintenanceModeProvider>();
+        services.AddSingleton<IRuntimeMaintenanceModeProvider>(sp => sp.GetRequiredService<RuntimeMaintenanceModeProvider>());
         services.AddSingleton<HealthAggregator>();
         services.AddWhyceSwagger();
         services.AddControllers()

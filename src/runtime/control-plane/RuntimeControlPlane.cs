@@ -2,6 +2,7 @@ using Whyce.Engines.T0U.Determinism.Sequence;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.Middleware;
 using Whyce.Runtime.Topology;
+using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Determinism;
 
@@ -40,14 +41,36 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
     private readonly IDeterministicIdEngine _hsidEngine;
     private readonly ISequenceResolver _hsidSequence;
     private readonly ITopologyResolver _topologyResolver;
+    private readonly IRuntimeStateAggregator _runtimeStateAggregator;
+    private readonly IRuntimeMaintenanceModeProvider _maintenanceProvider;
+    private readonly IExecutionLockProvider _executionLockProvider;
 
+    // phase1.5-S5.2.5 / MI-1 (DISTRIBUTED-EXECUTION-SAFETY-01):
+    // canonical execution-lock TTL. 30 seconds matches the
+    // declared host shutdown drain ceiling (TC-9
+    // Host:ShutdownTimeoutSeconds default) so a request that
+    // outlives its lease is also a request that has outlived the
+    // declared drain envelope. MI-1 does NOT introduce lease
+    // renewal — that is reserved for a future workstream.
+    private static readonly TimeSpan ExecutionLockTtl = TimeSpan.FromSeconds(30);
+
+    // phase1.5-S5.2.4 / HC-7 (DEGRADED-MODE-DEFINITION-01): the
+    // control plane consults the canonical IRuntimeStateAggregator
+    // contract (NOT the host-side concrete) so the runtime → host
+    // dependency edge forbidden by DG-R5-EXCEPT-01 is preserved.
+    // The contract lives in Whyce.Shared.Contracts which Whyce.Runtime
+    // already references; the host-side concrete continues to be
+    // the only implementer.
     public RuntimeControlPlane(
         IReadOnlyList<IMiddleware> middlewares,
         ICommandDispatcher dispatcher,
         IEventFabric eventFabric,
         IDeterministicIdEngine hsidEngine,
         ISequenceResolver hsidSequence,
-        ITopologyResolver topologyResolver)
+        ITopologyResolver topologyResolver,
+        IRuntimeStateAggregator runtimeStateAggregator,
+        IRuntimeMaintenanceModeProvider maintenanceProvider,
+        IExecutionLockProvider executionLockProvider)
     {
         _middlewares = middlewares ?? throw new ArgumentNullException(nameof(middlewares));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -58,15 +81,105 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
             "HSID enforcement failure: ISequenceResolver not configured.");
         _topologyResolver = topologyResolver ?? throw new InvalidOperationException(
             "HSID enforcement failure: ITopologyResolver not configured.");
+        _runtimeStateAggregator = runtimeStateAggregator
+            ?? throw new ArgumentNullException(nameof(runtimeStateAggregator));
+        _maintenanceProvider = maintenanceProvider
+            ?? throw new ArgumentNullException(nameof(maintenanceProvider));
+        _executionLockProvider = executionLockProvider
+            ?? throw new ArgumentNullException(nameof(executionLockProvider));
     }
 
     public async Task<CommandResult> ExecuteAsync(object command, CommandContext context, CancellationToken cancellationToken = default)
     {
+        // phase1.5-S5.2.5 / MI-1 (DISTRIBUTED-EXECUTION-SAFETY-01):
+        // distributed execution lock keyed by CommandId. Acquired
+        // BEFORE the HSID prelude / pipeline so two instances
+        // attempting the same command observe deterministic
+        // ownership. Released in the finally block so a thrown
+        // exception still surrenders the lease. The lock is
+        // owner-safe by construction (Lua CAS in
+        // RedisExecutionLockProvider) so a stale process whose
+        // lease has expired cannot accidentally unlock a key that
+        // has since been re-acquired by another owner.
+        var lockKey = $"whyce:execution-lock:{context.CommandId:N}";
+        var acquired = await _executionLockProvider.TryAcquireAsync(
+            lockKey, ExecutionLockTtl, cancellationToken);
+        if (!acquired)
+        {
+            // phase1.5-S5.2.4 / HC-9 (REDIS-HEALTH-01):
+            // deterministic failure family. The lock provider is
+            // contractually exception-free; a false return means
+            // either (a) another instance currently holds the
+            // lock, or (b) Redis itself is unavailable / failed
+            // the acquire round-trip. We cannot distinguish the
+            // two from this seam without coupling the contract to
+            // a specific store, so the canonical refusal is the
+            // broader "execution_lock_unavailable" family. The
+            // host-shutdown / client-disconnect cancellation
+            // branch is reported separately so callers can
+            // distinguish a graceful drain from an infrastructure
+            // outage.
+            if (cancellationToken.IsCancellationRequested)
+                return CommandResult.Failure("execution_cancelled");
+            return CommandResult.Failure("execution_lock_unavailable");
+        }
+
+        try
+        {
         // HSID v2.1 PRELUDE — out-of-band of the locked 8-middleware pipeline.
         // Stamps a compact deterministic correlation ID before any middleware
         // runs, so downstream components (tracing, audit, chain anchor) can
         // reference it.
         await StampHsidAsync(command, context);
+
+        // phase1.5-S5.2.4 / HC-7 (DEGRADED-MODE-DEFINITION-01):
+        // stamp the dispatch-time degraded posture onto the
+        // CommandContext BEFORE the middleware pipeline runs so
+        // tracing, metrics, audit, and any downstream observer can
+        // correlate request behavior with the live runtime state.
+        // GetDegradedMode() is dispatch-cheap by contract (no
+        // IHealthCheck fan-out). HC-7 is non-blocking — a degraded
+        // posture does not alter dispatch semantics; the tag exists
+        // for awareness only. Stamped exactly once (write-once on
+        // CommandContext); a defensive null-check tolerates the
+        // unlikely case of a pre-stamped context (e.g. test
+        // harnesses).
+        if (context.DegradedMode is null)
+        {
+            context.DegradedMode = _runtimeStateAggregator.GetDegradedMode();
+        }
+
+        // phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01):
+        // enforcement gate. Evaluated BEFORE the middleware
+        // pipeline so a maintenance hard-block or a
+        // restricted-during-degraded hard-block refuses the command
+        // without invoking validation, policy, idempotency, or any
+        // engine work. The decision is computed by the pure
+        // RuntimeEnforcementGate so the rule has a single owner
+        // and is unit-testable in isolation. Returned failures use
+        // CommandResult.Failure with a deterministic low-cardinality
+        // reason — never throws.
+        var maintenance = _maintenanceProvider.Get();
+        var degraded = context.DegradedMode ?? RuntimeDegradedMode.None;
+        var decision = RuntimeEnforcementGate.Evaluate(maintenance, degraded, command);
+        switch (decision.Outcome)
+        {
+            case RuntimeEnforcementOutcome.BlockMaintenance:
+                return CommandResult.Failure(decision.Reason!);
+            case RuntimeEnforcementOutcome.BlockRestricted:
+                return CommandResult.Failure(decision.Reason!);
+            case RuntimeEnforcementOutcome.ProceedRestricted:
+                // Soft tag — the dispatch proceeds normally; the
+                // tag exists so middleware / observability / audit
+                // can correlate request behavior with the live
+                // degraded posture without re-evaluating the rule.
+                if (!context.IsExecutionRestricted)
+                    context.IsExecutionRestricted = true;
+                break;
+            case RuntimeEnforcementOutcome.Proceed:
+            default:
+                break;
+        }
 
         // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): the
         // pipeline closure shape is now Func<CancellationToken,
@@ -130,6 +243,17 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
         }
 
         return result;
+        }
+        finally
+        {
+            // phase1.5-S5.2.5 / MI-1: ALWAYS release the lock, even
+            // on a thrown exception. ReleaseAsync is owner-safe and
+            // never throws on a missing key, so this is unconditionally
+            // safe to call. Exceptions from ExecuteAsync continue to
+            // propagate to the caller — the lock release is purely
+            // additive.
+            await _executionLockProvider.ReleaseAsync(lockKey);
+        }
     }
 
     /// <summary>

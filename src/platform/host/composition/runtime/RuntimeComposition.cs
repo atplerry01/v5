@@ -149,7 +149,10 @@ public static class RuntimeComposition
                 sp.GetRequiredService<IEventFabric>(),
                 sp.GetRequiredService<IDeterministicIdEngine>(),
                 sp.GetRequiredService<ISequenceResolver>(),
-                sp.GetRequiredService<ITopologyResolver>()));
+                sp.GetRequiredService<ITopologyResolver>(),
+                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IRuntimeStateAggregator>(),
+                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IRuntimeMaintenanceModeProvider>(),
+                sp.GetRequiredService<Whyce.Shared.Contracts.Runtime.IExecutionLockProvider>()));
 
         // phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): bind
         // WorkflowOptions from configuration with the record's

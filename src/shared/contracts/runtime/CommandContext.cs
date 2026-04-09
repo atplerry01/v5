@@ -108,6 +108,51 @@ public sealed record CommandContext
         }
     }
 
+    // --- phase1.5-S5.2.4 / HC-7 (DEGRADED-MODE-DEFINITION-01) ---
+    // Write-once snapshot of the runtime's Degraded-class posture
+    // at the moment dispatch began. Stamped by RuntimeControlPlane
+    // BEFORE the middleware pipeline runs so observability /
+    // tracing / audit can correlate request behavior with the live
+    // degraded reasons. Non-blocking: a Degraded posture does NOT
+    // alter dispatch semantics in HC-7 — enforcement is reserved
+    // for a later workstream. Locked after first set so middleware
+    // cannot rewrite the dispatch-time observation.
+
+    private Whyce.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? _degradedMode;
+    public Whyce.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? DegradedMode
+    {
+        get => _degradedMode;
+        set
+        {
+            if (_degradedMode is not null)
+                throw new InvalidOperationException(
+                    "DegradedMode is write-once. Already locked.");
+            _degradedMode = value;
+        }
+    }
+
+    // --- phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01) ---
+    // Write-once tag set by the runtime control plane's enforcement
+    // gate when the runtime is Degraded and the command was admitted
+    // anyway (i.e. the command does NOT implement
+    // IRestrictedDuringDegraded). Strict typed field rather than a
+    // free-form metadata bag so the existing CommandContext
+    // write-once invariant is preserved. Default false; set true
+    // exactly once on the soft-restriction branch of the gate.
+
+    private bool? _isExecutionRestricted;
+    public bool IsExecutionRestricted
+    {
+        get => _isExecutionRestricted ?? false;
+        set
+        {
+            if (_isExecutionRestricted is not null)
+                throw new InvalidOperationException(
+                    "IsExecutionRestricted is write-once. Already locked.");
+            _isExecutionRestricted = value;
+        }
+    }
+
     // --- HSID v2.1 (write-once, locked after RuntimeControlPlane prelude) ---
 
     private string? _hsid;

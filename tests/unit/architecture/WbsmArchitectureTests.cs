@@ -479,27 +479,111 @@ public sealed class WbsmArchitectureTests
             Path.Combine(SrcRoot, "projections"),
         };
 
+        // Phase 1.5 closure Patch B1 (2026-04-09): the predicate now
+        // partitions hits into "catch clauses" and "is-pattern uses".
+        // For catch clauses, a pure-rethrow body
+        // (e.g. `catch (ConcurrencyConflictException) { outcome = "x"; throw; }`)
+        // is permitted as observability instrumentation — the
+        // exception still travels untouched to the edge handler.
+        // The is-pattern matches and any catch-with-non-rethrow body
+        // remain hard violations. See guard rule R-RT-10 in
+        // claude/guards/phase1.5-runtime.guard.md.
+        var catchRegex = new Regex(@"catch\s*\(\s*ConcurrencyConflictException\b");
+        var isPatternRegex = new Regex(@"\bis\s+ConcurrencyConflictException\b");
+
         var hits = new System.Collections.Generic.List<string>();
         foreach (var root in roots)
         {
-            hits.AddRange(ScanCode(root,
-                new Regex(@"catch\s*\(\s*ConcurrencyConflictException\b")));
-            hits.AddRange(ScanCode(root,
-                new Regex(@"\bis\s+ConcurrencyConflictException\b")));
+            foreach (var hit in ScanCode(root, catchRegex))
+            {
+                if (!IsPureRethrowCatchHit(hit)) hits.Add(hit);
+            }
+            hits.AddRange(ScanCode(root, isPatternRegex));
         }
 
         // Same scan over src/platform EXCLUDING the middleware directory.
         var middlewarePrefix = Path.Combine(SrcRoot, "platform", "api", "middleware")
             + Path.DirectorySeparatorChar;
-        var platformHits = ScanCode(Path.Combine(SrcRoot, "platform"),
-                new Regex(@"catch\s*\(\s*ConcurrencyConflictException\b|\bis\s+ConcurrencyConflictException\b"))
-            .Where(line => !line.StartsWith(middlewarePrefix, System.StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        hits.AddRange(platformHits);
+        var platformRoot = Path.Combine(SrcRoot, "platform");
+        foreach (var hit in ScanCode(platformRoot, catchRegex))
+        {
+            if (hit.StartsWith(middlewarePrefix, System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (!IsPureRethrowCatchHit(hit)) hits.Add(hit);
+        }
+        foreach (var hit in ScanCode(platformRoot, isPatternRegex))
+        {
+            if (hit.StartsWith(middlewarePrefix, System.StringComparison.OrdinalIgnoreCase)) continue;
+            hits.Add(hit);
+        }
 
         Assert.True(hits.Count == 0,
             "ConcurrencyConflictException must travel untouched from the event store " +
             "to the API middleware. Catches found:\n" + string.Join("\n", hits));
+    }
+
+    /// <summary>
+    /// Phase 1.5 closure Patch B1 (2026-04-09) / R-RT-10: returns true
+    /// when the catch clause at the given ScanCode hit is a pure
+    /// rethrow — i.e. its body contains a bare <c>throw;</c> and
+    /// neither <c>return</c> nor <c>throw new</c>. Pure-rethrow
+    /// catches are permitted as observability instrumentation; any
+    /// other catch shape is rejected by the calling test.
+    ///
+    /// Hit format from <c>ScanCode</c>: <c>"{filePath}:{lineNumber}: {trimmed}"</c>.
+    /// </summary>
+    private static bool IsPureRethrowCatchHit(string hit)
+    {
+        // Parse "{filePath}:{lineNumber}: ..." — file path may
+        // contain ':' on Windows (drive prefix), so we skip index 2
+        // when locating the post-path colon.
+        var pathColon = hit.IndexOf(':', 2);          // colon after the file path (post drive letter)
+        if (pathColon < 0) return false;
+        var lineColon = hit.IndexOf(':', pathColon + 1); // colon after the line number
+        if (lineColon < 0) return false;
+        var filePath = hit.Substring(0, pathColon);
+        var lineSpan = hit.Substring(pathColon + 1, lineColon - pathColon - 1);
+        if (!int.TryParse(lineSpan, out var lineNumber)) return false;
+
+        if (!File.Exists(filePath)) return false;
+        var source = File.ReadAllText(filePath);
+        var lineStarts = new System.Collections.Generic.List<int> { 0 };
+        for (int i = 0; i < source.Length; i++)
+            if (source[i] == '\n') lineStarts.Add(i + 1);
+        if (lineNumber - 1 >= lineStarts.Count) return false;
+        var searchFrom = lineStarts[lineNumber - 1];
+
+        // Find the catch keyword from the line start.
+        var catchIdx = source.IndexOf("catch", searchFrom, System.StringComparison.Ordinal);
+        if (catchIdx < 0) return false;
+        // Find the opening '{' that begins the catch body.
+        var openBrace = source.IndexOf('{', catchIdx);
+        if (openBrace < 0) return false;
+        // Walk braces to find the matching close.
+        int depth = 0;
+        int closeBrace = -1;
+        for (int i = openBrace; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}')
+            {
+                depth--;
+                if (depth == 0) { closeBrace = i; break; }
+            }
+        }
+        if (closeBrace < 0) return false;
+        var body = source.Substring(openBrace + 1, closeBrace - openBrace - 1);
+
+        // Pure rethrow criteria:
+        //   - contains a bare `throw;` (rethrow), AND
+        //   - does NOT contain `throw new ` (transformed exception), AND
+        //   - does NOT contain `return` (alternate control flow)
+        // The body may contain assignments / method calls before
+        // the throw — those are observability-only side effects
+        // and do not affect exception flow.
+        var hasBareThrow = Regex.IsMatch(body, @"(^|[^\w])throw\s*;");
+        var hasThrowNew = Regex.IsMatch(body, @"\bthrow\s+new\b");
+        var hasReturn = Regex.IsMatch(body, @"\breturn\b");
+        return hasBareThrow && !hasThrowNew && !hasReturn;
     }
 
     // ─────────────────────────────────────────────────────────────────────

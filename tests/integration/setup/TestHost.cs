@@ -17,12 +17,60 @@ using Whyce.Runtime.Middleware.PostPolicy;
 using Whyce.Runtime.Middleware.PrePolicy;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
+using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
 using Whycespace.Tests.Shared;
 using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
 
 namespace Whycespace.Tests.Integration.Setup;
+
+/// <summary>
+/// phase1.5-S5.2.4 / HC-7: minimal IRuntimeStateAggregator stub for
+/// integration tests. Always reports Healthy / not-degraded — the
+/// integration suite does not exercise health/readiness aggregation.
+/// </summary>
+internal sealed class TestRuntimeStateAggregator : IRuntimeStateAggregator
+{
+    public Task<RuntimeStateSnapshot> GetCurrentStateAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new RuntimeStateSnapshot(RuntimeState.Healthy, Array.Empty<string>()));
+
+    public RuntimeStateSnapshot ComputeFromResults(IReadOnlyList<HealthCheckResult> results)
+        => new(RuntimeState.Healthy, Array.Empty<string>());
+
+    public RuntimeDegradedMode GetDegradedMode() => RuntimeDegradedMode.None;
+}
+
+/// <summary>
+/// phase1.5-S5.2.4 / HC-8: minimal IRuntimeMaintenanceModeProvider
+/// stub for integration tests. Always reports "not in maintenance"
+/// so dispatch behavior is unchanged from pre-HC-8.
+/// </summary>
+internal sealed class TestRuntimeMaintenanceModeProvider : IRuntimeMaintenanceModeProvider
+{
+    public RuntimeMaintenanceMode Get() => RuntimeMaintenanceMode.None;
+}
+
+/// <summary>
+/// phase1.5-S5.2.5 / MI-1: minimal in-process IExecutionLockProvider
+/// stub for integration tests. Implements the same SET-NX-PX
+/// semantics in memory so the integration suite exercises the
+/// lock acquire/release flow without spinning up Redis.
+/// </summary>
+internal sealed class InMemoryExecutionLockProvider : Whyce.Shared.Contracts.Runtime.IExecutionLockProvider
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _held =
+        new(StringComparer.Ordinal);
+
+    public Task<bool> TryAcquireAsync(string key, TimeSpan ttl, CancellationToken ct)
+        => Task.FromResult(_held.TryAdd(key, 1));
+
+    public Task ReleaseAsync(string key)
+    {
+        _held.TryRemove(key, out _);
+        return Task.CompletedTask;
+    }
+}
 
 /// <summary>
 /// Builds a fully-wired RuntimeControlPlane for integration tests.
@@ -163,13 +211,25 @@ public sealed class TestHost
         var topologyResolver = new TopologyResolver(
             new InMemoryStructureRegistry(Array.Empty<StructureNode>()));
 
+        // phase1.5-S5.2.4 / HC-7: integration TestHost provides a
+        // no-op IRuntimeStateAggregator that always reports
+        // not-degraded. Health/readiness aggregation is not under
+        // test here; the constructor parameter is satisfied via
+        // RuntimeDegradedMode.None so dispatch behavior is
+        // unchanged.
+        var stateAggregator = new TestRuntimeStateAggregator();
+        var maintenanceProvider = new TestRuntimeMaintenanceModeProvider();
+        var lockProvider = new InMemoryExecutionLockProvider();
         var controlPlane = new RuntimeControlPlane(
             recordedMiddlewares,
             dispatcher,
             eventFabric,
             hsidEngine,
             sequenceResolver,
-            topologyResolver);
+            topologyResolver,
+            stateAggregator,
+            maintenanceProvider,
+            lockProvider);
 
         return new TestHost(controlPlane, eventStore, chainAnchor, outbox, recorder, clock, idGenerator);
     }

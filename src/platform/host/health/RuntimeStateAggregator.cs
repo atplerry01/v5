@@ -73,11 +73,22 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
     /// </summary>
     private const string WorkersHealthCheckName = "workers";
 
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-9 (REDIS-HEALTH-01): canonical name of
+    /// the Redis IHealthCheck. Recognised by the aggregator and
+    /// folded into NotReady ("redis_unhealthy") or Degraded
+    /// ("redis_degraded_latency") via specific reasons rather than
+    /// the generic critical_healthcheck_failed bucket. Mirrors the
+    /// HC-6 "postgres" exclusion pattern.
+    /// </summary>
+    private const string RedisHealthCheckName = "redis";
+
     private readonly IEnumerable<IHealthCheck> _healthChecks;
     private readonly OpaPolicyEvaluator _opaEvaluator;
     private readonly WhyceChainPostgresAdapter _chainAdapter;
     private readonly IOutboxDepthSnapshot _outboxSnapshot;
     private readonly OutboxOptions _outboxOptions;
+    private readonly IPostgresPoolSnapshotProvider _postgresPools;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IClock _clock;
 
@@ -87,6 +98,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         WhyceChainPostgresAdapter chainAdapter,
         IOutboxDepthSnapshot outboxSnapshot,
         OutboxOptions outboxOptions,
+        IPostgresPoolSnapshotProvider postgresPools,
         IHostApplicationLifetime lifetime,
         IClock clock)
     {
@@ -95,6 +107,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         ArgumentNullException.ThrowIfNull(chainAdapter);
         ArgumentNullException.ThrowIfNull(outboxSnapshot);
         ArgumentNullException.ThrowIfNull(outboxOptions);
+        ArgumentNullException.ThrowIfNull(postgresPools);
         ArgumentNullException.ThrowIfNull(lifetime);
         ArgumentNullException.ThrowIfNull(clock);
 
@@ -103,6 +116,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         _chainAdapter = chainAdapter;
         _outboxSnapshot = outboxSnapshot;
         _outboxOptions = outboxOptions;
+        _postgresPools = postgresPools;
         _lifetime = lifetime;
         _clock = clock;
     }
@@ -140,9 +154,51 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         }
 
         // Rule 2 — any critical health check failure is NotReady.
-        if (results.Any(r => !r.IsHealthy && CriticalHealthCheckNames.Contains(r.Name)))
+        // HC-6: the "postgres" check is excluded here because pool
+        // capacity rules above already emit specific reasons; the
+        // generic critical_healthcheck_failed bucket would otherwise
+        // double-count and mask the actionable identifier.
+        if (results.Any(r => !r.IsHealthy
+                             && CriticalHealthCheckNames.Contains(r.Name)
+                             && !string.Equals(r.Name, "postgres", StringComparison.OrdinalIgnoreCase)
+                             && !string.Equals(r.Name, RedisHealthCheckName, StringComparison.OrdinalIgnoreCase)))
         {
             reasons.Add("critical_healthcheck_failed");
+            return new RuntimeStateSnapshot(RuntimeState.NotReady, reasons);
+        }
+
+        // Rule 2c (HC-9 / REDIS-HEALTH-01) — Redis is a critical
+        // dispatch dependency since MI-1 (every command acquires a
+        // distributed execution lock through Redis). A failed
+        // RedisHealthCheck must surface as the specific reason
+        // "redis_unhealthy" rather than as the generic
+        // critical_healthcheck_failed bucket so operators see an
+        // actionable cause. The "redis" check is consequently
+        // EXCLUDED from the critical-name scan and the
+        // noncritical-Degraded scan below.
+        var redisResult = results.FirstOrDefault(r =>
+            string.Equals(r.Name, RedisHealthCheckName, StringComparison.OrdinalIgnoreCase));
+        if (redisResult is { IsHealthy: false })
+        {
+            reasons.Add("redis_unhealthy");
+            return new RuntimeStateSnapshot(RuntimeState.NotReady, reasons);
+        }
+
+        // Rule 2b (HC-6 / POSTGRES-POOL-HEALTH-01) — postgres pool
+        // capacity rule. Evaluated via the canonical
+        // PostgresPoolHealthEvaluator over the in-process snapshot
+        // so the same rule that drives PostgreSqlHealthCheck also
+        // surfaces canonical reason identifiers here. Specific
+        // postgres pool reasons take precedence over the synthetic
+        // critical_healthcheck_failed bucket so the operator sees
+        // the actionable cause (exhaustion vs failures vs high
+        // wait) rather than the generic name. The "postgres" check
+        // is consequently EXCLUDED from the critical-name scan
+        // below to avoid double-counting on the same incident.
+        var postgresPoolResult = PostgresPoolHealthEvaluator.Evaluate(_postgresPools.GetSnapshot());
+        if (postgresPoolResult.State == PostgresPoolHealthState.NotReady)
+        {
+            foreach (var r in postgresPoolResult.Reasons) reasons.Add(r);
             return new RuntimeStateSnapshot(RuntimeState.NotReady, reasons);
         }
 
@@ -177,6 +233,25 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         // independent contributors may be present at once; the rule
         // collects them all into the same Degraded state with
         // distinct canonical reason identifiers.
+        // HC-9: Redis high-latency contributes to Degraded. The
+        // RedisHealthCheck reports IsHealthy=true with
+        // Status="DEGRADED" when the ping latency exceeds the
+        // configured threshold; the aggregator surfaces the
+        // canonical "redis_degraded_latency" reason for that case.
+        if (redisResult is { IsHealthy: true } && string.Equals(redisResult.Status, "DEGRADED", StringComparison.OrdinalIgnoreCase))
+        {
+            reasons.Add("redis_degraded_latency");
+        }
+
+        // HC-6: postgres high-wait contributes to Degraded alongside
+        // the other infrastructure-pressure signals. Same evaluator
+        // result we already computed above; we just consume the
+        // Degraded branch here so the rule lives in one place.
+        if (postgresPoolResult.State == PostgresPoolHealthState.Degraded)
+        {
+            foreach (var r in postgresPoolResult.Reasons) reasons.Add(r);
+        }
+
         if (_opaEvaluator.IsBreakerOpen)
         {
             reasons.Add("opa_breaker_open");
@@ -195,7 +270,9 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
 
         if (results.Any(r => !r.IsHealthy
                              && !CriticalHealthCheckNames.Contains(r.Name)
-                             && !string.Equals(r.Name, WorkersHealthCheckName, StringComparison.OrdinalIgnoreCase)))
+                             && !string.Equals(r.Name, WorkersHealthCheckName, StringComparison.OrdinalIgnoreCase)
+                             && !string.Equals(r.Name, "postgres", StringComparison.OrdinalIgnoreCase)
+                             && !string.Equals(r.Name, RedisHealthCheckName, StringComparison.OrdinalIgnoreCase)))
         {
             reasons.Add("noncritical_healthcheck_failed");
         }
@@ -206,5 +283,46 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         }
 
         return new RuntimeStateSnapshot(RuntimeState.Healthy, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-7 (DEGRADED-MODE-DEFINITION-01):
+    /// dispatch-cheap degraded posture. Evaluates ONLY the
+    /// in-process Degraded-class signals — host_draining is
+    /// excluded (NotReady), critical_healthcheck_failed is excluded
+    /// (NotReady), worker_unhealthy is excluded (NotReady),
+    /// outbox_snapshot_stale is excluded (NotReady, HC-1), and
+    /// postgres pool exhaustion / acquisition_failures are
+    /// excluded (NotReady, HC-6).
+    ///
+    /// <c>noncritical_healthcheck_failed</c> is intentionally NOT
+    /// evaluated here because it requires running the IHealthCheck
+    /// fan-out (N parallel dependency pings). The dispatch hot
+    /// path cannot afford that cost on every command. /Health and
+    /// /ready continue to surface that reason via the existing
+    /// <see cref="ComputeFromResults"/> path. The dispatch-time
+    /// awareness tag is honestly narrowed.
+    /// </summary>
+    public RuntimeDegradedMode GetDegradedMode()
+    {
+        var candidates = new List<string>(4);
+
+        if (_opaEvaluator.IsBreakerOpen)
+            candidates.Add("opa_breaker_open");
+
+        if (_chainAdapter.IsBreakerOpen)
+            candidates.Add("chain_anchor_breaker_open");
+
+        if (_outboxSnapshot.HasObservation
+            && _outboxSnapshot.CurrentDepth >= _outboxOptions.HighWaterMark)
+            candidates.Add("outbox_over_high_water_mark");
+
+        var pgResult = PostgresPoolHealthEvaluator.Evaluate(_postgresPools.GetSnapshot());
+        if (pgResult.State == PostgresPoolHealthState.Degraded)
+        {
+            foreach (var r in pgResult.Reasons) candidates.Add(r);
+        }
+
+        return RuntimeDegradedMode.From(candidates);
     }
 }

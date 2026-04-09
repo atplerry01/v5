@@ -26,4 +26,17 @@ public interface IRuntimeStateAggregator
     /// not duplicated.
     /// </summary>
     RuntimeStateSnapshot ComputeFromResults(IReadOnlyList<HealthCheckResult> results);
+
+    /// <summary>
+    /// phase1.5-S5.2.4 / HC-7 (DEGRADED-MODE-DEFINITION-01):
+    /// dispatch-cheap evaluation of the runtime's current
+    /// Degraded-class posture. Reads only in-process state
+    /// (breakers, outbox snapshot, postgres pool snapshot) — does
+    /// NOT run the <see cref="IHealthCheck"/> fan-out, so it is
+    /// safe to call on the per-command dispatch hot path. The
+    /// returned reason list is filtered to the canonical Degraded
+    /// vocabulary in <see cref="RuntimeDegradedMode.CanonicalReasons"/>;
+    /// NotReady-class identifiers are never returned here.
+    /// </summary>
+    RuntimeDegradedMode GetDegradedMode();
 }

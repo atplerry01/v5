@@ -139,12 +139,22 @@ while IFS= read -r f; do
 done < <(find "$SRC" -type f -name '*Adapter*.cs' 2>/dev/null)
 
 # ---------- C5: shared kernel I/O ----------
+# Phase 1.5 closure Patch A (2026-04-09): mirror the §5.1.2 Step C-G
+# comment-line exclusion that the R-DOM-01 / DG-R5-HOST-DOMAIN-FORBIDDEN
+# predicates already enforce. Doc comments inside src/shared/contracts
+# explaining which host-side concrete consumes a given options record
+# (e.g. "this OutboxOptions is read by Npgsql-backed PostgresOutboxAdapter")
+# are documentation, not a real shared-kernel I/O leak. The strip is
+# strict: a line whose first non-whitespace token is //, ///, /*, or *
+# is dropped before the I/O-marker grep runs.
 if [ -d "$SRC/shared" ]; then
   io_hits="$(grep -RInE \
               --include='*.cs' \
               --exclude-dir=obj --exclude-dir=bin \
               'Npgsql|Confluent\.Kafka|StackExchange\.Redis|Minio|System\.Net\.Http|System\.IO\.File' \
-              "$SRC/shared" 2>/dev/null || true)"
+              "$SRC/shared" 2>/dev/null \
+              | grep -vE ':[[:space:]]*(///|//|\*/|/\*|\*)' \
+              || true)"
   if [ -n "$io_hits" ]; then
     while IFS= read -r line; do
       report "shared kernel I/O leak: $line"

@@ -589,7 +589,28 @@ Evidence Required:
 - Accurate readiness behavior under subsystem failure
 
 Status:
-- NOT STARTED
+- HC-1..HC-8 COMPLETE — workstream §5.2.4 implementation steps closed; final canonical audit + closure prompt outstanding.
+
+Sub-step progress:
+- HC-1 ✅ COMPLETED — OutboxDepthSnapshot freshness (LastUpdatedAt + IsFresh) + fail-safe stale-snapshot refusal in PostgresOutboxAdapter (closes H19).
+- HC-2 ✅ COMPLETED — Canonical RuntimeState / RuntimeStateSnapshot / IRuntimeStateAggregator + concrete RuntimeStateAggregator owning the state rule; HealthAggregator delegates; /Health payload carries runtimeState + reasons; OpaPolicyEvaluator and WhyceChainPostgresAdapter expose side-effect-free IsBreakerOpen.
+- HC-3 ✅ COMPLETED — Canonical /live and /ready endpoints on HealthController; /ready consumes IRuntimeStateAggregator and flips on host drain.
+- HC-4 ✅ COMPLETED — HealthController exempted from PC-1 rate limiter via [DisableRateLimiting]; /Health, /Health/ping, /live, /ready are now poll-safe.
+- HC-5 ✅ COMPLETED — IWorkerLivenessRegistry + WorkerLivenessRegistry + WorkersHealthCheck + WorkerHealthOptions; OutboxDepthSampler / KafkaOutboxPublisher / GenericKafkaProjectionConsumerWorker each call RecordSuccess on the success path; RuntimeStateAggregator emits NotReady + "worker_unhealthy".
+- HC-6 ✅ COMPLETED — PostgreSqlHealthCheck upgraded to capacity-aware readiness using pool envelope metrics (no DB probing). Integrated with RuntimeStateAggregator signals.
+  - Post-implementation patch: windowed failure detection, config guard, deterministic ordering, timestamp consistency.
+- HC-7 ✅ COMPLETED — Degraded mode defined and propagated through runtime control plane with non-blocking enforcement and observability tagging.
+- HC-8 ✅ COMPLETED — Maintenance mode and degraded enforcement gate implemented in runtime control plane with deterministic blocking and restricted execution tagging.
+- HC-9 ✅ COMPLETED — Redis health visibility (lightweight ping probe via singleton multiplexer), runtime state aggregator emits redis_unhealthy / redis_degraded_latency, RedisExecutionLockProvider swallows store exceptions, control plane returns deterministic execution_lock_unavailable / execution_cancelled.
+
+§5.2.4 closure (2026-04-09): canonical audit suite executed under
+`claude/audits/phase1.5/`; final report
+`claude/audits/phase1.5/phase1.5-final.audit.md` SIGNED PASS after
+Patches A (dependency-check.sh C5 comment exclusion) and B1
+(WbsmArchitectureTests catch+rethrow allowance) closed both
+pre-existing blockers without touching production source. Guard
+`claude/guards/phase1.5-runtime.guard.md` LOCKED with rules
+R-RT-01..R-RT-10. Status: ✅ PASS.
 
 ## 5.2.5 Multi-Instance Runtime Safety
 Objective:
@@ -613,7 +634,10 @@ Evidence Required:
 - Stable distributed behavior
 
 Status:
-- NOT STARTED
+- IN PROGRESS — MI-1 complete; remaining sub-steps outstanding.
+
+Sub-step progress:
+- MI-1 ✅ COMPLETED — Distributed execution lock introduced using Redis SET NX PX pattern to prevent concurrent command execution across instances.
 
 ---
 
