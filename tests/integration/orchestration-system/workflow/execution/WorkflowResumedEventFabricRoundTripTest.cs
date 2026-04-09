@@ -11,6 +11,7 @@ using Whycespace.Tests.Integration.Setup;
 using Whycespace.Tests.Shared;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Engines.T0U.WhyceChain.Engine;
+using Whyce.Shared.Contracts.Infrastructure.Admission;
 
 namespace Whycespace.Tests.Integration.OrchestrationSystem.Workflow.Execution;
 
@@ -58,7 +59,9 @@ public sealed class WorkflowResumedEventFabricRoundTripTest
 
         var fabric = new EventFabric(
             new EventStoreService(eventStore),
-            new ChainAnchorService(new WhyceChainEngine(), chainAnchor),
+            // phase1.5-S5.2.5 / TB-1: ChainAnchorService now requires
+            // ChainAnchorOptions (KW-1 / TC-2). Defaults match production.
+            new ChainAnchorService(new WhyceChainEngine(), chainAnchor, new ChainAnchorOptions()),
             new OutboxService(outbox),
             schemaRegistry,
             new TopicNameResolver(),

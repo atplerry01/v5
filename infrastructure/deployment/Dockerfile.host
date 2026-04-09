@@ -1,0 +1,68 @@
+# phase1.5-S5.5 / Stage A — multi-stage Dockerfile for Whycespace.Host.
+#
+# Build context expectation: the repo ROOT (NOT the deployment directory)
+# so the COPY paths can reach `src/` directly. The compose file sets the
+# context accordingly.
+#
+# Stages:
+#   1. sdk    — restore + publish, layered for cache reuse
+#   2. runtime — minimal aspnet runtime image with only the published bits
+#
+# The runtime image binds Kestrel on 0.0.0.0:8080 (compose maps host ports).
+# All configuration arrives via env vars (Postgres__ConnectionString,
+# Postgres__ChainConnectionString, Postgres__ProjectionsConnectionString,
+# Redis__ConnectionString, Kafka__BootstrapServers, OPA__Endpoint), per
+# the canonical seams in src/platform/host/composition/infrastructure/
+# InfrastructureComposition.cs.
+
+# ─── Build stage ─────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS sdk
+WORKDIR /src
+
+# Copy csproj files first so `dotnet restore` is cache-friendly. Layout
+# mirrors the repo: src/{domain,engines,projections,runtime,shared,
+# systems}/*.csproj plus src/platform/{api,host}/*.csproj.
+COPY src/domain/Whycespace.Domain.csproj      src/domain/
+COPY src/engines/Whycespace.Engines.csproj    src/engines/
+COPY src/projections/Whycespace.Projections.csproj src/projections/
+COPY src/runtime/Whycespace.Runtime.csproj    src/runtime/
+COPY src/shared/Whycespace.Shared.csproj      src/shared/
+COPY src/systems/Whycespace.Systems.csproj    src/systems/
+COPY src/platform/api/Whycespace.Api.csproj   src/platform/api/
+COPY src/platform/host/Whycespace.Host.csproj src/platform/host/
+
+RUN dotnet restore src/platform/host/Whycespace.Host.csproj
+
+# Now bring in the full source and publish.
+COPY src/ src/
+
+RUN dotnet publish src/platform/host/Whycespace.Host.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+# ─── Runtime stage ───────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+
+# NOTE: an earlier revision of this Dockerfile installed `curl` here so
+# the compose healthcheck could probe /live. The apt-get install
+# repeatedly hit transient archive.ubuntu.com 400-Bad-Request flakes
+# during Stage A bring-up, blocking the build for reasons unrelated to
+# the Whycespace runtime. Resolution: drop the curl dependency entirely
+# and run the healthcheck via bash's built-in /dev/tcp pseudo-device,
+# which needs no extra packages. The aspnet image already ships bash,
+# so the healthcheck stays in-container with zero new layers and zero
+# package-manager surface. The healthcheck only proves Kestrel is
+# accepting TCP connections on 8080, which is the same liveness signal
+# /live would have given.
+
+COPY --from=sdk /app/publish ./
+
+# Bind Kestrel on all interfaces, port 8080 (non-privileged).
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "Whycespace.Host.dll"]

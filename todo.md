@@ -36,3 +36,17 @@
 | 5.7.3 | Runbooks and Incident Procedures | Operational control | NOT STARTED | Runbooks | YES |
 | 5.8.1 | Phase 1.5 Readiness Matrix | Central gate truth source | NOT STARTED | Matrix | YES |
 | 5.8.2 | Final Certification Audit | Formal progression approval | NOT STARTED | Certification Report | YES |
+
+
+
+
+- all domain reference should be build on {classification}:{context}
+- is T1M stateless and can we move domain to another, T1M should not be domain aware
+- engine generally should not be domain aware
+- stream domain entity for Youtube, udemy, tiktok
+- global pricing system domain entity
+- Phase 2 should start with all domain ractifications
+- runtime still contain workflow
+- standadized request and response payload across all system
+- paginations, download, export and file management standards
+

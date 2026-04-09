@@ -24,9 +24,16 @@ public sealed class RecordingMiddleware : IMiddleware
         _recorder = recorder;
     }
 
-    public Task<CommandResult> ExecuteAsync(CommandContext context, object command, Func<Task<CommandResult>> next)
+    // phase1.5-S5.2.5 / TB-1: aligned with the post-TC-1 IMiddleware
+    // contract that threads CancellationToken through the pipeline
+    // (next is now Func<CancellationToken, Task<CommandResult>>).
+    public Task<CommandResult> ExecuteAsync(
+        CommandContext context,
+        object command,
+        Func<CancellationToken, Task<CommandResult>> next,
+        CancellationToken cancellationToken = default)
     {
         _recorder.Record(_name);
-        return _inner.ExecuteAsync(context, command, next);
+        return _inner.ExecuteAsync(context, command, next, cancellationToken);
     }
 }

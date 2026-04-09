@@ -49,8 +49,14 @@ public sealed class PostgresEventStoreConcurrencyTest
         if (SkipIfNoDatabase()) return;
 
         var connectionString = ConnectionString!;
+        // phase1.5-S5.2.5 / TB-1: PostgresEventStoreAdapter constructor
+        // is now (EventStoreDataSource, EventDeserializer, IIdGenerator)
+        // per PC-4 (POSTGRES-POOL-01). Wrap the raw connection string in
+        // a fresh single-use NpgsqlDataSource for this test method.
         // Deserializer is only used by LoadEventsAsync; AppendEventsAsync ignores it.
-        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        var adapter = new PostgresEventStoreAdapter(
+            new EventStoreDataSource(dataSource), deserializer: null!, IdGen);
 
         // Fresh aggregate id per run to avoid cross-run interference.
         var aggregateId = IdGen.Generate(
@@ -95,7 +101,11 @@ public sealed class PostgresEventStoreConcurrencyTest
         if (SkipIfNoDatabase()) return;
 
         var connectionString = ConnectionString!;
-        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        // phase1.5-S5.2.5 / TB-1: see the matching block in the first
+        // test method for the EventStoreDataSource wrapping rationale.
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        var adapter = new PostgresEventStoreAdapter(
+            new EventStoreDataSource(dataSource), deserializer: null!, IdGen);
 
         var aggA = IdGen.Generate($"H8a:CrossAgg:A:{Guid.NewGuid()}");
         var aggB = IdGen.Generate($"H8a:CrossAgg:B:{Guid.NewGuid()}");
@@ -131,7 +141,11 @@ public sealed class PostgresEventStoreConcurrencyTest
         if (SkipIfNoDatabase()) return;
 
         var connectionString = ConnectionString!;
-        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        // phase1.5-S5.2.5 / TB-1: see the matching block in the first
+        // test method for the EventStoreDataSource wrapping rationale.
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        var adapter = new PostgresEventStoreAdapter(
+            new EventStoreDataSource(dataSource), deserializer: null!, IdGen);
         var aggregateId = IdGen.Generate($"H8b:Stale:{Guid.NewGuid()}");
 
         try
@@ -180,7 +194,11 @@ public sealed class PostgresEventStoreConcurrencyTest
         if (SkipIfNoDatabase()) return;
 
         var connectionString = ConnectionString!;
-        var adapter = new PostgresEventStoreAdapter(connectionString, deserializer: null!, IdGen);
+        // phase1.5-S5.2.5 / TB-1: see the matching block in the first
+        // test method for the EventStoreDataSource wrapping rationale.
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        var adapter = new PostgresEventStoreAdapter(
+            new EventStoreDataSource(dataSource), deserializer: null!, IdGen);
         var aggregateId = IdGen.Generate($"H8b:Sentinel:{Guid.NewGuid()}");
 
         try

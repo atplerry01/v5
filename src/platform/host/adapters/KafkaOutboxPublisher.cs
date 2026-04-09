@@ -124,6 +124,73 @@ public sealed class KafkaOutboxPublisher : BackgroundService
         }
     }
 
+    // phase1.5-S5.2.5 / MI-2 (OUTBOX-MULTI-INSTANCE-01): exactly-once
+    // publish across N runtime instances is guaranteed by THIS METHOD's
+    // SQL contract — not by a `claimed_by` / `claimed_at` column scheme,
+    // not by a reclaim sweeper, and not by any client-clock comparator.
+    //
+    // The guarantee rests on four invariants, all of which must remain
+    // intact for MI-2 to hold:
+    //
+    //   1. ROW-LOCK OWNERSHIP. The single SELECT below uses
+    //      `FOR UPDATE SKIP LOCKED`, which acquires per-row exclusive
+    //      locks held until the enclosing transaction ends. Concurrent
+    //      pollers running the identical SELECT see those rows as
+    //      "locked" and SKIP them — they pull the next unlocked row
+    //      instead. There is no window in which two workers can both
+    //      believe they own the same row.
+    //
+    //   2. TX-SCOPED PUBLISH-AND-MARK. The Kafka `ProduceAsync` AND the
+    //      `UPDATE outbox SET status='published'` happen INSIDE the same
+    //      transaction that holds the row lock. The `COMMIT` at the end
+    //      of the loop is the irrevocable publish boundary: only after
+    //      the broker has acknowledged the message AND the row has been
+    //      flipped to `published` do we release the lock. This is what
+    //      makes the publish "claimed and observed" atomically from any
+    //      other worker's perspective.
+    //
+    //   3. CRASH RECOVERY VIA ROLLBACK. If the host crashes, the network
+    //      drops, the cancellation token fires mid-publish, or any
+    //      exception escapes between SELECT and COMMIT, the `await using
+    //      tx` disposal ROLLS BACK the transaction. Postgres releases
+    //      the row locks immediately, and the row's `status` reverts to
+    //      whatever it was at SELECT time (`pending` or `failed`). The
+    //      next poll cycle on ANY surviving instance will pick the row
+    //      up and reprocess it. No event is lost; no event is double-
+    //      published, because the previous attempt's UPDATE was rolled
+    //      back together with the (potentially in-flight) Kafka write.
+    //      The narrow at-least-once seam is the *broker* itself: a
+    //      crash between Kafka ack and COMMIT can re-deliver. That is
+    //      bounded by Kafka idempotent-producer semantics + the
+    //      consumer-side dedup keyed on `event-id` header — both of
+    //      which are owned outside this method.
+    //
+    //   4. NO STUCK CLAIMS, NO CLOCK SKEW. Because ownership IS the row
+    //      lock — and a lock cannot outlive its connection — there is
+    //      nothing to "reclaim" after a timeout. A claim-column design
+    //      would need a 60s reclaim sweeper, an `IClock`, and tolerance
+    //      for clock skew across instances. We have none of those by
+    //      construction.
+    //
+    // CONSEQUENCES FOR FUTURE EDITORS:
+    //
+    //   - Do NOT split the SELECT and the publish into separate
+    //     transactions. The lock release between them re-introduces the
+    //     double-publish race the entire pattern exists to prevent.
+    //   - Do NOT introduce a `claimed_by`/`claimed_at` column scheme on
+    //     top of this. It is strictly redundant and degrades determinism.
+    //   - Do NOT replace `FOR UPDATE SKIP LOCKED` with a plain SELECT
+    //     followed by a conditional UPDATE. That is the lost-update
+    //     pattern; concurrent workers will both believe they own the row.
+    //   - Do NOT move the `ProduceAsync` call OUTSIDE the transaction.
+    //     The lock is what serializes ownership; releasing it before
+    //     the publish ack defeats invariant (2).
+    //
+    // Proof of these invariants lives in
+    // `tests/integration/platform/host/adapters/OutboxMultiInstanceSafetyTest.cs`
+    // (phase1.5-S5.2.5 MI-2). That file exercises the SQL contract
+    // directly so the proof targets the exact seam — if those tests
+    // start failing, MI-2 has been broken at the database level.
     private async Task<int> PublishBatchAsync(CancellationToken ct)
     {
         await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName, ct);
@@ -131,6 +198,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         // Fetch pending + previously-failed-but-under-retry-budget rows with
         // SKIP LOCKED to allow concurrent workers. 'deadletter' rows are excluded.
+        // See the MI-2 invariants block above this method for the full rationale.
         await using var selectCmd = new NpgsqlCommand(
             """
             SELECT id, correlation_id, event_id, aggregate_id, event_type, payload, topic, retry_count

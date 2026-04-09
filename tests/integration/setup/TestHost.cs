@@ -17,6 +17,7 @@ using Whyce.Runtime.Middleware.PostPolicy;
 using Whyce.Runtime.Middleware.PrePolicy;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
+using Whyce.Shared.Contracts.Infrastructure.Admission;
 using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
@@ -122,7 +123,9 @@ public sealed class TestHost
     public static TestHost ForTodo(
         IClock? clock = null,
         IIdGenerator? idGenerator = null,
-        bool denyPolicy = false)
+        bool denyPolicy = false,
+        Whyce.Shared.Contracts.Infrastructure.Policy.IPolicyEvaluator? policyEvaluator = null,
+        Whyce.Shared.Contracts.Infrastructure.Chain.IChainAnchor? chainAnchorOverride = null)
     {
         clock ??= new TestClock();
         idGenerator ??= new TestIdGenerator();
@@ -132,17 +135,34 @@ public sealed class TestHost
         var whyceIdEngine = new WhyceIdEngine();
         var whycePolicyEngine = new WhycePolicyEngine();
         var whyceChainEngine = new WhyceChainEngine();
-        var policyEvaluator = new AllowAllPolicyEvaluator { ShouldDeny = denyPolicy };
+        // phase1.5-S5.2.6 / FR-4: optional IPolicyEvaluator override so
+        // failure-recovery tests can inject a stub that throws
+        // PolicyEvaluationUnavailableException. Default preserves the
+        // pre-FR behavior byte-identically (AllowAllPolicyEvaluator with
+        // ShouldDeny driven by the denyPolicy flag).
+        var resolvedPolicyEvaluator = policyEvaluator
+            ?? new AllowAllPolicyEvaluator { ShouldDeny = denyPolicy };
 
         // In-memory adapters
         var eventStore = new InMemoryEventStore(recorder);
+        // phase1.5-S5.2.6 / FR-5: optional IChainAnchor override so
+        // failure-recovery tests can inject a stub that throws on
+        // AnchorAsync. The TestHost still exposes its InMemoryChainAnchor
+        // property for tests that don't override (existing tests are
+        // unaffected). Tests that DO override read the override directly.
         var chainAnchor = new InMemoryChainAnchor(clock, idGenerator, recorder);
+        var resolvedChainAnchor = chainAnchorOverride ?? (Whyce.Shared.Contracts.Infrastructure.Chain.IChainAnchor)chainAnchor;
         var outbox = new InMemoryOutbox(recorder);
         var idempotencyStore = new InMemoryIdempotencyStore();
 
         // Event fabric services
         var eventStoreService = new EventStoreService(eventStore);
-        var chainAnchorService = new ChainAnchorService(whyceChainEngine, chainAnchor);
+        // phase1.5-S5.2.5 / TB-1: ChainAnchorService now requires
+        // ChainAnchorOptions (KW-1 / TC-2). Defaults are sufficient for
+        // the integration suite — single permit, 5s wait timeout — which
+        // matches the production composition root behavior.
+        var chainAnchorService = new ChainAnchorService(
+            whyceChainEngine, resolvedChainAnchor, new ChainAnchorOptions());
         var outboxService = new OutboxService(outbox);
         var schemaRegistry = new EventSchemaRegistry();
         // Todo events are auto-registered via the default fallback in EventSchemaRegistry.Resolve,
@@ -168,6 +188,12 @@ public sealed class TestHost
         var workflowRegistry = new NoOpWorkflowRegistry();
         var replayService = new NoOpWorkflowExecutionReplayService();
 
+        // phase1.5-S5.2.5 / TB-1: RuntimeCommandDispatcher now requires
+        // a WorkflowAdmissionGate (KC-6). Default WorkflowOptions provide
+        // generous per-workflow + per-tenant ceilings that the integration
+        // suite never saturates, so dispatch behavior is unchanged.
+        var workflowAdmissionGate = new WorkflowAdmissionGate(new WorkflowOptions());
+
         // Real RuntimeCommandDispatcher
         var dispatcher = new RuntimeCommandDispatcher(
             engineRegistry,
@@ -175,7 +201,8 @@ public sealed class TestHost
             eventStore,
             workflowEngine,
             workflowRegistry,
-            replayService);
+            replayService,
+            workflowAdmissionGate);
 
         // Build the locked middleware pipeline via RuntimeControlPlaneBuilder,
         // then wrap each middleware in a RecordingMiddleware so the test can
@@ -189,7 +216,7 @@ public sealed class TestHost
             .UsePolicy(new PolicyMw(
                 whyceIdEngine,
                 whycePolicyEngine,
-                policyEvaluator,
+                resolvedPolicyEvaluator,
                 idGenerator,
                 new Whyce.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory()))
             .UseAuthorizationGuard(new AuthorizationGuardMiddleware())

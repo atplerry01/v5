@@ -1,0 +1,31 @@
+# phase1.5-S5.5 / Stage A — added during multi-instance bring-up.
+#
+# Without this file, `docker build` drags every `bin/` and `obj/` from
+# prior Windows host-side dotnet builds into the build context. Those
+# obj/ trees contain MSBuild project.assets.json cache files with
+# Windows-only fallback NuGet paths baked in
+# (e.g. "C:\Program Files (x86)\Microsoft Visual Studio\Shared\
+# NuGetPackages"), and the Linux SDK inside the container fails
+# `dotnet publish` with MSB4018 / "Unable to find fallback package
+# folder" because the path does not exist on Linux.
+#
+# Excluding bin/ and obj/ forces the container to do a clean restore
+# from packages.lock and produces a hermetic, reproducible build.
+
+**/bin/
+**/obj/
+
+# Test artifacts and IDE state — never needed in a runtime image.
+**/TestResults/
+**/.vs/
+**/.vscode/
+**/.idea/
+
+# Local environment files / secrets.
+**/*.env
+**/.env
+**/.env.*
+
+# Git metadata — pulled in by the COPY src/ otherwise.
+.git/
+.gitignore

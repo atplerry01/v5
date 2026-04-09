@@ -1,8 +1,18 @@
 # Phase 1.5 — Final Consolidated Audit Report
 
-**STATUS: PASS — UNCONDITIONAL CERTIFICATION SIGNED**
-**DATE: 2026-04-09**
-**SCOPE: §3 of phase1.5-final closure prompt**
+**STATUS: SUPERSEDED — PHASE 1.5 RE-OPENED 2026-04-09**
+**SUPERSEDED BY:** [phase1.5-reopen-amendment.md](phase1.5-reopen-amendment.md)
+**ORIGINAL CERTIFICATION DATE: 2026-04-09**
+**SCOPE OF ORIGINAL CERTIFICATION (preserved as historical record):** §3 of phase1.5-final closure prompt — narrow correctness scope only.
+
+> **NOTE:** This file is preserved verbatim as historical evidence of the
+> eight audit modules that did pass under the original (narrow) Phase 1.5
+> scope. Per the re-open amendment, Phase 1.5 closure now requires
+> additional sections §5.2.6 (failure & recovery), §5.3 (load / stress /
+> soak), §5.4 (observability & SLOs), and §5.5 (full-system multi-instance
+> validation). The PASS status of the eight modules below remains valid
+> ONLY for the narrow correctness scope they covered; it is NOT
+> sufficient on its own to certify Phase 1.5 under the expanded scope.
 
 ## Post-Remediation State (2026-04-09)
 

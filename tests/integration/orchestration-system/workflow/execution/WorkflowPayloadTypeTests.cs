@@ -148,10 +148,17 @@ public sealed class WorkflowPayloadTypeTests
         private readonly IReadOnlyList<object> _events;
         public StubEventStore(IReadOnlyList<object> events) { _events = events; }
 
-        public Task<IReadOnlyList<object>> LoadEventsAsync(Guid aggregateId) =>
+        // phase1.5-S5.2.5 / TB-1: aligned with the post-TC-5 IEventStore
+        // contract that carries CancellationToken end-to-end.
+        public Task<IReadOnlyList<object>> LoadEventsAsync(
+            Guid aggregateId, CancellationToken cancellationToken = default) =>
             Task.FromResult(_events);
 
-        public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<object> events, int expectedVersion) =>
+        public Task AppendEventsAsync(
+            Guid aggregateId,
+            IReadOnlyList<object> events,
+            int expectedVersion,
+            CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 }

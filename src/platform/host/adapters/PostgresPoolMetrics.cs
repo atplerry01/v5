@@ -162,12 +162,35 @@ public static class PostgresPoolMetrics
             Interlocked.Add(ref bucket.TotalWaitMicros, elapsedMicros);
             Interlocked.Increment(ref bucket.WaitObservationCount);
             // HC-6: decrement in-flight when the caller disposes the
-            // connection (returning it to the pool). NpgsqlConnection
-            // inherits Component.Disposed; the handler is invoked
-            // exactly once per Dispose. The closure captures `bucket`
-            // by reference so the decrement targets the correct pool
-            // even under concurrent acquisitions across pools.
-            conn.Disposed += (_, _) => Interlocked.Decrement(ref bucket.CurrentInFlight);
+            // connection (returning it to the pool). The closure
+            // captures `bucket` by reference so the decrement targets
+            // the correct pool even under concurrent acquisitions
+            // across pools.
+            //
+            // phase1.5-S5.2.5 / TB-1: the original implementation
+            // subscribed to Component.Disposed via NpgsqlConnection's
+            // base class. The current Npgsql version no longer
+            // supports the Disposed event and throws
+            // NotSupportedException at subscription time
+            // ("The Disposed event isn't supported by Npgsql. Use
+            // DbConnection.StateChange instead."). This was a latent
+            // S0 production bug — every code path through
+            // OpenInstrumentedAsync (outbox publisher, outbox enqueue,
+            // event store, idempotency store, depth sampler) was
+            // broken at runtime against the upgraded Npgsql, hidden
+            // because the only Postgres-backed integration tests that
+            // exercised this seam were broken at compile time and
+            // therefore never ran. TB-1 surfaced both at once. The
+            // canonical replacement is the StateChange event filtered
+            // to the Closed transition — NpgsqlConnection enters
+            // Closed during Dispose for any previously-Open
+            // connection, which is exactly the moment HC-6 needs to
+            // observe the return-to-pool.
+            conn.StateChange += (_, args) =>
+            {
+                if (args.CurrentState == System.Data.ConnectionState.Closed)
+                    Interlocked.Decrement(ref bucket.CurrentInFlight);
+            };
             Acquisitions.Add(1, new KeyValuePair<string, object?>("pool", poolName));
             return conn;
         }
