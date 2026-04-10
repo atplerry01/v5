@@ -136,7 +136,7 @@ public sealed class PolicyMiddleware : IMiddleware
 
         // Step 6: Policy deny = HARD STOP. The denial is recorded via an
         // AuditEmission so it flows to the dedicated policy decision stream
-        // (constitutional-system/policy/decision) — independent of the command's
+        // (constitutional/policy/decision) — independent of the command's
         // aggregate. Satisfies POL-AUDIT-01 / POLICY-NO-SILENT-DECISION-01.
         if (!policyResult.IsCompliant)
         {

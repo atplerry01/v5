@@ -10,7 +10,7 @@ namespace Whyce.Engines.T0U.WhycePolicy;
 /// <c>Whycespace.Domain.*</c> while runtime middleware is not (rule 11.R-DOM-01).
 ///
 /// Returns a fully-formed AuditEmission carrying the event, dedicated routing
-/// metadata (constitutional-system / policy / decision), and the mandatory
+/// metadata (constitutional / policy / decision), and the mandatory
 /// audit metadata bundle (DecisionHash, ExecutionHash, PolicyVersion, CommandId).
 ///
 /// Pure: no clock, no RNG, no Guid.NewGuid — every field is sourced from
@@ -18,7 +18,7 @@ namespace Whyce.Engines.T0U.WhycePolicy;
 /// </summary>
 public sealed class PolicyDecisionEventFactory : IPolicyDecisionEventFactory
 {
-    private const string AuditClassification = "constitutional-system";
+    private const string AuditClassification = "constitutional";
     private const string AuditContext = "policy";
     private const string AuditDomain = "decision";
 

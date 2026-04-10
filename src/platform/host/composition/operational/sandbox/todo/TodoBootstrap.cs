@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Whyce.Engines.T1M.Steps.Todo;
 using Whyce.Engines.T2E.Operational.Todo;
 using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.OperationalSystem.Sandbox.Todo;
+using Whyce.Projections.Operational.Sandbox.Todo;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
@@ -12,7 +12,7 @@ using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjection
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Runtime;
-using Whyce.Systems.Downstream.OperationalSystem.Sandbox.Todo;
+using Whyce.Systems.Downstream.Operational.Sandbox.Todo;
 
 namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
 

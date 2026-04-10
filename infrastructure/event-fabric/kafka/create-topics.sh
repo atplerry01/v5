@@ -36,11 +36,11 @@ TOPICS=(
   "whyce.operational.sandbox.todo.retry"
   "whyce.operational.sandbox.todo.deadletter"
 
-  # constitutional-system > policy > decision (Phase 1 gate unblock S0)
-  "whyce.constitutional-system.policy.decision.commands"
-  "whyce.constitutional-system.policy.decision.events"
-  "whyce.constitutional-system.policy.decision.retry"
-  "whyce.constitutional-system.policy.decision.deadletter"
+  # constitutional > policy > decision (Phase 1 gate unblock S0)
+  "whyce.constitutional.policy.decision.commands"
+  "whyce.constitutional.policy.decision.events"
+  "whyce.constitutional.policy.decision.retry"
+  "whyce.constitutional.policy.decision.deadletter"
 )
 
 for TOPIC in "${TOPICS[@]}"; do

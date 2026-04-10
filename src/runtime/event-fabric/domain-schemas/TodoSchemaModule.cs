@@ -1,5 +1,5 @@
 using Whyce.Shared.Contracts.Events.Todo;
-using DomainEvents = Whycespace.Domain.OperationalSystem.Sandbox.Todo;
+using DomainEvents = Whycespace.Domain.Operational.Sandbox.Todo;
 
 namespace Whyce.Runtime.EventFabric.DomainSchemas;
 

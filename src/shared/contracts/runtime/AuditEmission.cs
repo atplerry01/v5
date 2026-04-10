@@ -12,8 +12,8 @@ namespace Whyce.Shared.Contracts.Runtime;
 /// keyed off a deterministic id derived from the operation coordinates.
 ///
 /// Why dedicated routing metadata: the same separation must hold for the
-/// outbound topic. Audit events publish to a constitutional-system topic
-/// (e.g. <c>whyce.constitutional-system.policy.decision.events</c>) so that
+/// outbound topic. Audit events publish to a constitutional topic
+/// (e.g. <c>whyce.constitutional.policy.decision.events</c>) so that
 /// audit consumers can subscribe without joining every domain topic.
 ///
 /// All fields are required: the audit emission MUST be self-describing so the

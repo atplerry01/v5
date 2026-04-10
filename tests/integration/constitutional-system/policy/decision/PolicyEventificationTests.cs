@@ -48,7 +48,7 @@ public sealed class PolicyEventificationTests
         // then domain batch (todo event). Audit batch publishes to the dedicated topic.
         Assert.Equal(2, host.ChainAnchor.Blocks.Count);
         Assert.Equal(2, host.Outbox.Batches.Count);
-        Assert.Equal("whyce.constitutional-system.policy.decision.events", host.Outbox.Batches[0].Topic);
+        Assert.Equal("whyce.constitutional.policy.decision.events", host.Outbox.Batches[0].Topic);
         Assert.Equal("whyce.operational.sandbox.todo.events", host.Outbox.Batches[1].Topic);
         Assert.Contains(host.Outbox.Batches[0].Events, e => e is PolicyEvaluatedEvent);
     }
@@ -85,7 +85,7 @@ public sealed class PolicyEventificationTests
 
         Assert.Single(host.ChainAnchor.Blocks);
         var batch = Assert.Single(host.Outbox.Batches);
-        Assert.Equal("whyce.constitutional-system.policy.decision.events", batch.Topic);
+        Assert.Equal("whyce.constitutional.policy.decision.events", batch.Topic);
         Assert.IsType<PolicyDeniedEvent>(Assert.Single(batch.Events));
     }
 

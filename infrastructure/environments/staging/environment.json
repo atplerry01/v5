@@ -1,6 +1,6 @@
 {
   "environment": "staging",
-  "classification": "operational-system",
+  "classification": "operational",
   "context": "deployment",
   "domain": "sandbox",
   "settings": {}

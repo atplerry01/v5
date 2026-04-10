@@ -20,7 +20,7 @@ public sealed record CommandResult
     /// Optional audit emission carried alongside the result. Persisted by the
     /// runtime control plane to a dedicated stream BEFORE domain events,
     /// independent of IsSuccess. Used by PolicyMiddleware to record allow/deny
-    /// decisions to the constitutional-system policy decision stream.
+    /// decisions to the constitutional policy decision stream.
     /// PolicyDecisionHash on the context is still mandatory — audit emission
     /// records governed decisions, never bypasses.
     /// </summary>

@@ -9,7 +9,7 @@ namespace Whycespace.Tests.Integration.Runtime;
 /// inside TestHost; the fabric stages (Persist, Chain, Outbox) record via the
 /// in-memory adapters. Under WBSM v3.5 policy eventification, the fabric runs
 /// TWICE per command on the allow path: first for the policy AuditEmission
-/// (constitutional-system/policy/decision stream), then for the command's
+/// (constitutional/policy/decision stream), then for the command's
 /// domain events. Audit always precedes domain.
 ///
 /// This test makes the static guarantees in
