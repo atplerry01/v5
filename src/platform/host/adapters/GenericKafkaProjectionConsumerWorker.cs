@@ -382,8 +382,15 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     /// <summary>
     /// phase1-gate-S3: publishes a malformed inbound message to the deadletter
     /// topic preserving original key/value/headers and adding diagnostic
-    /// `dlq-reason` and `dlq-source-topic` headers. Failures here are caught
-    /// and logged — the consumer never crashes on a deadletter publish error.
+    /// `dlq-reason` and `dlq-source-topic` headers.
+    ///
+    /// phase1.5 S0-3 (K-DLQ-001): a DLQ publish failure MUST propagate so the
+    /// caller does NOT commit the source offset. Pre-S0-3 this method swallowed
+    /// the exception and the caller committed unconditionally, which silently
+    /// dropped messages on a broken DLQ topic. Now the publish-failed counter
+    /// is bumped, the failure is logged, and the exception is re-thrown so the
+    /// outer consume loop's catch handles back-off and Kafka re-delivers the
+    /// uncommitted message on the next poll.
     /// </summary>
     private async Task PublishToDeadletterAsync(
         IProducer<string, string> producer,
@@ -430,16 +437,18 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            // phase1.5-S5.2.2 / KC-3: increment the publish-failure
-            // counter before logging so a broken DLQ topic produces an
-            // operator-visible signal. The exception is still
-            // swallowed ($12: the consumer never crashes on a
-            // deadletter publish error) but it is no longer silent.
+            // phase1.5 S0-3 (K-DLQ-001): bump the publish-failure counter
+            // and log, then re-throw. The outer consume-loop catch will
+            // back off, and because the source offset has NOT been
+            // committed (every call site commits only on the line AFTER
+            // this method returns) Kafka will re-deliver on the next poll.
             DlqPublishFailedCounter.Add(1,
                 new KeyValuePair<string, object?>("source_topic", _topic),
                 new KeyValuePair<string, object?>("reason", ex.GetType().Name));
-            _logger?.LogError(ex,
-                "FAILED to publish to deadletter topic {DeadletterTopic}", deadletterTopic);
+            _logger?.LogCritical(ex,
+                "DLQ publish failed for {DeadletterTopic} — refusing to commit source offset",
+                deadletterTopic);
+            throw;
         }
     }
 }

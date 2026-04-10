@@ -76,14 +76,14 @@ services:
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
       ASPNETCORE_ENVIRONMENT: "Production"
       # Connection strings — use service-name DNS inside the compose network.
-      Postgres__ConnectionString: "Host=postgres;Port=5432;Database=whyce_eventstore;Username=whyce;Password=whyce"
-      Postgres__ChainConnectionString: "Host=whycechain-db;Port=5432;Database=whycechain;Username=whyce;Password=whyce"
-      Postgres__ProjectionsConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=whyce"
+      Postgres__ConnectionString: "Host=postgres;Port=5432;Database=whyce_eventstore;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Postgres__ChainConnectionString: "Host=whycechain-db;Port=5432;Database=whycechain;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Postgres__ProjectionsConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       # phase1.5-S5.5 / Stage B: TodoController reads `Projections:ConnectionString`
       # (a DIFFERENT config key from `Postgres:ProjectionsConnectionString` —
       # see InfrastructureComposition.cs line 43-50 acknowledging the seam).
       # Both must be supplied; same physical DB.
-      Projections__ConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=whyce"
+      Projections__ConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Redis__ConnectionString: "redis:6379"
       Kafka__BootstrapServers: "kafka:9092"
       OPA__Endpoint: "http://opa:8181"
@@ -91,8 +91,8 @@ services:
       # ObservabilityComposition (chain-store snapshot bucket). Values
       # match the base compose minio service env.
       MinIO__Endpoint: "minio:9000"
-      MinIO__AccessKey: "whyce"
-      MinIO__SecretKey: "whycepassword"
+      MinIO__AccessKey: ${MINIO_ROOT_USER}
+      MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
       # Identifier so log lines + readiness payloads can attribute back
       # to a specific host instance. Picked up by ASPNETCORE_HOSTNAME and
       # surfaces in standard ASP.NET logging.
@@ -140,14 +140,14 @@ services:
     environment:
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
       ASPNETCORE_ENVIRONMENT: "Production"
-      Postgres__ConnectionString: "Host=postgres;Port=5432;Database=whyce_eventstore;Username=whyce;Password=whyce"
-      Postgres__ChainConnectionString: "Host=whycechain-db;Port=5432;Database=whycechain;Username=whyce;Password=whyce"
-      Postgres__ProjectionsConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=whyce"
+      Postgres__ConnectionString: "Host=postgres;Port=5432;Database=whyce_eventstore;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Postgres__ChainConnectionString: "Host=whycechain-db;Port=5432;Database=whycechain;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Postgres__ProjectionsConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       # phase1.5-S5.5 / Stage B: TodoController reads `Projections:ConnectionString`
       # (a DIFFERENT config key from `Postgres:ProjectionsConnectionString` —
       # see InfrastructureComposition.cs line 43-50 acknowledging the seam).
       # Both must be supplied; same physical DB.
-      Projections__ConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=whyce"
+      Projections__ConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Redis__ConnectionString: "redis:6379"
       Kafka__BootstrapServers: "kafka:9092"
       OPA__Endpoint: "http://opa:8181"
@@ -155,8 +155,8 @@ services:
       # ObservabilityComposition (chain-store snapshot bucket). Values
       # match the base compose minio service env.
       MinIO__Endpoint: "minio:9000"
-      MinIO__AccessKey: "whyce"
-      MinIO__SecretKey: "whycepassword"
+      MinIO__AccessKey: ${MINIO_ROOT_USER}
+      MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
       DOTNET_HOSTNAME: "whyce-host-2"
     ports:
       - "18082:8080"

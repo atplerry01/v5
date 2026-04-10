@@ -60,7 +60,7 @@ services:
     environment:
       POSTGRES_DB: whyce_eventstore
       POSTGRES_USER: whyce
-      POSTGRES_PASSWORD: whyce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../data/postgres/event-store/migrations:/docker-entrypoint-initdb.d
@@ -90,7 +90,7 @@ services:
     environment:
       POSTGRES_DB: whyce_projections
       POSTGRES_USER: whyce
-      POSTGRES_PASSWORD: whyce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - projections_data:/var/lib/postgresql/data
       - ../data/postgres/projections:/docker-entrypoint-initdb.d/projections:ro
@@ -295,7 +295,7 @@ services:
     environment:
       POSTGRES_DB: whycechain
       POSTGRES_USER: whyce
-      POSTGRES_PASSWORD: whyce
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - whycechain_data:/var/lib/postgresql/data
     deploy:
@@ -325,7 +325,7 @@ services:
       - "9001:9001"
     environment:
       MINIO_ROOT_USER: whyce
-      MINIO_ROOT_PASSWORD: whycepassword
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -357,7 +357,7 @@ services:
       - ../data/minio/init-buckets.sh:/init-buckets.sh:ro
     environment:
       MINIO_ROOT_USER: whyce
-      MINIO_ROOT_PASSWORD: whycepassword
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     networks:
       - whyce-network
 

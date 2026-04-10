@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Whyce.Shared.Contracts.Application.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
@@ -17,6 +18,7 @@ public sealed class TodoController : ControllerBase
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IRedisClient _redis;
+    private readonly ILogger<TodoController> _logger;
     private readonly string _projectionsConnectionString;
 
     // phase1.5-S5.2.2 / KC-4 RESIDUAL: TodoController.Get is declared
@@ -32,11 +34,13 @@ public sealed class TodoController : ControllerBase
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
         IRedisClient redis,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<TodoController> logger)
     {
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
         _redis = redis;
+        _logger = logger;
         _projectionsConnectionString = configuration.GetValue<string>("Projections:ConnectionString")
             ?? throw new InvalidOperationException(
                 "Projections:ConnectionString is required. No fallback.");
@@ -96,7 +100,11 @@ public sealed class TodoController : ControllerBase
             using var doc = JsonDocument.Parse(stateJson);
             if (doc.RootElement.TryGetProperty("Title", out var t)) title = t.GetString() ?? string.Empty;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled error in TodoController operation");
+            throw;
+        }
 
         var status = lastEventType == "TodoCompletedEvent" ? "completed" : "active";
 
