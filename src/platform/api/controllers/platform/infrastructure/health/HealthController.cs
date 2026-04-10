@@ -5,7 +5,7 @@ using Whyce.Platform.Api.Health;
 using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Api.Controllers;
+namespace Whyce.Platform.Api.Controllers.Platform.Infrastructure.Health;
 
 [ApiController]
 [Route("[controller]")]

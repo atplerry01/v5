@@ -8,7 +8,7 @@ using Whyce.Shared.Contracts.Infrastructure.Projection;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Api.Controllers;
+namespace Whyce.Platform.Api.Controllers.Operational.Sandbox.Todo;
 
 [ApiController]
 [Route("api/todo")]

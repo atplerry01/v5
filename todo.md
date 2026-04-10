@@ -38,19 +38,18 @@
 | 5.8.2 | Final Certification Audit | Formal progression approval | NOT STARTED | Certification Report | YES |
 
 
-- Phase 2 should start with all domain ractifications
-
-- 
-- engine generally should not be domain aware
-- stream domain entity for Youtube, udemy, tiktok
-- global pricing system domain entity
-- runtime still contain workflow
-- standadized request and response payload across all system
-- paginations, download, export and file management standards
-
-
-- activate incident domain model
+- engines and layers standards
 - upgrade TODO to trello/kuban style
+- activate incident domain model
+- standadized request and response payload across all system
 - simulate when there is any error, an incident report should be generated
 
-- engines and layers standards
+
+
+
+- Phase 2 should start with all domain ractifications
+
+- stream domain entity for Youtube, udemy, tiktok
+- global pricing system domain entity
+- paginations, download, export and file management standards
+

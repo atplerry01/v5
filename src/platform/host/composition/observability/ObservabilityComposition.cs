@@ -136,7 +136,7 @@ public static class ObservabilityComposition
         services.AddSingleton<HealthAggregator>();
         services.AddWhyceSwagger();
         services.AddControllers()
-            .AddApplicationPart(typeof(Whyce.Platform.Api.Controllers.HealthController).Assembly);
+            .AddApplicationPart(typeof(Whyce.Platform.Api.Controllers.Platform.Infrastructure.Health.HealthController).Assembly);
 
         return services;
     }
