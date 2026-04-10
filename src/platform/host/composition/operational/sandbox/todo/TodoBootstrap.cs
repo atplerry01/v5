@@ -9,7 +9,7 @@ using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Kernel.Domain;
 using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Systems.Downstream.Operational.Sandbox.Todo;

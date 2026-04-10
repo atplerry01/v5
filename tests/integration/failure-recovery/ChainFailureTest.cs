@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Chain;
 using Whycespace.Tests.Integration.Setup;
 

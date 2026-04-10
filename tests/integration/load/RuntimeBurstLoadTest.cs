@@ -5,7 +5,7 @@ using Npgsql;
 using NSubstitute;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Health;
 using Whyce.Shared.Contracts.Infrastructure.Messaging;
 using Whyce.Shared.Kernel.Domain;

@@ -1,5 +1,5 @@
 using Whyce.Runtime.Deterministic;
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whycespace.Tests.Integration.Setup;
 using Whycespace.Tests.Shared;
 

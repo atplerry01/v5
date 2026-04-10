@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Application.Todo;
+namespace Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 
 /// <summary>
 /// Canonical workflow-name constants for the Todo lifecycle.

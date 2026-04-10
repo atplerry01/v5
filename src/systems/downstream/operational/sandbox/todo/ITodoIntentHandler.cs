@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 
 namespace Whyce.Systems.Downstream.Operational.Sandbox.Todo;
 

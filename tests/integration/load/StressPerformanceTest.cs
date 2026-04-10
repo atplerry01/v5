@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whycespace.Tests.Integration.Setup;
 
 namespace Whycespace.Tests.Integration.Load;

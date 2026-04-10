@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whycespace.Domain.ConstitutionalSystem.Policy.Decision;
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Tests.Integration.Setup;

@@ -1,7 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Npgsql;
-using Whyce.Shared.Contracts.Application.Todo;
+using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Events.Todo;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
