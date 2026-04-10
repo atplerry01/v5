@@ -147,3 +147,10 @@ TESTS_GUARD_VIOLATION:
   resume after failure → re-runs the failed step per chosen policy. `NoOpWorkflowEngine` stubs do not
   satisfy this rule.
 - Source: `claude/new-rules/_archives/20260407-230000-workflow-resume-payload-and-test-coverage.md`.
+
+## NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **ACT-FABRIC-ROUNDTRIP-TEST-01** (S0): Every domain event whose schema is registered with `IEventSchemaRegistry` MUST have at least one integration test that constructs the event, persists it via the real `IEventFabric` (not a double), reloads it from the real event store, and asserts payload integrity round-trip. Tests that bypass the real fabric MUST be tagged `[Trait("Fabric","Bypass")]`. CI gate enumerates registered events and fails the build on any uncovered registration. Rationale: prevents the `WorkflowExecutionResumedEvent` class of drift where in-memory doubles green-light a path the real fabric does not know about. Source: `_archives/20260408-103326-activation.md`.
+- **G-E2E-010 — Untested = FAIL** (S1): Validation, audit, and e2e prompts MUST treat any test case that is unreachable, un-runnable, or skipped as a FAILURE, never a SKIP. Reports listing SKIP in place of executable evidence are non-compliant. Applies cross-cutting to all test/validation/audit prompts. Source: `_archives/20260408-142631-validation.md` Finding 1.
+- **T-POLICY-001** (S1): Test fixtures touching the command path MUST assert non-null `decision_hash` and `policy.version` on the resulting event/command-result. Production code is covered by `policy-binding.guard.md`; this closes the test-side gap. Source: `_archives/20260408-142631-validation.md` Finding 3.
+- **T-BUILD-01 STRENGTHENING** (S1): A commit that changes a production interface signature (constructor args or interface members) MUST update the corresponding test doubles in `tests/integration/setup/` in the SAME commit. Orphaned test doubles are an S1 architectural violation. The executable enforcement is `claude/audits/tests-integration-build.audit.md`. Source: `_archives/20260409-120500-infrastructure-tests-integration-baseline-drift.md`.

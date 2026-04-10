@@ -168,3 +168,7 @@ POLICY_GUARD_VIOLATION:
   as a domain event in EventStore is forbidden. Audit trail must be queryable via the event stream, not only
   via chain anchors.
 - Source: `claude/new-rules/_archives/20260407-190000-policy-eventification.md`.
+
+## NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **P-EVT-001 — Persisted events carry policy decision hash** (S2): Every row in the `events` table that resulted from a command path MUST have non-null `policy_decision_hash` and `policy_version`. The chain anchor carrying the hash is necessary but not sufficient — per WBSM v3 $11 the audit trail lives on the event itself. Audit query: `SELECT count(*) FROM events WHERE policy_decision_hash IS NULL` MUST equal 0 in any environment that has executed at least one command. The dispatcher pipeline / engine event-emit path is responsible for stamping these columns at write time, not a separate projection. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 9 (originating evidence: TodoCreatedEvent `d51e8a7f-06f5-7b40-4c9c-d7797e55f076`).

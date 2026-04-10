@@ -41,7 +41,6 @@
 
 
 - all domain reference should be build on {classification}:{context}
-- is T1M stateless and can we move domain to another, T1M should not be domain aware
 - engine generally should not be domain aware
 - stream domain entity for Youtube, udemy, tiktok
 - global pricing system domain entity

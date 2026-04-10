@@ -73,3 +73,7 @@ var cs = configuration.GetValue<string>("EventStore:ConnectionString")
     ?? throw new InvalidOperationException(
         "EVENTSTORE__CONNECTIONSTRING environment variable is required");
 ```
+
+## NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **CFG-K1 — Configuration key form** (S0): Configuration key lookups MUST use the `Section:Key` form, never `Section__Key`. The double-underscore form is the env-var encoding consumed by `AddEnvironmentVariables()`, which rewrites `Foo__Bar` to config key `Foo:Bar`. A literal `GetValue<string>("Foo__Bar")` lookup therefore never resolves env vars and silently throws (or silently uses a fallback) on every required key. CI grep: `GetValue<.*>\(\"[A-Za-z0-9_]+__` = S0 fail. Originating evidence: 15 broken callsites in `src/platform/host/composition/**` (`InfrastructureComposition.cs`, `ObservabilityComposition.cs`, `TodoBootstrap.cs`) blocking all live execution. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 5.

@@ -215,3 +215,7 @@ ENFORCEMENT:
   `claude/new-rules/_archives/20260408-020000-kafka-header-contract.md`.
 
 - Phase 1 gate source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.
+
+## NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **K-DLQ-001 — DLQ route precedes source-offset commit** (S0, data-loss risk): On the consumer failure path, a poisoned message MUST be successfully produced to its DLQ topic (and its DLQ produce acknowledged) BEFORE the source partition offset is committed. Committing the source offset prior to a confirmed DLQ write is a guard violation: a process death between the two acts permanently loses the message. The consumer wrapper MUST express this as: `await ProduceToDlqAsync(msg); await CommitSourceOffsetAsync(msg);` — never the reverse, never in parallel without an awaited DLQ ack. Static check: grep consumer wrappers for `Commit*` calls and assert each is dominated by an awaited DLQ produce on the failure branch. Source: `_archives/20260408-142631-validation.md` Finding 2.

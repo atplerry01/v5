@@ -145,3 +145,8 @@ and an existing guard overlap, the stricter rule wins.
 - **DET-HSID-CALLSITE-01** (S1): `IDeterministicIdEngine.Generate(...)` MUST NOT be called outside
   `src/runtime/control-plane/` and `src/engines/T0U/determinism/`.
 - Source: `claude/new-rules/_archives/20260407-200000-hsid-v2.1-parallel-seam.md`.
+
+## NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **DET-SEED-DERIVATION-01** (S1): When invoking `IIdGenerator.Generate(seed)` (or any seam producing a deterministic identifier from a seed string), the seed MUST be composed exclusively of stable command coordinates (aggregate id, command type name, aggregate version, correlation/causation id, deterministic discriminators). FORBIDDEN seed components: `IClock.UtcNow`/`DateTime.*`/`Stopwatch.*`/`Ticks`, `Guid.NewGuid()`/`Random.*`/`RandomNumberGenerator.*`, process/thread/machine identifiers, env vars, or hashes thereof. Static check: search `IIdGenerator.Generate(` and flag any seed-string interpolation containing `Clock|Now|Ticks|Guid|Random`. Architecture-test enforcement under `tests/unit/architecture/WbsmArchitectureTests`. Rationale: non-deterministic seeds defeat the entire deterministic-id mechanism and silently break replay, projection idempotency, and chain integrity. Source: `_archives/20260408-103326-determinism.md`.
+- **DET-IDCHECK-COVERAGE-01** (S2): `scripts/deterministic-id-check.sh` (or a sibling script) MUST scan `tests/**` and `scripts/validation/**` in addition to `src/**`. Test paths and validation harnesses are not exempt from determinism rules. Source: `_archives/20260408-142631-validation.md` Finding 4.
