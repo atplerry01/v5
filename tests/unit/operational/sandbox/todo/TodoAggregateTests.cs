@@ -1,4 +1,4 @@
-using Whycespace.Domain.Operational.Sandbox.Todo;
+using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Tests.Shared;
 

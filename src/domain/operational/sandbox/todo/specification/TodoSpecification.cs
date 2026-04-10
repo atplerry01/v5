@@ -1,5 +1,0 @@
-namespace Whycespace.Domain.Operational.Sandbox.Todo;
-
-public sealed class TodoSpecification
-{
-}

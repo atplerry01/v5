@@ -41,6 +41,7 @@
 
 
 - all domain reference should be build on {classification}:{context}
+- 
 - engine generally should not be domain aware
 - stream domain entity for Youtube, udemy, tiktok
 - global pricing system domain entity
@@ -49,3 +50,7 @@
 - standadized request and response payload across all system
 - paginations, download, export and file management standards
 
+
+- activate incident domain model
+- upgrade TODO to trello/kuban style
+- simulate when there is any error, an incident report should be generated
