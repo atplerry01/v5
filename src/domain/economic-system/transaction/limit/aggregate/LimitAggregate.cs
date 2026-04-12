@@ -1,23 +1,92 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Transaction.Limit;
 
-public sealed class LimitAggregate
+public sealed class LimitAggregate : AggregateRoot
 {
-    public static LimitAggregate Create()
+    public LimitId LimitId { get; private set; }
+    public Guid AccountId { get; private set; }
+    public LimitType Type { get; private set; }
+    public Amount Threshold { get; private set; }
+    public Currency Currency { get; private set; }
+    public Amount CurrentUtilization { get; private set; }
+    public LimitStatus Status { get; private set; }
+    public Timestamp DefinedAt { get; private set; }
+
+    private LimitAggregate() { }
+
+    // ── Factory ──────────────────────────────────────────────────
+
+    public static LimitAggregate Define(
+        LimitId limitId,
+        Guid accountId,
+        LimitType type,
+        Amount threshold,
+        Currency currency,
+        Timestamp definedAt)
     {
+        if (threshold.Value <= 0m) throw LimitErrors.InvalidThreshold();
+        if (accountId == Guid.Empty) throw LimitErrors.MissingAccountReference();
+
         var aggregate = new LimitAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        aggregate.RaiseDomainEvent(new LimitDefinedEvent(
+            limitId, accountId, type, threshold, currency, definedAt));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    // ── Behavior ─────────────────────────────────────────────────
+
+    public void Check(Guid transactionId, Amount transactionAmount, Timestamp checkedAt)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        if (Status != LimitStatus.Active) throw LimitErrors.LimitNotActive();
+
+        var projectedUtilization = CurrentUtilization.Value + transactionAmount.Value;
+
+        if (projectedUtilization > Threshold.Value)
+        {
+            RaiseDomainEvent(new LimitExceededEvent(
+                LimitId, transactionId, transactionAmount, Threshold, checkedAt));
+            throw LimitErrors.LimitExceeded(transactionAmount, Threshold);
+        }
+
+        RaiseDomainEvent(new LimitCheckedEvent(
+            LimitId, transactionId, transactionAmount,
+            new Amount(projectedUtilization), checkedAt));
     }
 
-    private void ValidateBeforeChange()
+    // ── Apply ────────────────────────────────────────────────────
+
+    protected override void Apply(object domainEvent)
     {
-        // Pre-change validation gate
+        switch (domainEvent)
+        {
+            case LimitDefinedEvent e:
+                LimitId = e.LimitId;
+                AccountId = e.AccountId;
+                Type = e.Type;
+                Threshold = e.Threshold;
+                Currency = e.Currency;
+                CurrentUtilization = new Amount(0m);
+                Status = LimitStatus.Active;
+                DefinedAt = e.DefinedAt;
+                break;
+
+            case LimitCheckedEvent e:
+                CurrentUtilization = e.CurrentUtilization;
+                break;
+
+            case LimitExceededEvent:
+                Status = LimitStatus.Exceeded;
+                break;
+        }
+    }
+
+    // ── Invariants ───────────────────────────────────────────────
+
+    protected override void EnsureInvariants()
+    {
+        if (Threshold.Value < 0m) throw LimitErrors.NegativeThreshold();
+        if (CurrentUtilization.Value < 0m) throw LimitErrors.NegativeUtilization();
     }
 }

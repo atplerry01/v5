@@ -22,4 +22,7 @@ public static class DomainSchemaCatalog
 
     public static void RegisterOrchestrationWorkflowExecution(EventSchemaRegistry registry)
         => new WorkflowExecutionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterOperationalSandboxKanban(EventSchemaRegistry registry)
+        => new KanbanSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

@@ -130,10 +130,13 @@ public sealed class EventFabric : IEventFabric
         // Step 2: Persist to EventStore (source of truth)
         // phase1-gate-H8b: forward the dispatcher-captured ExpectedVersion as
         // the optimistic concurrency assertion. null → -1 sentinel (no check).
+        // Audit emissions use a separate aggregate stream (aggregateIdOverride),
+        // so the domain aggregate's ExpectedVersion must NOT apply — always -1.
         // phase1.5-S5.2.3 / TC-5: forward CT into the event-store
         // append so PostgresEventStoreAdapter Execute*Async calls
         // honor cancellation.
-        await _eventStoreService.AppendAsync(aggregateId, domainEvents, context.ExpectedVersion ?? -1, cancellationToken);
+        var expectedVersion = aggregateIdOverride is not null ? -1 : (context.ExpectedVersion ?? -1);
+        await _eventStoreService.AppendAsync(aggregateId, domainEvents, expectedVersion, cancellationToken);
 
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
         // phase1.5-S5.2.3 / TC-2: forward the request/host-shutdown

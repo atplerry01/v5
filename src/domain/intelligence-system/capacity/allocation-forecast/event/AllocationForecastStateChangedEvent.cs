@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.IntelligenceSystem.Capacity.AllocationForecast;
-
-public sealed record AllocationForecastStateChangedEvent;

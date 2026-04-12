@@ -7,9 +7,11 @@ namespace Whyce.Runtime.Middleware.PostPolicy;
 /// <summary>
 /// Post-policy idempotency guard. Prevents duplicate command processing.
 /// Runs AFTER policy to avoid caching denied commands.
-/// Key: CommandType + AggregateId (deterministic — same input produces same AggregateId).
-/// CorrelationId is excluded because it changes per HTTP request; including it
-/// would allow business-level duplicates with different correlation IDs.
+/// Key: CommandId (deterministic — derived from aggregateId + commandType +
+/// full command signature in SystemIntentDispatcher). This ensures that two
+/// structurally identical commands produce the same key while distinct commands
+/// targeting the same aggregate (e.g. multiple list creates on one board)
+/// produce distinct keys.
 /// </summary>
 public sealed class IdempotencyMiddleware : IMiddleware
 {
@@ -26,7 +28,7 @@ public sealed class IdempotencyMiddleware : IMiddleware
         Func<CancellationToken, Task<CommandResult>> next,
         CancellationToken cancellationToken = default)
     {
-        var idempotencyKey = $"{command.GetType().Name}:{context.AggregateId}";
+        var idempotencyKey = $"{command.GetType().Name}:{context.CommandId}";
 
         // phase1.5-S5.2.2 / KC-2 (IDEMPOTENCY-COALESCE-01): single
         // round-trip claim replaces the pre-KC-2 ExistsAsync +

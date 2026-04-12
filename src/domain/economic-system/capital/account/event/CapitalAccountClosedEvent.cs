@@ -4,5 +4,4 @@ namespace Whycespace.Domain.EconomicSystem.Capital.Account;
 
 public sealed record CapitalAccountClosedEvent(
     AccountId AccountId,
-    string Reason,
-    DateTimeOffset ClosedAt) : DomainEvent;
+    Timestamp ClosedAt) : DomainEvent;

@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Inventory.Item;
 
-public sealed record ItemCreatedEvent;
+public sealed record ItemCreatedEvent(ItemId ItemId, ItemTypeId TypeId, string ItemName);

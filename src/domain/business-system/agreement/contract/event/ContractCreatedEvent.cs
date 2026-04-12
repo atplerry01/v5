@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Agreement.Contract;
 
-public sealed record ContractCreatedEvent;
+public sealed record ContractCreatedEvent(ContractId ContractId);

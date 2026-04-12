@@ -1,3 +1,4 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Capital.Account;
@@ -6,225 +7,153 @@ public sealed class CapitalAccountAggregate : AggregateRoot
 {
     public AccountId AccountId { get; private set; }
     public OwnerId OwnerId { get; private set; }
-    public string CurrencyCode { get; private set; } = string.Empty;
-    public decimal TotalBalance { get; private set; }
-    public decimal AvailableBalance { get; private set; }
-    public decimal ReservedBalance { get; private set; }
+    public Currency Currency { get; private set; }
+    public Amount TotalBalance { get; private set; }
+    public Amount AvailableBalance { get; private set; }
+    public Amount ReservedBalance { get; private set; }
     public CapitalAccountStatus Status { get; private set; }
-    public DateTimeOffset CreatedAt { get; private set; }
-    public DateTimeOffset LastUpdatedAt { get; private set; }
+    public Timestamp CreatedAt { get; private set; }
+    public Timestamp LastUpdatedAt { get; private set; }
 
-    private CapitalAccountAggregate() { }
-
-    // ── Factory ──────────────────────────────────────────────────
-
-    public static CapitalAccountAggregate OpenAccount(
-        AccountId accountId,
-        OwnerId ownerId,
-        string currencyCode,
-        DateTimeOffset now)
+    public void Open(AccountId accountId, OwnerId ownerId, Currency currency, Timestamp createdAt)
     {
-        GuardCurrencyCode(currencyCode);
-
-        var account = new CapitalAccountAggregate
-        {
-            AccountId = accountId,
-            OwnerId = ownerId,
-            CurrencyCode = currencyCode.ToUpperInvariant(),
-            TotalBalance = 0m,
-            AvailableBalance = 0m,
-            ReservedBalance = 0m,
-            Status = CapitalAccountStatus.Active,
-            CreatedAt = now,
-            LastUpdatedAt = now
-        };
-
-        account.RaiseDomainEvent(new CapitalAccountOpenedEvent(
-            accountId,
-            ownerId,
-            account.CurrencyCode,
-            now));
-
-        return account;
+        RaiseDomainEvent(new CapitalAccountOpenedEvent(accountId, ownerId, currency, createdAt));
     }
 
-    // ── Behavior ─────────────────────────────────────────────────
-
-    public void Fund(decimal amount, string currencyCode, DateTimeOffset now)
+    public void Fund(Amount amount, Currency currency)
     {
-        GuardOperational();
-        GuardPositiveAmount(amount);
-        GuardCurrencyMatch(currencyCode);
+        if (Status == CapitalAccountStatus.Frozen) throw CapitalAccountErrors.AccountIsFrozen();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
+        if (currency != Currency) throw CapitalAccountErrors.CurrencyMismatch(Currency, currency);
+        if (amount.Value <= 0) throw CapitalAccountErrors.InvalidAmount();
 
-        TotalBalance += amount;
-        AvailableBalance += amount;
-        LastUpdatedAt = now;
+        var newTotal = new Amount(TotalBalance.Value + amount.Value);
+        var newAvailable = new Amount(AvailableBalance.Value + amount.Value);
 
-        RaiseDomainEvent(new CapitalFundedEvent(
-            AccountId,
-            amount,
-            CurrencyCode,
-            TotalBalance,
-            AvailableBalance,
-            now));
+        RaiseDomainEvent(new CapitalFundedEvent(AccountId, amount, newTotal, newAvailable));
     }
 
-    public void Allocate(decimal amount, string currencyCode, DateTimeOffset now)
+    public void Allocate(Amount amount, Currency currency)
     {
-        GuardOperational();
-        GuardPositiveAmount(amount);
-        GuardCurrencyMatch(currencyCode);
-
-        if (amount > AvailableBalance)
+        if (Status == CapitalAccountStatus.Frozen) throw CapitalAccountErrors.AccountIsFrozen();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
+        if (currency != Currency) throw CapitalAccountErrors.CurrencyMismatch(Currency, currency);
+        if (amount.Value <= 0) throw CapitalAccountErrors.InvalidAmount();
+        if (amount.Value > AvailableBalance.Value)
             throw CapitalAccountErrors.InsufficientAvailableBalance(amount, AvailableBalance);
 
-        TotalBalance -= amount;
-        AvailableBalance -= amount;
-        LastUpdatedAt = now;
+        var newAvailable = new Amount(AvailableBalance.Value - amount.Value);
 
-        RaiseDomainEvent(new CapitalAllocatedEvent(
-            AccountId,
-            amount,
-            CurrencyCode,
-            TotalBalance,
-            AvailableBalance,
-            now));
+        RaiseDomainEvent(new AccountCapitalAllocatedEvent(AccountId, amount, newAvailable));
     }
 
-    public void Reserve(decimal amount, string currencyCode, DateTimeOffset now)
+    public void Reserve(Amount amount, Currency currency)
     {
-        GuardOperational();
-        GuardPositiveAmount(amount);
-        GuardCurrencyMatch(currencyCode);
-
-        if (amount > AvailableBalance)
+        if (Status == CapitalAccountStatus.Frozen) throw CapitalAccountErrors.AccountIsFrozen();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
+        if (currency != Currency) throw CapitalAccountErrors.CurrencyMismatch(Currency, currency);
+        if (amount.Value <= 0) throw CapitalAccountErrors.InvalidAmount();
+        if (amount.Value > AvailableBalance.Value)
             throw CapitalAccountErrors.InsufficientAvailableBalance(amount, AvailableBalance);
 
-        AvailableBalance -= amount;
-        ReservedBalance += amount;
-        LastUpdatedAt = now;
+        var newAvailable = new Amount(AvailableBalance.Value - amount.Value);
+        var newReserved = new Amount(ReservedBalance.Value + amount.Value);
 
-        RaiseDomainEvent(new CapitalReservedEvent(
-            AccountId,
-            amount,
-            CurrencyCode,
-            AvailableBalance,
-            ReservedBalance,
-            now));
+        RaiseDomainEvent(new AccountCapitalReservedEvent(AccountId, amount, newAvailable, newReserved));
     }
 
-    public void ReleaseReservation(decimal amount, string currencyCode, DateTimeOffset now)
+    public void ReleaseReservation(Amount amount, Currency currency)
     {
-        GuardOperational();
-        GuardPositiveAmount(amount);
-        GuardCurrencyMatch(currencyCode);
-
-        if (amount > ReservedBalance)
+        if (Status == CapitalAccountStatus.Frozen) throw CapitalAccountErrors.AccountIsFrozen();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
+        if (currency != Currency) throw CapitalAccountErrors.CurrencyMismatch(Currency, currency);
+        if (amount.Value <= 0) throw CapitalAccountErrors.InvalidAmount();
+        if (amount.Value > ReservedBalance.Value)
             throw CapitalAccountErrors.InsufficientAvailableBalance(amount, ReservedBalance);
 
-        ReservedBalance -= amount;
-        AvailableBalance += amount;
-        LastUpdatedAt = now;
+        var newAvailable = new Amount(AvailableBalance.Value + amount.Value);
+        var newReserved = new Amount(ReservedBalance.Value - amount.Value);
 
-        RaiseDomainEvent(new ReservationReleasedEvent(
-            AccountId,
-            amount,
-            CurrencyCode,
-            AvailableBalance,
-            ReservedBalance,
-            now));
+        RaiseDomainEvent(new AccountReservationReleasedEvent(AccountId, amount, newAvailable, newReserved));
     }
 
-    public void Freeze(string reason, DateTimeOffset now)
+    public void Freeze(string reason)
     {
-        GuardNotClosed();
+        if (Status == CapitalAccountStatus.Frozen) throw CapitalAccountErrors.AccountIsFrozen();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
 
-        if (string.IsNullOrWhiteSpace(reason))
-            throw new DomainException("Freeze reason is required.");
-
-        Status = CapitalAccountStatus.Frozen;
-        LastUpdatedAt = now;
-
-        RaiseDomainEvent(new CapitalAccountFrozenEvent(
-            AccountId,
-            reason,
-            TotalBalance,
-            AvailableBalance,
-            ReservedBalance,
-            now));
+        RaiseDomainEvent(new CapitalAccountFrozenEvent(AccountId, reason));
     }
 
-    public void Close(string reason, DateTimeOffset now)
+    public void Close(Timestamp closedAt)
     {
-        GuardNotClosed();
+        if (Status == CapitalAccountStatus.Closed) throw CapitalAccountErrors.AccountIsClosed();
+        if (TotalBalance.Value != 0) throw CapitalAccountErrors.CannotCloseWithOutstandingBalance();
+        if (ReservedBalance.Value != 0) throw CapitalAccountErrors.CannotCloseWithReservedFunds();
 
-        if (string.IsNullOrWhiteSpace(reason))
-            throw new DomainException("Close reason is required.");
-
-        if (TotalBalance != 0m)
-            throw CapitalAccountErrors.CannotCloseWithOutstandingBalance(TotalBalance);
-
-        if (ReservedBalance != 0m)
-            throw CapitalAccountErrors.CannotCloseWithReservedFunds(ReservedBalance);
-
-        Status = CapitalAccountStatus.Closed;
-        LastUpdatedAt = now;
-
-        RaiseDomainEvent(new CapitalAccountClosedEvent(
-            AccountId,
-            reason,
-            now));
+        RaiseDomainEvent(new CapitalAccountClosedEvent(AccountId, closedAt));
     }
 
-    // ── Invariants ───────────────────────────────────────────────
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case CapitalAccountOpenedEvent e:
+                AccountId = e.AccountId;
+                OwnerId = e.OwnerId;
+                Currency = e.Currency;
+                TotalBalance = new Amount(0);
+                AvailableBalance = new Amount(0);
+                ReservedBalance = new Amount(0);
+                Status = CapitalAccountStatus.Active;
+                CreatedAt = e.CreatedAt;
+                LastUpdatedAt = e.CreatedAt;
+                break;
+
+            case CapitalFundedEvent e:
+                TotalBalance = e.NewTotalBalance;
+                AvailableBalance = e.NewAvailableBalance;
+                break;
+
+            case AccountCapitalAllocatedEvent e:
+                TotalBalance = new Amount(TotalBalance.Value - e.AllocatedAmount.Value);
+                AvailableBalance = e.NewAvailableBalance;
+                break;
+
+            case AccountCapitalReservedEvent e:
+                AvailableBalance = e.NewAvailableBalance;
+                ReservedBalance = e.NewReservedBalance;
+                break;
+
+            case AccountReservationReleasedEvent e:
+                AvailableBalance = e.NewAvailableBalance;
+                ReservedBalance = e.NewReservedBalance;
+                break;
+
+            case CapitalAccountFrozenEvent:
+                Status = CapitalAccountStatus.Frozen;
+                break;
+
+            case CapitalAccountClosedEvent e:
+                Status = CapitalAccountStatus.Closed;
+                LastUpdatedAt = e.ClosedAt;
+                break;
+        }
+    }
 
     protected override void EnsureInvariants()
     {
-        if (TotalBalance < 0m)
-            throw CapitalAccountErrors.NegativeTotalBalance(TotalBalance);
+        if (TotalBalance.Value < 0)
+            throw CapitalAccountErrors.NegativeTotalBalance();
 
-        if (AvailableBalance < 0m)
-            throw CapitalAccountErrors.NegativeAvailableBalance(AvailableBalance);
+        if (AvailableBalance.Value < 0)
+            throw CapitalAccountErrors.NegativeAvailableBalance();
 
-        if (ReservedBalance < 0m)
-            throw CapitalAccountErrors.NegativeReservedBalance(ReservedBalance);
+        if (ReservedBalance.Value < 0)
+            throw CapitalAccountErrors.NegativeReservedBalance();
 
-        if (AvailableBalance + ReservedBalance != TotalBalance)
+        if (Status == CapitalAccountStatus.Active &&
+            AvailableBalance.Value + ReservedBalance.Value != TotalBalance.Value)
             throw CapitalAccountErrors.BalanceInvariantViolation(TotalBalance, AvailableBalance, ReservedBalance);
-    }
-
-    // ── Guards ───────────────────────────────────────────────────
-
-    private void GuardOperational()
-    {
-        if (Status == CapitalAccountStatus.Frozen)
-            throw CapitalAccountErrors.AccountIsFrozen(AccountId);
-
-        if (Status == CapitalAccountStatus.Closed)
-            throw CapitalAccountErrors.AccountIsClosed(AccountId);
-    }
-
-    private void GuardNotClosed()
-    {
-        if (Status == CapitalAccountStatus.Closed)
-            throw CapitalAccountErrors.AccountIsClosed(AccountId);
-    }
-
-    private static void GuardPositiveAmount(decimal amount)
-    {
-        if (amount <= 0m)
-            throw CapitalAccountErrors.InvalidAmount(amount);
-    }
-
-    private static void GuardCurrencyCode(string code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-            throw CapitalAccountErrors.InvalidCurrencyCode(code ?? "null");
-    }
-
-    private void GuardCurrencyMatch(string currencyCode)
-    {
-        if (!string.Equals(CurrencyCode, currencyCode, StringComparison.OrdinalIgnoreCase))
-            throw CapitalAccountErrors.CurrencyMismatch(CurrencyCode, currencyCode);
     }
 }

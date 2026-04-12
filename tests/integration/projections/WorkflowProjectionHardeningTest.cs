@@ -1,8 +1,8 @@
 using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.OrchestrationSystem.Workflow;
+using Whyce.Projections.Orchestration.Workflow;
 using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.OrchestrationSystem.Workflow;
-using Whyce.Shared.Contracts.Projections.OrchestrationSystem.Workflow;
+using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
+using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
 
 namespace Whycespace.Tests.Integration.Projections;
 

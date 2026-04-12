@@ -1,0 +1,7 @@
+namespace Whycespace.Domain.StructuralSystem.Structure.HierarchyDefinition;
+
+public sealed record HierarchyDefinitionDefinedEvent(HierarchyDefinitionId HierarchyDefinitionId, HierarchyDefinitionDescriptor Descriptor);
+
+public sealed record HierarchyDefinitionValidatedEvent(HierarchyDefinitionId HierarchyDefinitionId);
+
+public sealed record HierarchyDefinitionLockedEvent(HierarchyDefinitionId HierarchyDefinitionId);

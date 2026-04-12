@@ -1,23 +1,110 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Capital.Asset;
 
-public sealed class AssetAggregate
+public sealed class AssetAggregate : AggregateRoot
 {
-    public static AssetAggregate Create()
+    public AssetId AssetId { get; private set; }
+    public Guid OwnerId { get; private set; }
+    public Amount Value { get; private set; }
+    public Currency Currency { get; private set; }
+    public AssetStatus Status { get; private set; }
+    public Timestamp CreatedAt { get; private set; }
+    public Timestamp LastValuedAt { get; private set; }
+
+    private AssetAggregate() { }
+
+    // ── Factory ──────────────────────────────────────────────────
+
+    public static AssetAggregate Create(
+        AssetId assetId,
+        Guid ownerId,
+        Amount initialValue,
+        Currency currency,
+        Timestamp createdAt)
     {
+        Guard.Against(ownerId == Guid.Empty, "Owner ID cannot be empty.");
+        Guard.Against(initialValue.Value <= 0m, "Initial value must be greater than zero.");
+
         var aggregate = new AssetAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+
+        aggregate.RaiseDomainEvent(new AssetCreatedEvent(
+            assetId,
+            ownerId,
+            initialValue,
+            currency,
+            createdAt));
+
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    // ── Behavior ─────────────────────────────────────────────────
+
+    public void Revalue(Amount newValue, Timestamp valuedAt)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        if (Status == AssetStatus.Disposed)
+            throw AssetErrors.CannotValueDisposedAsset();
+
+        Guard.Against(newValue.Value <= 0m, "New value must be greater than zero.");
+
+        RaiseDomainEvent(new AssetValuedEvent(
+            AssetId,
+            Value,
+            newValue,
+            Currency,
+            valuedAt));
     }
 
-    private void ValidateBeforeChange()
+    public void Dispose(Timestamp disposedAt)
     {
-        // Pre-change validation gate
+        if (Status == AssetStatus.Disposed)
+            throw AssetErrors.AssetAlreadyDisposed();
+
+        RaiseDomainEvent(new AssetDisposedEvent(
+            AssetId,
+            Value,
+            disposedAt));
+    }
+
+    // ── Event Sourcing ───────────────────────────────────────────
+
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case AssetCreatedEvent e:
+                AssetId = e.AssetId;
+                OwnerId = e.OwnerId;
+                Value = e.InitialValue;
+                Currency = e.Currency;
+                Status = AssetStatus.Active;
+                CreatedAt = e.CreatedAt;
+                LastValuedAt = e.CreatedAt;
+                break;
+
+            case AssetValuedEvent e:
+                Value = e.NewValue;
+                Status = AssetStatus.Valued;
+                LastValuedAt = e.ValuedAt;
+                break;
+
+            case AssetDisposedEvent:
+                Status = AssetStatus.Disposed;
+                break;
+        }
+    }
+
+    // ── Invariants ───────────────────────────────────────────────
+
+    protected override void EnsureInvariants()
+    {
+        if (Value.Value < 0m)
+            throw AssetErrors.NegativeAssetValue();
+
+        if (Status != AssetStatus.Disposed)
+        {
+            Guard.Against(OwnerId == Guid.Empty, "OwnerId must not be empty for a non-disposed asset.");
+        }
     }
 }

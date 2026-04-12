@@ -34,6 +34,36 @@ internal sealed class FlexibleGuidConverter : JsonConverter<Guid>
 }
 
 /// <summary>
+/// Accepts an int encoded either as a raw JSON number (42) or as a value-object
+/// envelope ({"value":42}). Required because domain events may expose position/count
+/// fields as value objects (e.g. KanbanPosition) whose default System.Text.Json shape
+/// is the envelope form, while inbound schema contracts declare them as raw ints.
+/// </summary>
+internal sealed class FlexibleIntConverter : JsonConverter<int>
+{
+    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+            return reader.GetInt32();
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, "value", StringComparison.OrdinalIgnoreCase))
+                    return prop.Value.GetInt32();
+            }
+        }
+
+        throw new JsonException("Expected int number or { value: int } object.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
+        => writer.WriteNumberValue(value);
+}
+
+/// <summary>
 /// Schema-driven event deserializer.
 /// Replaces the static EventTypeResolver and the per-domain switch in KafkaProjectionConsumerWorker.
 ///
@@ -48,7 +78,7 @@ public sealed class EventDeserializer
     private readonly EventSchemaRegistry _schema;
     private static readonly JsonSerializerOptions InboundOptions = new()
     {
-        Converters = { new FlexibleGuidConverter() }
+        Converters = { new FlexibleGuidConverter(), new FlexibleIntConverter() }
     };
 
     public EventDeserializer(EventSchemaRegistry schema)

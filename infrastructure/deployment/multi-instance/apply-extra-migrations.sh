@@ -29,7 +29,7 @@ set -euo pipefail
 log() { printf '[apply-extra-migrations] %s\n' "$*" >&2; }
 
 PGUSER=whyce
-PGPASSWORD=whyce
+PGPASSWORD="${POSTGRES_PASSWORD:-change_me_securely}"
 export PGPASSWORD
 
 apply_dir() {

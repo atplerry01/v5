@@ -1,4 +1,5 @@
 using Whyce.Platform.Host.Composition.Constitutional.Policy;
+using Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban;
 using Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
 using Whyce.Platform.Host.Composition.Orchestration.Workflow;
 
@@ -17,6 +18,7 @@ public static class BootstrapModuleCatalog
     [
         new ConstitutionalPolicyBootstrap(),
         new TodoBootstrap(),
+        new KanbanBootstrap(),
         new WorkflowExecutionBootstrap()
     ];
 }

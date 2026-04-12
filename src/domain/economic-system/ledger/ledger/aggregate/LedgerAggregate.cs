@@ -1,23 +1,59 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Ledger.Ledger;
 
-public sealed class LedgerAggregate
+public sealed class LedgerAggregate : AggregateRoot
 {
-    public static LedgerAggregate Create()
+    public LedgerId LedgerId { get; private set; }
+    public Currency Currency { get; private set; }
+    public Timestamp OpenedAt { get; private set; }
+
+    private readonly List<PostedJournalReference> _journals = new();
+    public IReadOnlyList<PostedJournalReference> Journals => _journals.AsReadOnly();
+
+    public static LedgerAggregate Open(LedgerId ledgerId, Currency currency, Timestamp openedAt)
     {
-        var aggregate = new LedgerAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
-        return aggregate;
+        var ledger = new LedgerAggregate();
+        ledger.RaiseDomainEvent(new LedgerOpenedEvent(ledgerId, currency, openedAt));
+        return ledger;
     }
 
-    private void EnsureInvariants()
+    public void AppendJournal(Guid journalId, Timestamp appendedAt)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        Guard.Against(journalId == Guid.Empty, "Journal reference cannot be empty.");
+
+        if (_journals.Any(j => j.JournalId == journalId))
+            throw LedgerErrors.DuplicateJournal(journalId);
+
+        RaiseDomainEvent(new JournalAppendedToLedgerEvent(LedgerId, journalId, appendedAt));
     }
 
-    private void ValidateBeforeChange()
+    protected override void Apply(object domainEvent)
     {
-        // Pre-change validation gate
+        switch (domainEvent)
+        {
+            case LedgerOpenedEvent e:
+                LedgerId = e.LedgerId;
+                Currency = e.Currency;
+                OpenedAt = e.OpenedAt;
+                break;
+
+            case JournalAppendedToLedgerEvent e:
+                _journals.Add(PostedJournalReference.Create(e.JournalId, e.AppendedAt));
+                break;
+        }
+    }
+
+    protected override void EnsureInvariants()
+    {
+        var duplicateJournalIds = _journals
+            .GroupBy(j => j.JournalId)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        if (duplicateJournalIds.Count > 0)
+            throw LedgerErrors.DuplicateJournal(duplicateJournalIds.First());
     }
 }

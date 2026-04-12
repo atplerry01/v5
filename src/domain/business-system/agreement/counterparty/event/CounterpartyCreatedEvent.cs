@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Agreement.Counterparty;
 
-public sealed record CounterpartyCreatedEvent;
+public sealed record CounterpartyCreatedEvent(CounterpartyId CounterpartyId);

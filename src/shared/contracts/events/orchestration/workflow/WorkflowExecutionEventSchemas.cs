@@ -1,0 +1,15 @@
+namespace Whyce.Shared.Contracts.Events.Orchestration.Workflow;
+
+public sealed record WorkflowExecutionStartedEventSchema(
+    Guid AggregateId, string WorkflowName, object? Payload = null);
+
+public sealed record WorkflowStepCompletedEventSchema(
+    Guid AggregateId, int StepIndex, string StepName, string ExecutionHash, object? Output = null);
+
+public sealed record WorkflowExecutionCompletedEventSchema(Guid AggregateId, string ExecutionHash);
+
+public sealed record WorkflowExecutionFailedEventSchema(
+    Guid AggregateId, string FailedStepName, string Reason);
+
+public sealed record WorkflowExecutionResumedEventSchema(
+    Guid AggregateId, string ResumedFromStepName, string PreviousFailureReason);

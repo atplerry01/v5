@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Localization.CurrencyFormat;
+
+public sealed record CurrencyFormatActivatedEvent(CurrencyFormatId CurrencyFormatId);

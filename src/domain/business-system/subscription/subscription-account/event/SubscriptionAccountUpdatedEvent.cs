@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Subscription.SubscriptionAccount;
-
-public sealed record SubscriptionAccountUpdatedEvent;

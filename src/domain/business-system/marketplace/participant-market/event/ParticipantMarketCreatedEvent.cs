@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Marketplace.ParticipantMarket;
 
-public sealed record ParticipantMarketCreatedEvent;
+public sealed record ParticipantMarketRegisteredEvent(ParticipantMarketId ParticipantMarketId, ParticipantReference Reference);

@@ -1,42 +1,45 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Capital.Account;
 
 public static class CapitalAccountErrors
 {
-    public static DomainException InsufficientAvailableBalance(decimal requested, decimal available) =>
-        new($"Cannot process {requested:F2}: only {available:F2} available.");
+    public static DomainException InsufficientAvailableBalance(Amount requested, Amount available) =>
+        new($"Insufficient available balance. Requested: {requested.Value}, Available: {available.Value}.");
 
-    public static DomainException AccountIsFrozen(AccountId accountId) =>
-        new($"Capital account '{accountId.Value}' is frozen. No operations permitted.");
+    public static DomainException InvalidAmount() =>
+        new("Amount must be greater than zero.");
 
-    public static DomainException AccountIsClosed(AccountId accountId) =>
-        new($"Capital account '{accountId.Value}' is closed. No operations permitted.");
+    public static DomainException InvalidCurrencyCode() =>
+        new("Currency code is invalid.");
 
-    public static DomainException CannotCloseWithOutstandingBalance(decimal total) =>
-        new($"Cannot close account with outstanding balance of {total:F2}.");
+    public static DomainException CurrencyMismatch(Currency expected, Currency actual) =>
+        new($"Currency mismatch. Expected: {expected.Code}, Actual: {actual.Code}.");
 
-    public static DomainException CannotCloseWithReservedFunds(decimal reserved) =>
-        new($"Cannot close account with reserved funds of {reserved:F2}.");
+    public static DomainException AccountIsFrozen() =>
+        new("Operation not permitted. Account is frozen.");
 
-    public static DomainException InvalidAmount(decimal amount) =>
-        new($"Amount must be greater than zero. Received: {amount:F2}.");
+    public static DomainException AccountIsClosed() =>
+        new("Operation not permitted. Account is closed.");
 
-    public static DomainException InvalidCurrencyCode(string code) =>
-        new($"Currency code '{code}' is invalid. Must be a non-empty ISO currency code.");
+    public static DomainException CannotCloseWithOutstandingBalance() =>
+        new("Cannot close account with an outstanding total balance.");
 
-    public static DomainException CurrencyMismatch(string expected, string actual) =>
-        new($"Currency mismatch: account uses '{expected}' but received '{actual}'.");
+    public static DomainException CannotCloseWithReservedFunds() =>
+        new("Cannot close account with reserved funds.");
 
-    public static DomainInvariantViolationException NegativeTotalBalance(decimal total) =>
-        new($"Invariant violated: TotalBalance cannot be negative. Current: {total:F2}.");
+    public static DomainInvariantViolationException NegativeTotalBalance() =>
+        new("Total balance cannot be negative.");
 
-    public static DomainInvariantViolationException NegativeAvailableBalance(decimal available) =>
-        new($"Invariant violated: AvailableBalance cannot be negative. Current: {available:F2}.");
+    public static DomainInvariantViolationException NegativeAvailableBalance() =>
+        new("Available balance cannot be negative.");
 
-    public static DomainInvariantViolationException NegativeReservedBalance(decimal reserved) =>
-        new($"Invariant violated: ReservedBalance cannot be negative. Current: {reserved:F2}.");
+    public static DomainInvariantViolationException NegativeReservedBalance() =>
+        new("Reserved balance cannot be negative.");
 
-    public static DomainInvariantViolationException BalanceInvariantViolation(decimal total, decimal available, decimal reserved) =>
-        new($"Invariant violated: Available ({available:F2}) + Reserved ({reserved:F2}) must equal Total ({total:F2}).");
+    public static DomainInvariantViolationException BalanceInvariantViolation(
+        Amount total, Amount available, Amount reserved) =>
+        new($"Balance invariant violated. Total: {total.Value}, Available: {available.Value}, Reserved: {reserved.Value}. " +
+            "Available + Reserved must equal Total.");
 }

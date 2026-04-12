@@ -6,7 +6,7 @@ using Whyce.Engines.T0U.WhyceId.Engine;
 using Whyce.Engines.T0U.WhycePolicy.Engine;
 using Whyce.Runtime.Topology;
 using Whyce.Shared.Kernel.Determinism;
-using Whyce.Engines.T2E.Operational.Todo;
+using Whyce.Engines.T2E.Operational.Sandbox.Todo;
 using Whyce.Runtime.ControlPlane;
 using Whyce.Runtime.Dispatcher;
 using Whyce.Runtime.EventFabric;
@@ -79,7 +79,7 @@ internal sealed class InMemoryExecutionLockProvider : Whyce.Shared.Contracts.Run
 /// Real components: middleware pipeline (all 8), RuntimeCommandDispatcher,
 /// EventFabric, EventStoreService, ChainAnchorService, OutboxService,
 /// EventSchemaRegistry, TopicNameResolver, WhyceIdEngine, WhycePolicyEngine,
-/// WhyceChainEngine, EngineRegistry, TodoEngine.
+/// WhyceChainEngine, EngineRegistry, Todo handlers.
 ///
 /// In-memory substitutes for infrastructure adapters: IEventStore,
 /// IChainAnchor, IOutbox, IIdempotencyStore, IPolicyEvaluator (OPA).
@@ -174,14 +174,16 @@ public sealed class TestHost
             eventStoreService, chainAnchorService, outboxService,
             schemaRegistry, topicResolver, clock);
 
-        // Engine registry + service provider (Todo engines)
+        // Engine registry + service provider (Todo handlers)
         var engineRegistry = new EngineRegistry();
-        engineRegistry.Register<CreateTodoCommand, TodoEngine>();
-        engineRegistry.Register<UpdateTodoCommand, TodoEngine>();
-        engineRegistry.Register<CompleteTodoCommand, TodoEngine>();
+        engineRegistry.Register<CreateTodoCommand, CreateTodoHandler>();
+        engineRegistry.Register<UpdateTodoCommand, UpdateTodoHandler>();
+        engineRegistry.Register<CompleteTodoCommand, CompleteTodoHandler>();
 
         var services = new MinimalServiceProvider();
-        services.Register(typeof(TodoEngine), new TodoEngine());
+        services.Register(typeof(CreateTodoHandler), new CreateTodoHandler());
+        services.Register(typeof(UpdateTodoHandler), new UpdateTodoHandler());
+        services.Register(typeof(CompleteTodoHandler), new CompleteTodoHandler());
 
         // Workflow surface (stubbed — Todo doesn't use it)
         var workflowEngine = new NoOpWorkflowEngine();

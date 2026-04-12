@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Billing.PaymentApplication;
+
+public sealed record PaymentApplicationReversedEvent(PaymentApplicationId PaymentApplicationId);

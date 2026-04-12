@@ -36,6 +36,12 @@ TOPICS=(
   "whyce.operational.sandbox.todo.retry"
   "whyce.operational.sandbox.todo.deadletter"
 
+  # operational > sandbox > kanban
+  "whyce.operational.sandbox.kanban.commands"
+  "whyce.operational.sandbox.kanban.events"
+  "whyce.operational.sandbox.kanban.retry"
+  "whyce.operational.sandbox.kanban.deadletter"
+
   # constitutional > policy > decision (Phase 1 gate unblock S0)
   "whyce.constitutional.policy.decision.commands"
   "whyce.constitutional.policy.decision.events"

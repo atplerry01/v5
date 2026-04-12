@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Capital.Account;
 
 public readonly record struct AccountId
@@ -6,11 +8,7 @@ public readonly record struct AccountId
 
     public AccountId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("AccountId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "AccountId cannot be empty.");
         Value = value;
     }
-
-    public static AccountId From(Guid value) => new(value);
 }

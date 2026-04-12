@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
+
 namespace Whycespace.Domain.EconomicSystem.Capital.Account;
 
 public sealed class CapitalTransferService
@@ -5,11 +7,13 @@ public sealed class CapitalTransferService
     public void Transfer(
         CapitalAccountAggregate source,
         CapitalAccountAggregate destination,
-        decimal amount,
-        string currencyCode,
-        DateTimeOffset now)
+        Amount amount,
+        Currency currency)
     {
-        source.Allocate(amount, currencyCode, now);
-        destination.Fund(amount, currencyCode, now);
+        if (source.Currency != destination.Currency)
+            throw CapitalAccountErrors.CurrencyMismatch(source.Currency, destination.Currency);
+
+        source.Allocate(amount, currency);
+        destination.Fund(amount, currency);
     }
 }

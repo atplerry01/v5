@@ -1,5 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Marketplace.Bid;
 
-public sealed class BidService
-{
-}
+public sealed class BidService { }

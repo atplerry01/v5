@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.StructuralSystem.Structure.Classification;
+
+public sealed record ClassificationDefinedEvent(ClassificationId ClassificationId, ClassificationDescriptor Descriptor);

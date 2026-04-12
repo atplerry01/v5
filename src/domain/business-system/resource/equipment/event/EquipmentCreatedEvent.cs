@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Resource.Equipment;
 
-public sealed record EquipmentCreatedEvent;
+public sealed record EquipmentCreatedEvent(EquipmentId EquipmentId);

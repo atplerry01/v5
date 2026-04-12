@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Agreement.Obligation;
 
-public sealed record ObligationCreatedEvent;
+public sealed record ObligationCreatedEvent(ObligationId ObligationId);

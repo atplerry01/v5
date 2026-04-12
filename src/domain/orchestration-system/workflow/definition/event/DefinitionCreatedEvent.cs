@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Definition;
 
-public sealed record DefinitionCreatedEvent;
+public sealed record DefinitionDraftedEvent(DefinitionId DefinitionId, WorkflowBlueprint Blueprint);

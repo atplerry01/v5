@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Marketplace.SettlementMarket;
 
-public sealed record SettlementMarketCreatedEvent;
+public sealed record SettlementMarketCreatedEvent(SettlementMarketId SettlementMarketId);

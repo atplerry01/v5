@@ -594,7 +594,7 @@ public sealed class WbsmArchitectureTests
     public void Workflow_read_model_step_outputs_is_read_only_dictionary()
     {
         var path = Path.Combine(SrcRoot, "shared", "contracts", "projections",
-            "orchestration-system", "workflow", "WorkflowExecutionReadModel.cs");
+            "orchestration", "workflow", "WorkflowExecutionReadModel.cs");
         var content = File.ReadAllText(path);
 
         Assert.Contains("IReadOnlyDictionary<string, object?> StepOutputs", content);
@@ -605,7 +605,7 @@ public sealed class WbsmArchitectureTests
     [Fact]
     public void Workflow_projection_handler_does_not_mutate_step_outputs_in_place()
     {
-        var path = Path.Combine(SrcRoot, "projections", "orchestration-system",
+        var path = Path.Combine(SrcRoot, "projections", "orchestration",
             "workflow", "handler", "WorkflowExecutionProjectionHandler.cs");
         var content = File.ReadAllText(path);
 
@@ -616,7 +616,7 @@ public sealed class WbsmArchitectureTests
     [Fact]
     public void Workflow_projection_handler_is_replay_safe_log_and_skip()
     {
-        var path = Path.Combine(SrcRoot, "projections", "orchestration-system",
+        var path = Path.Combine(SrcRoot, "projections", "orchestration",
             "workflow", "handler", "WorkflowExecutionProjectionHandler.cs");
         var content = File.ReadAllText(path);
 

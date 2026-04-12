@@ -1,4 +1,4 @@
-using Whyce.Engines.T2E.Operational.Todo;
+using Whyce.Engines.T2E.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
 using Whyce.Shared.Contracts.Engine;
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
@@ -14,7 +14,7 @@ public sealed class TodoEngineTests
     [Fact]
     public async Task ExecuteAsync_CreateCommand_EmitsCreatedEvent()
     {
-        var engine = new TodoEngine();
+        var handler = new CreateTodoHandler();
         var aggregateId = IdGen.Generate("TodoEngineTests:Create:agg");
         var command = new CreateTodoCommand(aggregateId, "Test todo");
 
@@ -23,7 +23,7 @@ public sealed class TodoEngineTests
             aggregateId,
             (type, id) => Task.FromResult<object>(null!));
 
-        await engine.ExecuteAsync(context);
+        await handler.ExecuteAsync(context);
 
         Assert.Single(context.EmittedEvents);
         var created = Assert.IsType<TodoCreatedEvent>(context.EmittedEvents[0]);
@@ -33,7 +33,7 @@ public sealed class TodoEngineTests
     [Fact]
     public async Task ExecuteAsync_UpdateCommand_EmitsUpdatedEvent()
     {
-        var engine = new TodoEngine();
+        var handler = new UpdateTodoHandler();
         var aggregateId = IdGen.Generate("TodoEngineTests:Update:agg");
         var command = new UpdateTodoCommand(aggregateId, "Updated");
 
@@ -46,7 +46,7 @@ public sealed class TodoEngineTests
             aggregateId,
             (type, id) => Task.FromResult<object>(aggregate));
 
-        await engine.ExecuteAsync(context);
+        await handler.ExecuteAsync(context);
 
         Assert.Single(context.EmittedEvents);
         var updated = Assert.IsType<TodoUpdatedEvent>(context.EmittedEvents[0]);
@@ -56,7 +56,7 @@ public sealed class TodoEngineTests
     [Fact]
     public async Task ExecuteAsync_CompleteCommand_EmitsCompletedEvent()
     {
-        var engine = new TodoEngine();
+        var handler = new CompleteTodoHandler();
         var aggregateId = IdGen.Generate("TodoEngineTests:Complete:agg");
         var command = new CompleteTodoCommand(aggregateId);
 
@@ -68,7 +68,7 @@ public sealed class TodoEngineTests
             aggregateId,
             (type, id) => Task.FromResult<object>(aggregate));
 
-        await engine.ExecuteAsync(context);
+        await handler.ExecuteAsync(context);
 
         Assert.Single(context.EmittedEvents);
         Assert.IsType<TodoCompletedEvent>(context.EmittedEvents[0]);

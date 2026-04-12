@@ -40,6 +40,8 @@ services:
         condition: service_healthy
       whycechain-db:
         condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ../data/postgres:/migrations:ro
       - ./multi-instance/apply-extra-migrations.sh:/apply.sh:ro

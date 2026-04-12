@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Entitlement.Limit;
 
-public sealed record LimitCreatedEvent;
+public sealed record LimitCreatedEvent(LimitId LimitId, LimitSubjectId SubjectId, int ThresholdValue);

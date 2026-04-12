@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.operational.sandbox.kanban.commands",
+    "whyce.operational.sandbox.kanban.events",
+    "whyce.operational.sandbox.kanban.retry",
+    "whyce.operational.sandbox.kanban.deadletter"
+  ]
+}

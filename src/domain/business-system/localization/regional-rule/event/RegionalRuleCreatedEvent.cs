@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Localization.RegionalRule;
 
-public sealed record RegionalRuleCreatedEvent;
+public sealed record RegionalRuleCreatedEvent(RegionalRuleId RegionalRuleId, RuleCode Code);

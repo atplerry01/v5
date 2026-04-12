@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T1M.Steps.Todo;
-using Whyce.Engines.T2E.Operational.Todo;
+using Whyce.Engines.T1M.Steps.Operational.Sandbox.Todo;
+using Whyce.Engines.T2E.Operational.Sandbox.Todo;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Projections.Operational.Sandbox.Todo;
 using Whyce.Runtime.EventFabric;
@@ -20,10 +20,6 @@ namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
 /// Full domain wiring for operational/sandbox/todo. Owns every Todo-specific
 /// DI registration, schema entry, projection mapping, engine binding, and
 /// workflow definition that would otherwise live in Program.cs.
-///
-/// Schema identity binding is delegated to the runtime-side
-/// DomainSchemaCatalog seam (Phase 1.5 §5.1.2 BPV-D01); host stays free of
-/// typed domain-event references.
 /// </summary>
 public sealed class TodoBootstrap : IDomainBootstrapModule
 {
@@ -34,18 +30,12 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         services.AddTransient<CreateTodoStep>();
         services.AddTransient<EmitCompletionStep>();
 
-        // T2E engine
-        services.AddTransient<TodoEngine>();
+        // T2E handlers (one per command)
+        services.AddTransient<CreateTodoHandler>();
+        services.AddTransient<UpdateTodoHandler>();
+        services.AddTransient<CompleteTodoHandler>();
 
-        // Projection layer (consumers receive events from Kafka ONLY)
-        // phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): the projection
-        // handler now resolves the inner NpgsqlDataSource from the
-        // declared ProjectionsDataSource singleton (registered by
-        // InfrastructureComposition). The projections assembly cannot
-        // reference the host-adapters layer, so the bootstrap unwraps
-        // .Inner here at the construction seam. Pool sizing flows
-        // from Postgres.Pools.Projections.* configuration; the
-        // pre-KC-4 raw connection string read at this site is gone.
+        // Projection layer
         services.AddSingleton(sp => new TodoProjectionHandler(
             sp.GetRequiredService<ProjectionsDataSource>().Inner));
         services.AddSingleton<TodoProjectionConsumer>();
@@ -53,17 +43,9 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         // Systems.Downstream — Todo intent handler
         services.AddTransient<ITodoIntentHandler, TodoIntentHandler>();
 
-        // Kafka projection consumer — generic worker.
-        // Per-domain config (topic, group, projection table) lives here in the bootstrap module;
-        // the worker itself contains zero domain references.
+        // Kafka projection consumer
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
             ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
-        // phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): the second
-        // pre-KC-4 read of Postgres:ProjectionsConnectionString
-        // (previously used to construct PostgresProjectionWriter
-        // inline) is removed. The writer now receives ProjectionsDataSource
-        // via DI from InfrastructureComposition. Single canonical
-        // source of truth for the projections pool.
 
         const string topic = "whyce.operational.sandbox.todo.events";
         const string consumerGroup = "whyce.projection.operational.sandbox.todo";
@@ -84,10 +66,6 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
                     projectionTable,
                     aggregateType),
                 sp.GetRequiredService<IClock>(),
-                // phase1.5-S5.2.1 / PC-6 (KAFKA-CONSUMER-CONFIG-01):
-                // resolve the declared KafkaConsumerOptions singleton so
-                // the worker applies bounded prefetch / session / poll
-                // values instead of inheriting librdkafka defaults.
                 sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
                 sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
@@ -95,8 +73,6 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 
     public void RegisterSchema(EventSchemaRegistry schema)
     {
-        // Phase 1.5 §5.1.2 BPV-D01: schema identity binding lives in the
-        // runtime-side TodoSchemaModule. Host stays free of typed domain refs.
         DomainSchemaCatalog.RegisterOperationalSandboxTodo(schema);
     }
 
@@ -111,9 +87,9 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 
     public void RegisterEngines(IEngineRegistry engine)
     {
-        engine.Register<CreateTodoCommand, TodoEngine>();
-        engine.Register<UpdateTodoCommand, TodoEngine>();
-        engine.Register<CompleteTodoCommand, TodoEngine>();
+        engine.Register<CreateTodoCommand, CreateTodoHandler>();
+        engine.Register<UpdateTodoCommand, UpdateTodoHandler>();
+        engine.Register<CompleteTodoCommand, CompleteTodoHandler>();
     }
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)

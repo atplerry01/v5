@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Subscription.Enrollment;
-
-public sealed record EnrollmentStateChangedEvent;

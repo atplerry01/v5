@@ -1,5 +1,4 @@
 namespace Whycespace.Domain.CoreSystem.Command.CommandRouting;
 
-public sealed class CommandRoutingSpecification
-{
-}
+// Specifications are split into CanActivateSpecification and CanDisableSpecification.
+// This file is retained for structural consistency.

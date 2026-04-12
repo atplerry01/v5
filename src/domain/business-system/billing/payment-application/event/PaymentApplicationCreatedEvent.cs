@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Billing.PaymentApplication;
 
-public sealed record PaymentApplicationCreatedEvent;
+public sealed record PaymentApplicationCreatedEvent(PaymentApplicationId PaymentApplicationId);

@@ -1,3 +1,5 @@
 namespace Whycespace.Domain.CoreSystem.Event.EventDefinition;
 
-public sealed record EventDefinitionCreatedEvent;
+public sealed record EventDefinitionRegisteredEvent(
+    EventDefinitionId DefinitionId,
+    EventSchema Schema);

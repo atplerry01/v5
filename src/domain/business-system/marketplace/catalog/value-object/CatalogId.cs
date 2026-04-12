@@ -1,3 +1,14 @@
 namespace Whycespace.Domain.BusinessSystem.Marketplace.Catalog;
 
-public readonly record struct CatalogId(Guid Value);
+public readonly record struct CatalogId
+{
+    public Guid Value { get; }
+
+    public CatalogId(Guid value)
+    {
+        if (value == Guid.Empty)
+            throw new ArgumentException("CatalogId value must not be empty.", nameof(value));
+
+        Value = value;
+    }
+}

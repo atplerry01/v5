@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Resource.MaintenanceResource;
+
+public sealed record MaintenanceResourceActivatedEvent(MaintenanceResourceId MaintenanceResourceId);

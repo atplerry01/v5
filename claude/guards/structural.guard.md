@@ -28,7 +28,7 @@ All files under `src/`. Applies to every commit, PR, and CI pipeline run.
 
 9. **DEPENDENCY DIRECTION** — Dependencies flow strictly: `platform > systems > runtime > engines > domain < shared`. `src/projections/` is an isolated read-side layer referencing only `shared` and `infrastructure`. No reverse dependency is permitted. No lateral dependency within the same layer (e.g., engine-to-engine). Runtime and projections are mutually isolated — neither may reference the other.
 
-10. **NAMESPACE ALIGNMENT** — File namespace must match its physical folder path. A file in `src/domain/economic/capital/vault/` must have namespace `Domain.Economic.Capital.Vault.*`. No namespace aliasing to circumvent layer boundaries.
+10. **NAMESPACE ALIGNMENT** — File namespace must match its physical folder path. A file in `src/domain/economic-system/capital/vault/` must have namespace `Domain.EconomicSystem.Capital.Vault.*`. No namespace aliasing to circumvent layer boundaries.
 
 11. **NO TRANSITIVE LEAKAGE** — Public types in inner layers must not expose types from outer layers in their signatures. Domain types must not reference engine or runtime types even transitively.
 
@@ -98,6 +98,7 @@ All files under `src/`. Applies to every commit, PR, and CI pipeline run.
 13. Verify no `src/projections/` file references Runtime, Domain, or Engines namespaces.
 14. Verify no `src/runtime/projection/` file references Projections namespace.
 15. Verify `src/runtime/projection/` exists and contains execution-support projections only.
+16. Verify all directories directly under `src/domain/` are in the locked classification registry (Rule 16). Flag any unrecognized folder as S0.
 
 ## Pass Criteria
 
@@ -137,6 +138,7 @@ All files under `src/`. Applies to every commit, PR, and CI pipeline run.
 | **S0 — CRITICAL** | Domain projections reference runtime/domain/engines | `using Whycespace.Runtime;` in `src/projections/` |
 | **S0 — CRITICAL** | Runtime projections reference domain projections | `using Whycespace.Projections;` in `src/runtime/projection/` |
 | **S0 — CRITICAL** | Missing projection layer | `src/projections/` or `src/runtime/projection/` does not exist |
+| **S0 — CRITICAL** | Unauthorized classification folder created/renamed/removed | New folder `src/domain/analytics-system/` without approval |
 | **S2 — MEDIUM** | Platform referencing engine directly | `using Engines.T2E.*;` in platform controller |
 | **S2 — MEDIUM** | Namespace misalignment | File path and namespace disagree |
 | **S3 — LOW** | Unnecessary transitive reference | Shared referencing a type it does not use |
@@ -158,6 +160,29 @@ STRUCTURAL_GUARD_VIOLATION:
   expected: <correct behavior>
   actual: <detected behavior>
 ```
+
+---
+
+16. **DOMAIN CLASSIFICATION REGISTRY (LOCKED)** — The top-level folders under `src/domain/` are the **canonical classification set**. Each classification uses the `{name}-system` suffix. The locked registry is:
+
+    | Classification | Folder | Namespace Prefix |
+    |---|---|---|
+    | Business | `business-system` | `BusinessSystem` |
+    | Constitutional | `constitutional-system` | `ConstitutionalSystem` |
+    | Core | `core-system` | `CoreSystem` |
+    | Decision | `decision-system` | `DecisionSystem` |
+    | Economic | `economic-system` | `EconomicSystem` |
+    | Intelligence | `intelligence-system` | `IntelligenceSystem` |
+    | Operational | `operational-system` | `OperationalSystem` |
+    | Orchestration | `orchestration-system` | `OrchestrationSystem` |
+    | Structural | `structural-system` | `StructuralSystem` |
+    | Trust | `trust-system` | `TrustSystem` |
+
+    **Special entries** (not classifications): `shared-kernel` (domain primitives), `bin/`, `obj/` (build artifacts).
+
+    **Creating a new classification folder under `src/domain/` requires explicit user approval.** Claude Code MUST NOT create, rename, or remove classification-level folders without direct instruction. Violating this is an **S0 — CRITICAL** structural breach.
+
+    All domain paths follow `src/domain/{classification-system}/{context}/{domain}/`. No domain code may exist directly under a classification folder — it must be nested in a context.
 
 ---
 

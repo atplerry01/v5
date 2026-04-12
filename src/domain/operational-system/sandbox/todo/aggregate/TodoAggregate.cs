@@ -19,12 +19,12 @@ public sealed class TodoAggregate : AggregateRoot
         return aggregate;
     }
 
-    public void Update(string title)
+    public void ReviseTitle(string title)
     {
         Guard.Against(string.IsNullOrWhiteSpace(title), TodoErrors.TitleRequired);
         Guard.Against(_isCompleted, TodoErrors.CannotUpdateCompleted);
 
-        RaiseDomainEvent(new TodoUpdatedEvent(new AggregateId(Id.Value), title));
+        RaiseDomainEvent(new TodoTitleRevisedEvent(new AggregateId(Id.Value), title));
     }
 
     public void Complete()
@@ -44,7 +44,7 @@ public sealed class TodoAggregate : AggregateRoot
                 _isCompleted = false;
                 break;
 
-            case TodoUpdatedEvent e:
+            case TodoTitleRevisedEvent e:
                 _title = e.Title;
                 break;
 

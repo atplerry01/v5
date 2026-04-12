@@ -1,3 +1,4 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Capital.Account;
@@ -5,5 +6,5 @@ namespace Whycespace.Domain.EconomicSystem.Capital.Account;
 public sealed record CapitalAccountOpenedEvent(
     AccountId AccountId,
     OwnerId OwnerId,
-    string CurrencyCode,
-    DateTimeOffset OpenedAt) : DomainEvent;
+    Currency Currency,
+    Timestamp CreatedAt) : DomainEvent;

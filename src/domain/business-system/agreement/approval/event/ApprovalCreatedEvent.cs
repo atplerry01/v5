@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Agreement.Approval;
 
-public sealed record ApprovalCreatedEvent;
+public sealed record ApprovalCreatedEvent(ApprovalId ApprovalId);

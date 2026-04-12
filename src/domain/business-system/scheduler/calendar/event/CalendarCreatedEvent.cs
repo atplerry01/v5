@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Scheduler.Calendar;
 
-public sealed record CalendarCreatedEvent;
+public sealed record CalendarCreatedEvent(CalendarId CalendarId);

@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Events.OrchestrationSystem.Workflow;
+using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
 using DomainEvents = Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 
 namespace Whyce.Runtime.EventFabric.DomainSchemas;

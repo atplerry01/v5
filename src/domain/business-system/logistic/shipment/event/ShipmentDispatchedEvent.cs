@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Logistic.Shipment;
+
+public sealed record ShipmentDispatchedEvent(ShipmentId ShipmentId);

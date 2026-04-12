@@ -1,5 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Marketplace.ParticipantMarket;
 
-public sealed class ParticipantMarketService
-{
-}
+public sealed class ParticipantMarketService { }

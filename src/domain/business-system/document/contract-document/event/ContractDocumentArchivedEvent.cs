@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Document.ContractDocument;
+
+public sealed record ContractDocumentArchivedEvent(ContractDocumentId ContractDocumentId);

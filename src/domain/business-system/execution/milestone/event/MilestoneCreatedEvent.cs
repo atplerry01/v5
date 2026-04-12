@@ -1,3 +1,3 @@
 namespace Whycespace.Domain.BusinessSystem.Execution.Milestone;
 
-public sealed record MilestoneCreatedEvent;
+public sealed record MilestoneCreatedEvent(MilestoneId MilestoneId, MilestoneTargetId TargetId);

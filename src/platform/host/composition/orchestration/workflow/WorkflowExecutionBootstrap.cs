@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.OrchestrationSystem.Workflow;
+using Whyce.Projections.Orchestration.Workflow;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
 using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Projections.OrchestrationSystem.Workflow;
+using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Platform.Host.Composition.Orchestration.Workflow;

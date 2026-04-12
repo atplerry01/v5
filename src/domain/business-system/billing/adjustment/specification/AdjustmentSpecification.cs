@@ -1,5 +1,9 @@
 namespace Whycespace.Domain.BusinessSystem.Billing.Adjustment;
 
-public sealed class AdjustmentSpecification
+public sealed class HasReasonSpecification
 {
+    public bool IsSatisfiedBy(string? reason)
+    {
+        return !string.IsNullOrWhiteSpace(reason);
+    }
 }

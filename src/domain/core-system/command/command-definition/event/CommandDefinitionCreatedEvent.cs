@@ -1,3 +1,5 @@
 namespace Whycespace.Domain.CoreSystem.Command.CommandDefinition;
 
-public sealed record CommandDefinitionCreatedEvent;
+public sealed record CommandDefinitionRegisteredEvent(
+    CommandDefinitionId DefinitionId,
+    CommandSchema Schema);

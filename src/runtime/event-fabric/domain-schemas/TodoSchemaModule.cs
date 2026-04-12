@@ -9,8 +9,6 @@ namespace Whyce.Runtime.EventFabric.DomainSchemas;
 /// Owns the binding from Todo domain event CLR types to the
 /// <see cref="EventSchemaRegistry"/>, plus the outbound payload mappers that
 /// project domain events into shared schema records for the projection layer.
-/// Relocated from <c>src/platform/host/composition/operational/sandbox/todo/TodoBootstrap.cs</c>
-/// under Phase 1.5 §5.1.2 BPV-D01 to remove typed domain references from host.
 /// </summary>
 public sealed class TodoSchemaModule : ISchemaModule
 {
