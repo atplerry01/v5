@@ -1,9 +1,9 @@
 using Whyce.Projections.Operational.Sandbox.Kanban.Reducer;
 using Whyce.Projections.Shared;
 using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Board;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
 using Whyce.Shared.Contracts.Projection;
 
 namespace Whyce.Projections.Operational.Sandbox.Kanban.Board;
@@ -22,20 +22,20 @@ public sealed class KanbanBoardProjectionHandler :
     {
         return envelope.Payload switch
         {
-            KanbanBoardCreatedEventSchema e => Project(e, envelope.EventId, envelope.CorrelationId, cancellationToken),
+            KanbanBoardCreatedEventSchema e => Project(e, envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
             _ => throw new InvalidOperationException(
                 $"KanbanBoardProjectionHandler received unmatched event: {envelope.Payload.GetType().Name}.")
         };
     }
 
     public async Task HandleAsync(KanbanBoardCreatedEventSchema e, CancellationToken ct = default)
-        => await Project(e, Guid.Empty, Guid.Empty, ct);
+        => await Project(e, Guid.Empty, 0, Guid.Empty, ct);
 
-    private async Task Project(KanbanBoardCreatedEventSchema e, Guid eventId, Guid correlationId, CancellationToken ct)
+    private async Task Project(KanbanBoardCreatedEventSchema e, Guid eventId, long eventVersion, Guid correlationId, CancellationToken ct)
     {
         var state = await _store.LoadAsync(e.AggregateId, ct) ??
                     new KanbanBoardReadModel { BoardId = e.AggregateId };
         state = KanbanProjectionReducer.Apply(state, e);
-        await _store.UpsertAsync(e.AggregateId, state, "KanbanBoardCreatedEvent", eventId, correlationId, ct);
+        await _store.UpsertAsync(e.AggregateId, state, "KanbanBoardCreatedEvent", eventId, eventVersion, correlationId, ct);
     }
 }

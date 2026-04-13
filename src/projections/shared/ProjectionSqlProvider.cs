@@ -14,13 +14,14 @@ public static class ProjectionSqlProvider
         INSERT INTO {schema}.{table}
             (aggregate_id, aggregate_type, current_version, state, last_event_id, last_event_type, correlation_id, projected_at, created_at)
         VALUES
-            (@aggId, @aggType, 1, @state::jsonb, @lastEventId, @eventType, @corrId, NOW(), NOW())
+            (@aggId, @aggType, @eventVersion, @state::jsonb, @lastEventId, @eventType, @corrId, NOW(), NOW())
         ON CONFLICT (aggregate_id) DO UPDATE SET
-            current_version = {schema}.{table}.current_version + 1,
+            current_version = @eventVersion,
             state = @state::jsonb,
             last_event_id = @lastEventId,
             last_event_type = @eventType,
             projected_at = NOW()
         WHERE {schema}.{table}.last_event_id IS DISTINCT FROM @lastEventId
+          AND {schema}.{table}.current_version < @eventVersion
         """;
 }

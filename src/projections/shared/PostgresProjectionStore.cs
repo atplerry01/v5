@@ -60,6 +60,7 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         TState state,
         string lastEventType,
         Guid eventId,
+        long eventVersion,
         Guid correlationId,
         CancellationToken cancellationToken)
     {
@@ -69,6 +70,7 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         await using var cmd = new NpgsqlCommand(_upsertSql, conn);
         cmd.Parameters.AddWithValue("aggId", aggregateId);
         cmd.Parameters.AddWithValue("aggType", _aggregateType);
+        cmd.Parameters.AddWithValue("eventVersion", eventVersion);
         cmd.Parameters.AddWithValue("state", stateJson);
         cmd.Parameters.AddWithValue("lastEventId", eventId);
         cmd.Parameters.AddWithValue("eventType", lastEventType);

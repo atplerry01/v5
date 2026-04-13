@@ -1,6 +1,6 @@
 using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
 using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
 using Whyce.Shared.Contracts.Runtime;
 
 namespace Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;

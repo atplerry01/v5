@@ -17,8 +17,8 @@ public static class BootstrapModuleCatalog
     public static IReadOnlyList<IDomainBootstrapModule> All { get; } =
     [
         new ConstitutionalPolicyBootstrap(),
-        new TodoBootstrap(),
-        new KanbanBootstrap(),
+        new TodoCompositionRoot(),
+        new KanbanCompositionRoot(),
         new WorkflowExecutionBootstrap()
     ];
 }

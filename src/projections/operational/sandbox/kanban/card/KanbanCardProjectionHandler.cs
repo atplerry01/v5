@@ -1,9 +1,9 @@
 using Whyce.Projections.Operational.Sandbox.Kanban.Reducer;
 using Whyce.Projections.Shared;
 using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
 using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
 using Whyce.Shared.Contracts.Projection;
 
 namespace Whyce.Projections.Operational.Sandbox.Kanban.Card;
@@ -26,35 +26,35 @@ public sealed class KanbanCardProjectionHandler :
     {
         return envelope.Payload switch
         {
-            KanbanCardCreatedEventSchema e => ProjectCreate(e, envelope.EventId, envelope.CorrelationId, cancellationToken),
-            KanbanCardMovedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardMovedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
-            KanbanCardReorderedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardReorderedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
-            KanbanCardCompletedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardCompletedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
-            KanbanCardUpdatedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardUpdatedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
+            KanbanCardCreatedEventSchema e => ProjectCreate(e, envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            KanbanCardMovedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardMovedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            KanbanCardReorderedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardReorderedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            KanbanCardCompletedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardCompletedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            KanbanCardUpdatedEventSchema e => ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardUpdatedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
             _ => throw new InvalidOperationException(
                 $"KanbanCardProjectionHandler received unmatched event: {envelope.Payload.GetType().Name}.")
         };
     }
 
-    public async Task HandleAsync(KanbanCardCreatedEventSchema e, CancellationToken ct = default) => await ProjectCreate(e, Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(KanbanCardMovedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardMovedEvent", Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(KanbanCardReorderedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardReorderedEvent", Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(KanbanCardCompletedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardCompletedEvent", Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(KanbanCardUpdatedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardUpdatedEvent", Guid.Empty, Guid.Empty, ct);
+    public async Task HandleAsync(KanbanCardCreatedEventSchema e, CancellationToken ct = default) => await ProjectCreate(e, Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(KanbanCardMovedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardMovedEvent", Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(KanbanCardReorderedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardReorderedEvent", Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(KanbanCardCompletedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardCompletedEvent", Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(KanbanCardUpdatedEventSchema e, CancellationToken ct = default) => await ProjectMutate(e.AggregateId, s => KanbanProjectionReducer.Apply(s, e), "KanbanCardUpdatedEvent", Guid.Empty, 0, Guid.Empty, ct);
 
-    private async Task ProjectCreate(KanbanCardCreatedEventSchema e, Guid eventId, Guid correlationId, CancellationToken ct)
+    private async Task ProjectCreate(KanbanCardCreatedEventSchema e, Guid eventId, long eventVersion, Guid correlationId, CancellationToken ct)
     {
         var state = await _store.LoadAsync(e.AggregateId, ct) ??
                     new KanbanBoardReadModel { BoardId = e.AggregateId };
         state = KanbanProjectionReducer.Apply(state, e);
-        await _store.UpsertAsync(e.AggregateId, state, "KanbanCardCreatedEvent", eventId, correlationId, ct);
+        await _store.UpsertAsync(e.AggregateId, state, "KanbanCardCreatedEvent", eventId, eventVersion, correlationId, ct);
     }
 
-    private async Task ProjectMutate(Guid aggregateId, Func<KanbanBoardReadModel?, KanbanBoardReadModel?> reduce, string eventType, Guid eventId, Guid correlationId, CancellationToken ct)
+    private async Task ProjectMutate(Guid aggregateId, Func<KanbanBoardReadModel?, KanbanBoardReadModel?> reduce, string eventType, Guid eventId, long eventVersion, Guid correlationId, CancellationToken ct)
     {
         var state = await _store.LoadAsync(aggregateId, ct);
         state = reduce(state);
         if (state is null) return;
-        await _store.UpsertAsync(aggregateId, state, eventType, eventId, correlationId, ct);
+        await _store.UpsertAsync(aggregateId, state, eventType, eventId, eventVersion, correlationId, ct);
     }
 }

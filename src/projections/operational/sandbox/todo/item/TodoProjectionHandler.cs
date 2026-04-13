@@ -24,23 +24,23 @@ public sealed class TodoProjectionHandler :
     {
         return envelope.Payload switch
         {
-            TodoCreatedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCreatedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
-            TodoUpdatedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoUpdatedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
-            TodoCompletedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCompletedEvent", envelope.EventId, envelope.CorrelationId, cancellationToken),
+            TodoCreatedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCreatedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            TodoUpdatedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoUpdatedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
+            TodoCompletedEventSchema e => Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCompletedEvent", envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
             _ => throw new InvalidOperationException(
                 $"TodoProjectionHandler received unmatched event type: {envelope.Payload.GetType().Name}. " +
                 $"EventId={envelope.EventId}, EventType={envelope.EventType}.")
         };
     }
 
-    public async Task HandleAsync(TodoCreatedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCreatedEvent", Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(TodoUpdatedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoUpdatedEvent", Guid.Empty, Guid.Empty, ct);
-    public async Task HandleAsync(TodoCompletedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCompletedEvent", Guid.Empty, Guid.Empty, ct);
+    public async Task HandleAsync(TodoCreatedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCreatedEvent", Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(TodoUpdatedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoUpdatedEvent", Guid.Empty, 0, Guid.Empty, ct);
+    public async Task HandleAsync(TodoCompletedEventSchema e, CancellationToken ct = default) => await Project(e.AggregateId, s => TodoProjectionReducer.Apply(s, e), "TodoCompletedEvent", Guid.Empty, 0, Guid.Empty, ct);
 
-    private async Task Project(Guid aggregateId, Func<TodoReadModel, TodoReadModel> reduce, string eventType, Guid eventId, Guid correlationId, CancellationToken ct)
+    private async Task Project(Guid aggregateId, Func<TodoReadModel, TodoReadModel> reduce, string eventType, Guid eventId, long eventVersion, Guid correlationId, CancellationToken ct)
     {
         var state = await _store.LoadAsync(aggregateId, ct) ?? new TodoReadModel { Id = aggregateId };
         state = reduce(state);
-        await _store.UpsertAsync(aggregateId, state, eventType, eventId, correlationId, ct);
+        await _store.UpsertAsync(aggregateId, state, eventType, eventId, eventVersion, correlationId, ct);
     }
 }

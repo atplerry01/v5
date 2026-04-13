@@ -1,4 +1,6 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
 namespace Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
 

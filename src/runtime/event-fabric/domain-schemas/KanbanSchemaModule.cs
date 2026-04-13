@@ -1,4 +1,6 @@
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Board;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.List;
 using DomainEvents = Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
 namespace Whyce.Runtime.EventFabric.DomainSchemas;
