@@ -1,8 +1,8 @@
-using Whyce.Shared.Contracts.Policy;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Policy;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Domain.ConstitutionalSystem.Policy.Decision;
 
-namespace Whyce.Engines.T0U.WhycePolicy;
+namespace Whycespace.Engines.T0U.WhycePolicy;
 
 /// <summary>
 /// Engine-layer factory for policy decision <see cref="AuditEmission"/> objects.

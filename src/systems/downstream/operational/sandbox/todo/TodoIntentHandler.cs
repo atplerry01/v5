@@ -1,8 +1,8 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Systems.Downstream.Operational.Sandbox.Todo;
+namespace Whycespace.Systems.Downstream.Operational.Sandbox.Todo;
 
 public sealed class TodoIntentHandler : ITodoIntentHandler
 {

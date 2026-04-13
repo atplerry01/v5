@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Composition.Abstractions;
+using Whycespace.Platform.Host.Composition.Abstractions;
 
-namespace Whyce.Platform.Host.Composition.Core;
+namespace Whycespace.Platform.Host.Composition.Core;
 
 public sealed class CoreCompositionModule : ICompositionModule
 {

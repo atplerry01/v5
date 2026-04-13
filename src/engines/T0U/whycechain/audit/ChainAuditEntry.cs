@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceChain.Audit;
+namespace Whycespace.Engines.T0U.WhyceChain.Audit;
 
 /// <summary>
 /// Immutable audit record for chain operations.

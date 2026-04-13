@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Registry;
+namespace Whycespace.Engines.T0U.WhycePolicy.Registry;
 
 /// <summary>
 /// Registry of all policy rules. Provides deterministic rule resolution.

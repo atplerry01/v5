@@ -1,12 +1,12 @@
 using System.Collections.Generic;
-using Whyce.Platform.Host.Composition.Abstractions;
-using Whyce.Platform.Host.Composition.Core;
-using Whyce.Platform.Host.Composition.Infrastructure;
-using Whyce.Platform.Host.Composition.Observability;
-using Whyce.Platform.Host.Composition.Projections;
-using Whyce.Platform.Host.Composition.Runtime;
+using Whycespace.Platform.Host.Composition.Abstractions;
+using Whycespace.Platform.Host.Composition.Core;
+using Whycespace.Platform.Host.Composition.Infrastructure;
+using Whycespace.Platform.Host.Composition.Observability;
+using Whycespace.Platform.Host.Composition.Projections;
+using Whycespace.Platform.Host.Composition.Runtime;
 
-namespace Whyce.Platform.Host.Composition.Registry;
+namespace Whycespace.Platform.Host.Composition.Registry;
 
 /// <summary>
 /// Deterministic, explicit composition module registry. No reflection, no

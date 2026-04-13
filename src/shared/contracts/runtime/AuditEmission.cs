@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 /// <summary>
 /// Routing override for audit events that must be persisted to a stream

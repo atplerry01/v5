@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace Whyce.Runtime.Deterministic;
+namespace Whycespace.Runtime.Deterministic;
 
 /// <summary>
 /// Deterministic hasher. All hashing in the runtime MUST go through this class

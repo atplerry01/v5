@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Fabric Pipeline — orchestrates fabric stages with error handling.

@@ -1,10 +1,10 @@
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01):
 /// command-side marker indicating that the command MUST be
 /// rejected when the runtime is in a Degraded posture. Lives in
-/// <c>Whyce.Shared.Contracts.Runtime</c> alongside
+/// <c>Whycespace.Shared.Contracts.Runtime</c> alongside
 /// <see cref="CommandContext"/> so any command in any
 /// <c>shared/contracts/application/*</c> namespace can opt in
 /// without taking a host or runtime reference.

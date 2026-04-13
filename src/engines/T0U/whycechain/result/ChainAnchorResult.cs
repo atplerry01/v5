@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceChain.Result;
+namespace Whycespace.Engines.T0U.WhyceChain.Result;
 
 public sealed record ChainAnchorResult(
     bool IsAnchored,

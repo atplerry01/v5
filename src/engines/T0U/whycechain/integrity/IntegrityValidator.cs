@@ -1,6 +1,6 @@
-using Whyce.Engines.T0U.WhyceChain.Hashing;
+using Whycespace.Engines.T0U.WhyceChain.Hashing;
 
-namespace Whyce.Engines.T0U.WhyceChain.Integrity;
+namespace Whycespace.Engines.T0U.WhyceChain.Integrity;
 
 /// <summary>
 /// Validates chain integrity by verifying hash linkage between blocks.

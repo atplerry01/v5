@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Chain;
+namespace Whycespace.Shared.Contracts.Infrastructure.Chain;
 
 public interface IChainAnchor
 {

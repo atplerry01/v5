@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Whyce.Runtime.Guards;
+namespace Whycespace.Runtime.Guards;
 
 /// <summary>
 /// Determinism guard. Scans runtime and engine assemblies for violations

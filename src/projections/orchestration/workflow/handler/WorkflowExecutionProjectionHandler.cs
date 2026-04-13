@@ -1,10 +1,10 @@
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Projection;
-using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Events.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Projection;
+using Whycespace.Shared.Contracts.Projections.Orchestration.Workflow;
 
-namespace Whyce.Projections.Orchestration.Workflow;
+namespace Whycespace.Projections.Orchestration.Workflow;
 
 /// <summary>
 /// Materializes the workflow execution read model from lifecycle events.

@@ -1,7 +1,7 @@
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Todo;
 using DomainEvents = Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Schema module for the operational/sandbox/todo domain.

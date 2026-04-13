@@ -1,12 +1,12 @@
-using Whyce.Projections.Operational.Sandbox.Todo.Reducer;
-using Whyce.Projections.Shared;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Projection;
+using Whycespace.Projections.Operational.Sandbox.Todo.Reducer;
+using Whycespace.Projections.Shared;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Projection;
 
-namespace Whyce.Projections.Operational.Sandbox.Todo.Item;
+namespace Whycespace.Projections.Operational.Sandbox.Todo.Item;
 
 public sealed class TodoProjectionHandler :
     IEnvelopeProjectionHandler,

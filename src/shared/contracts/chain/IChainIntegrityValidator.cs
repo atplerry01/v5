@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Chain;
+namespace Whycespace.Shared.Contracts.Chain;
 
 /// <summary>
 /// Contract for chain integrity validation.

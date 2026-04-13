@@ -1,4 +1,4 @@
-namespace Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
+namespace Whycespace.Systems.Downstream.Operational.Sandbox.Kanban;
 
 public sealed record KanbanSystemResult(
     bool Success,

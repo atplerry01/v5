@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.EventFabric;
+namespace Whycespace.Shared.Contracts.EventFabric;
 
 /// <summary>
 /// Read-only contract for an event envelope. Defined in shared contracts so that

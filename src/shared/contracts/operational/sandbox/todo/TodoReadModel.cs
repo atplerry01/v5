@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Operational.Sandbox.Todo;
+namespace Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
 
 public sealed record TodoReadModel
 {

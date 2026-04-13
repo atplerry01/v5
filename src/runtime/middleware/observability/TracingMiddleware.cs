@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.Observability;
+namespace Whycespace.Runtime.Middleware.Observability;
 
 /// <summary>
 /// Observability middleware: captures full execution span for every command.
@@ -10,7 +10,7 @@ namespace Whyce.Runtime.Middleware.Observability;
 /// </summary>
 public sealed class TracingMiddleware : IMiddleware
 {
-    private static readonly ActivitySource Source = new("Whyce.Runtime.ControlPlane");
+    private static readonly ActivitySource Source = new("Whycespace.Runtime.ControlPlane");
 
     public async Task<CommandResult> ExecuteAsync(
         CommandContext context,

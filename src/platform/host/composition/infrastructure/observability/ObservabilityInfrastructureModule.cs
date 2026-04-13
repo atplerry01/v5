@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Observability;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Observability;
 
 /// <summary>
 /// Infrastructure-level observability capability — reserved for future

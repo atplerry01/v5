@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Shared.Contracts.Policy;
+namespace Whycespace.Shared.Contracts.Policy;
 
 /// <summary>
 /// Constructs a policy decision <see cref="AuditEmission"/> from primitive

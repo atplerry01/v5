@@ -1,9 +1,9 @@
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Composition.Registry;
+using Whycespace.Platform.Host.Composition.Registry;
 
-namespace Whyce.Platform.Host.Composition.Loader;
+namespace Whycespace.Platform.Host.Composition.Loader;
 
 /// <summary>
 /// Loader extension that walks the CompositionRegistry in deterministic

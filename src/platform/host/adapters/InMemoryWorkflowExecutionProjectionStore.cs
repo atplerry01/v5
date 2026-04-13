@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Projections.Orchestration.Workflow;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// In-memory placeholder for the workflow execution projection read store.

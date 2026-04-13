@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Kernel.Determinism;
+namespace Whycespace.Shared.Kernel.Determinism;
 
 /// <summary>
 /// HSID v2.1 location segment (LLLL). Four uppercase chars naming the

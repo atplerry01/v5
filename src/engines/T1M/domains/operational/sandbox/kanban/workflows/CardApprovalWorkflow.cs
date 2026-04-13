@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
+namespace Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
 
 /// <summary>
 /// Canonical workflow-name constant for the Kanban card approval lifecycle.

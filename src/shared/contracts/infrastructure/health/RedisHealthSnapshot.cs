@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Health;
+namespace Whycespace.Shared.Contracts.Infrastructure.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-9 (REDIS-HEALTH-01): immutable view of

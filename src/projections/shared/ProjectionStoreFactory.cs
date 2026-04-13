@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Whyce.Projections.Shared;
+namespace Whycespace.Projections.Shared;
 
 /// <summary>
 /// Centralizes creation of PostgresProjectionStore instances.

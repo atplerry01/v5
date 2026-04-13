@@ -1,7 +1,7 @@
-using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Events.Orchestration.Workflow;
 using DomainEvents = Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Schema module for the orchestration/workflow/execution lifecycle.

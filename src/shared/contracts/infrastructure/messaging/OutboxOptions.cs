@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Messaging;
+namespace Whycespace.Shared.Contracts.Infrastructure.Messaging;
 
 /// <summary>
 /// Tunable behavior for the Postgres-to-Kafka outbox relay.

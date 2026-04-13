@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
 
-namespace Whyce.Platform.Api.Health;
+namespace Whycespace.Platform.Api.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01): the

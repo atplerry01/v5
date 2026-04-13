@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Deterministic event serializer. Produces stable, reproducible JSON output.

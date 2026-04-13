@@ -1,4 +1,4 @@
-namespace Whyce.Projections.Shared;
+namespace Whycespace.Projections.Shared;
 
 /// <summary>
 /// Externalizes all projection SQL from the store. Single source of truth

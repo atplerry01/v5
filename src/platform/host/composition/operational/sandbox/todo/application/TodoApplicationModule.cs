@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T2E.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Engines.T2E.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Application;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Application;
 
 /// <summary>
 /// Todo application module — T2E command handler DI registrations and engine bindings.

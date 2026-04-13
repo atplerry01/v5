@@ -1,8 +1,8 @@
-using Whyce.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
-namespace Whyce.Engines.T1M.Core.Lifecycle;
+namespace Whycespace.Engines.T1M.Core.Lifecycle;
 
 /// <summary>
 /// T1M-tier factory that produces workflow lifecycle domain events directly,

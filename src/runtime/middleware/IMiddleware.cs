@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware;
+namespace Whycespace.Runtime.Middleware;
 
 /// <summary>
 /// Runtime middleware interface. All middleware in the control plane pipeline

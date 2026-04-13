@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
+using Whycespace.Systems.Downstream.Operational.Sandbox.Kanban;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban.Infrastructure;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban.Infrastructure;
 
 /// <summary>
 /// Kanban infrastructure module — Systems.Downstream intent handler registration.

@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Kernel.Determinism;
+namespace Whycespace.Shared.Kernel.Determinism;
 
 /// <summary>
 /// HSID v2.1 — single source of truth for topology-aware, bucket-scoped,
@@ -6,7 +6,7 @@ namespace Whyce.Shared.Kernel.Determinism;
 /// <c>PPP-LLLL-TTT-TOPOLOGY-SEQ</c>.
 ///
 /// This is a SECOND, parallel deterministic identity seam alongside
-/// <see cref="Whyce.Shared.Kernel.Domain.IIdGenerator"/>. The two seams have
+/// <see cref="Whycespace.Shared.Kernel.Domain.IIdGenerator"/>. The two seams have
 /// non-overlapping responsibilities — see
 /// <c>claude/new-rules/20260407-200000-hsid-v2.1-parallel-seam.md</c>.
 /// </summary>

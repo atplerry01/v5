@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Chain;
+namespace Whycespace.Shared.Contracts.Infrastructure.Chain;
 
 /// <summary>
 /// Thrown by the chain-store adapter when a chain-store I/O call cannot

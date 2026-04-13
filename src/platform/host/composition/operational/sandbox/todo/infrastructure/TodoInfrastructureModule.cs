@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Systems.Downstream.Operational.Sandbox.Todo;
+using Whycespace.Systems.Downstream.Operational.Sandbox.Todo;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Infrastructure;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Infrastructure;
 
 /// <summary>
 /// Todo infrastructure module — Systems.Downstream intent handler registration.

@@ -1,4 +1,4 @@
-namespace Whyce.Platform.Host.Health;
+namespace Whycespace.Platform.Host.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-6 (POSTGRES-POOL-HEALTH-01): minimal

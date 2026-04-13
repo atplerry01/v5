@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Engines.T0U.WhyceId.Verification;
+namespace Whycespace.Engines.T0U.WhyceId.Verification;
 
 /// <summary>
 /// Verifies identity claims deterministically.

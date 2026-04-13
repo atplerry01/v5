@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Context;
+namespace Whycespace.Engines.T0U.WhycePolicy.Context;
 
 /// <summary>
 /// Immutable context for policy evaluation.

@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Context;
+namespace Whycespace.Runtime.Context;
 
 /// <summary>
 /// Resolves workflow context from the command.

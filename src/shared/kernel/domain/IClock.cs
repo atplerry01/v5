@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Kernel.Domain;
+namespace Whycespace.Shared.Kernel.Domain;
 
 public interface IClock
 {

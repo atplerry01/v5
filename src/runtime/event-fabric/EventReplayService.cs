@@ -1,7 +1,7 @@
-using Whyce.Runtime.Deterministic;
-using Whyce.Runtime.Projection;
+using Whycespace.Runtime.Deterministic;
+using Whycespace.Runtime.Projection;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Replay Service — replays events from the event store to rebuild

@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): named singleton wrapper

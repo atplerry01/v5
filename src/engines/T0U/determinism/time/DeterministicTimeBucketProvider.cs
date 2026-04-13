@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Engines.T0U.Determinism.Time;
+namespace Whycespace.Engines.T0U.Determinism.Time;
 
 /// <summary>
 /// Replay-stable bucket: SHA256(seed)[..3] uppercase hex.

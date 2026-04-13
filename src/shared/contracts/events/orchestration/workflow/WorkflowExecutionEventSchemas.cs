@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Events.Orchestration.Workflow;
+namespace Whycespace.Shared.Contracts.Events.Orchestration.Workflow;
 
 public sealed record WorkflowExecutionStartedEventSchema(
     Guid AggregateId, string WorkflowName, object? Payload = null);

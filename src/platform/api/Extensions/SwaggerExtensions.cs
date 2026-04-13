@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 
-namespace Whyce.Platform.Api.Extensions;
+namespace Whycespace.Platform.Api.Extensions;
 
 public static class SwaggerExtensions
 {

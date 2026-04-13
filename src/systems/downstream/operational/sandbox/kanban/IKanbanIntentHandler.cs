@@ -1,8 +1,8 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
-namespace Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
+namespace Whycespace.Systems.Downstream.Operational.Sandbox.Kanban;
 
 public interface IKanbanIntentHandler
 {

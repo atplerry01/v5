@@ -1,9 +1,9 @@
 using System.Diagnostics.Metrics;
 using System.Threading.RateLimiting;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Dispatcher;
+namespace Whycespace.Runtime.Dispatcher;
 
 /// <summary>
 /// phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): declared in-flight
@@ -35,7 +35,7 @@ public sealed class WorkflowAdmissionGate : IDisposable
     // admission seam. Two counters tagged by workflow_name and
     // (for rejections) partition. Cardinality is bounded by the
     // declared workflow registry.
-    public static readonly Meter Meter = new("Whyce.Workflow", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Workflow", "1.0");
     private static readonly Counter<long> AdmittedCounter =
         Meter.CreateCounter<long>("workflow.admitted");
     private static readonly Counter<long> RejectedCounter =

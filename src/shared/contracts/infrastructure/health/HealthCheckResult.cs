@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Health;
+namespace Whycespace.Shared.Contracts.Infrastructure.Health;
 
 public record HealthCheckResult(
     string Name,

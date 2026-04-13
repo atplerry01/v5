@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
 
-namespace Whyce.Platform.Host.Health;
+namespace Whycespace.Platform.Host.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): in-process concrete

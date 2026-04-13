@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Policy;
+namespace Whycespace.Shared.Contracts.Infrastructure.Policy;
 
 public interface IPolicyEvaluator
 {

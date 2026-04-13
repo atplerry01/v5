@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
 
-namespace Whyce.Platform.Host.Health;
+namespace Whycespace.Platform.Host.Health;
 
 public sealed class RuntimeHealthCheck : IHealthCheck
 {

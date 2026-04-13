@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric.Workers;
+namespace Whycespace.Runtime.EventFabric.Workers;
 
 /// <summary>
 /// Replay Worker — replays events from the event store through the fabric

@@ -1,7 +1,7 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.PrePolicy;
+namespace Whycespace.Runtime.Middleware.PrePolicy;
 
 /// <summary>
 /// Pre-policy validation: rejects malformed commands early before any policy or engine cost.

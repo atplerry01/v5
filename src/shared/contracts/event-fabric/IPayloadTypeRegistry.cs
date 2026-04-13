@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.EventFabric;
+namespace Whycespace.Shared.Contracts.EventFabric;
 
 /// <summary>
 /// Registry of CLR types that may appear as opaque <c>object?</c> payloads or

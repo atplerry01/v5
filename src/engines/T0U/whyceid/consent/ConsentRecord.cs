@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceId.Consent;
+namespace Whycespace.Engines.T0U.WhyceId.Consent;
 
 /// <summary>
 /// Immutable consent record. Tracks what an identity has consented to.

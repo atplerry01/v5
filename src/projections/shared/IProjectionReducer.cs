@@ -1,4 +1,4 @@
-namespace Whyce.Projections.Shared;
+namespace Whycespace.Projections.Shared;
 
 /// <summary>
 /// Optional interface for projection reducers. Enforces the pure

@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Simulation;
+namespace Whycespace.Engines.T0U.WhycePolicy.Simulation;
 
 /// <summary>
 /// Result of a policy simulation (dry-run evaluation).

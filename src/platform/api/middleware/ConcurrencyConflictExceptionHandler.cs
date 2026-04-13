@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
-namespace Whyce.Platform.Api.Middleware;
+namespace Whycespace.Platform.Api.Middleware;
 
 /// <summary>
 /// phase1-gate-api-edge: maps <see cref="ConcurrencyConflictException"/> to

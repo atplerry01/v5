@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Guards;
+namespace Whycespace.Runtime.Guards;
 
 /// <summary>
 /// Runtime isolation guard. Validates that the runtime boundary is not violated.

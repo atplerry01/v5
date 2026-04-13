@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Workflow;
+namespace Whycespace.Runtime.Workflow;
 
 public sealed class WorkflowRegistry : IWorkflowRegistry
 {

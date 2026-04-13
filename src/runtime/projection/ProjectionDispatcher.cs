@@ -1,7 +1,7 @@
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Projection;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.Projection;
 
-namespace Whyce.Runtime.Projection;
+namespace Whycespace.Runtime.Projection;
 
 /// <summary>
 /// Projection Dispatcher — routes event envelopes to registered projection handlers.

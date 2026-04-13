@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 /// <summary>
 /// Execution context for a command. Carries identity, policy, and correlation metadata.
@@ -118,8 +118,8 @@ public sealed record CommandContext
     // for a later workstream. Locked after first set so middleware
     // cannot rewrite the dispatch-time observation.
 
-    private Whyce.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? _degradedMode;
-    public Whyce.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? DegradedMode
+    private Whycespace.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? _degradedMode;
+    public Whycespace.Shared.Contracts.Infrastructure.Health.RuntimeDegradedMode? DegradedMode
     {
         get => _degradedMode;
         set

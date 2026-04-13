@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Engine;
+namespace Whycespace.Shared.Contracts.Engine;
 
 public interface IEngineContext
 {

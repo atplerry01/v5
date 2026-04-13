@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.Operational.Sandbox.Todo.Item;
-using Whyce.Projections.Shared;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Kernel.Domain;
-using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Projections.Operational.Sandbox.Todo.Item;
+using Whycespace.Projections.Shared;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Kernel.Domain;
+using PostgresProjectionWriter = Whycespace.Platform.Host.Adapters.PostgresProjectionWriter;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Projection;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Projection;
 
 /// <summary>
 /// Todo projection module — projection handler DI registrations, store factory,
@@ -51,8 +51,8 @@ public static class TodoProjectionModule
                     projectionTable,
                     aggregateType),
                 sp.GetRequiredService<IClock>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
 
         return services;

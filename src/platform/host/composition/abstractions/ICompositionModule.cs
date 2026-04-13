@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Whyce.Platform.Host.Composition.Abstractions;
+namespace Whycespace.Platform.Host.Composition.Abstractions;
 
 /// <summary>
 /// Composition module contract. Modules orchestrate registration only —

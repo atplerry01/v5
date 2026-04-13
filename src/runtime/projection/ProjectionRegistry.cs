@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Whyce.Shared.Contracts.Projection;
+using Whycespace.Shared.Contracts.Projection;
 
-namespace Whyce.Runtime.Projection;
+namespace Whycespace.Runtime.Projection;
 
 /// <summary>
 /// Projection Registry — maintains the mapping from event types to projection handlers.

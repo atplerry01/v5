@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
+namespace Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
 public sealed record CreateKanbanListCommand(Guid Id, Guid ListId, string Name, int Position);
 

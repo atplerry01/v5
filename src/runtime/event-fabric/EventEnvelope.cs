@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Immutable event envelope. Every domain event passing through the Event Fabric

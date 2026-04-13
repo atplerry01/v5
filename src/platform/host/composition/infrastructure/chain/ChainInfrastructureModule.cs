@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Shared.Contracts.Infrastructure.Chain;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Chain;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Chain;
 
 /// <summary>
 /// Chain anchor capability — Postgres-backed chain anchor registration.
@@ -22,7 +22,7 @@ public static class ChainInfrastructureModule
             new WhyceChainPostgresAdapter(
                 sp.GetRequiredService<ChainDataSource>(),
                 sp.GetRequiredService<IClock>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Admission.ChainAnchorOptions>()));
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Admission.ChainAnchorOptions>()));
         services.AddSingleton<IChainAnchor>(sp => sp.GetRequiredService<WhyceChainPostgresAdapter>());
 
         return services;

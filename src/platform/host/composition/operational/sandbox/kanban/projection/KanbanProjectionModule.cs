@@ -1,17 +1,17 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.Operational.Sandbox.Kanban.Board;
-using Whyce.Projections.Operational.Sandbox.Kanban.Card;
-using Whyce.Projections.Operational.Sandbox.Kanban.List;
-using Whyce.Projections.Shared;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Kernel.Domain;
-using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Projections.Operational.Sandbox.Kanban.Board;
+using Whycespace.Projections.Operational.Sandbox.Kanban.Card;
+using Whycespace.Projections.Operational.Sandbox.Kanban.List;
+using Whycespace.Projections.Shared;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Kernel.Domain;
+using PostgresProjectionWriter = Whycespace.Platform.Host.Adapters.PostgresProjectionWriter;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban.Projection;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban.Projection;
 
 /// <summary>
 /// Kanban projection module — projection handler DI registrations, store factory,
@@ -59,8 +59,8 @@ public static class KanbanProjectionModule
                     projectionTable,
                     aggregateType),
                 sp.GetRequiredService<IClock>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
 
         return services;

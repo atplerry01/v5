@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Per-domain schema contribution seam (Phase 1.5 §5.1.2 BPV-D01 remediation).

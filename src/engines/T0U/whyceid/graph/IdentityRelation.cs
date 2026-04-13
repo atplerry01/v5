@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceId.Graph;
+namespace Whycespace.Engines.T0U.WhyceId.Graph;
 
 /// <summary>
 /// Represents a relationship between two identities.

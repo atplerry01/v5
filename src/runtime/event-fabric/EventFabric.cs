@@ -1,8 +1,8 @@
-using Whyce.Runtime.Deterministic;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Runtime.Deterministic;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Fabric — ORCHESTRATOR ONLY.

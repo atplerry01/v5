@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Outbox Service — bridge between Event Fabric and external systems.

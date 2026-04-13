@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Engine;
 
-namespace Whyce.Runtime.Dispatcher;
+namespace Whycespace.Runtime.Dispatcher;
 
 public sealed class EngineRegistry : IEngineRegistry
 {

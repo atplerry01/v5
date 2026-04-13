@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Persistence;
+namespace Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 /// <summary>
 /// Thrown by <see cref="IEventStore.AppendEventsAsync"/> when the caller's

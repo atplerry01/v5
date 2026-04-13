@@ -1,9 +1,9 @@
-using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
-using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
+using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
+namespace Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
 
 /// <summary>
 /// Step 1: Validates that the CardApprovalIntent carries all required

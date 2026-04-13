@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Cache;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Cache;
 
 /// <summary>
 /// Cache capability — Redis connection, client, and distributed execution lock.
@@ -27,8 +27,8 @@ public static class CacheInfrastructureModule
         // distributed execution lock backed by the same Redis
         // singleton already registered above. Singleton-scoped so
         // the per-process owner-token map persists across requests.
-        services.AddSingleton<Whyce.Shared.Contracts.Runtime.IExecutionLockProvider>(sp =>
-            new Whyce.Platform.Host.Runtime.RedisExecutionLockProvider(
+        services.AddSingleton<Whycespace.Shared.Contracts.Runtime.IExecutionLockProvider>(sp =>
+            new Whycespace.Platform.Host.Runtime.RedisExecutionLockProvider(
                 sp.GetRequiredService<IConnectionMultiplexer>()));
 
         return services;

@@ -1,12 +1,12 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Runtime.Middleware.Execution;
-using Whyce.Runtime.Middleware.Observability;
-using Whyce.Runtime.Middleware.PostPolicy;
-using Whyce.Runtime.Middleware.PrePolicy;
-using Whyce.Shared.Contracts.Runtime;
-using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Runtime.Middleware.Execution;
+using Whycespace.Runtime.Middleware.Observability;
+using Whycespace.Runtime.Middleware.PostPolicy;
+using Whycespace.Runtime.Middleware.PrePolicy;
+using Whycespace.Shared.Contracts.Runtime;
+using PolicyMw = Whycespace.Runtime.Middleware.Policy.PolicyMiddleware;
 
-namespace Whyce.Runtime.ControlPlane;
+namespace Whycespace.Runtime.ControlPlane;
 
 /// <summary>
 /// Builds the RuntimeControlPlane with LOCKED middleware order.

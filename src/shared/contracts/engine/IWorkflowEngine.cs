@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Shared.Contracts.Engine;
+namespace Whycespace.Shared.Contracts.Engine;
 
 public interface IWorkflowEngine
 {

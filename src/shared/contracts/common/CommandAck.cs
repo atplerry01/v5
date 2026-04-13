@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Common;
+namespace Whycespace.Shared.Contracts.Common;
 
 /// <summary>
 /// Acknowledgment response for command endpoints that mutate state

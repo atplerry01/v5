@@ -1,11 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T2E.Operational.Sandbox.Kanban;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Engines.T2E.Operational.Sandbox.Kanban;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban.Application;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban.Application;
 
 /// <summary>
 /// Kanban application module — T2E command handler DI registrations and engine bindings.

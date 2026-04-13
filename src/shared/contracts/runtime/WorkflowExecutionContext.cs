@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 public sealed class WorkflowExecutionContext : IDomainEventSink
 {

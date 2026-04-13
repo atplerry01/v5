@@ -1,12 +1,12 @@
-using Whyce.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
 
-namespace Whyce.Shared.Contracts.Projection;
+namespace Whycespace.Shared.Contracts.Projection;
 
 /// <summary>
 /// Envelope-based projection handler contract. Lives in shared contracts so that
 /// <c>src/projections/**</c> can implement it without referencing <c>src/runtime/**</c>.
 ///
-/// This is distinct from the typed <c>Whyce.Shared.Contracts.Infrastructure.Projection.IProjectionHandler&lt;T&gt;</c>
+/// This is distinct from the typed <c>Whycespace.Shared.Contracts.Infrastructure.Projection.IProjectionHandler&lt;T&gt;</c>
 /// which is keyed on a specific event payload type. The envelope-based handler
 /// receives the full envelope (including correlation, sequence, and metadata) and
 /// is the contract used by the runtime ProjectionRegistry / ProjectionDispatcher.

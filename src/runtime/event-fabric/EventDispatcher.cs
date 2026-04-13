@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Dispatcher — routes EventEnvelopes to registered in-process consumers.

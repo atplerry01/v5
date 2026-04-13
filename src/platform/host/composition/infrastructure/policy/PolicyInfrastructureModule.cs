@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Policy;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Policy;
 
 /// <summary>
 /// Policy evaluator capability — OPA configuration and evaluator registration.

@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 /// <summary>
 /// Surface used by execution paths (engines, workflow engine) to emit domain

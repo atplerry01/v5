@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using Whyce.Engines.T0U.WhyceChain.Command;
-using Whyce.Engines.T0U.WhyceChain.Engine;
-using Whyce.Engines.T0U.WhyceChain.Hashing;
-using Whyce.Engines.T0U.WhyceChain.Result;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Engines.T0U.WhyceChain.Command;
+using Whycespace.Engines.T0U.WhyceChain.Engine;
+using Whycespace.Engines.T0U.WhyceChain.Hashing;
+using Whycespace.Engines.T0U.WhyceChain.Result;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Infrastructure.Chain;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Chain Anchor Service — anchors events to the immutable WhyceChain ledger.
@@ -20,7 +20,7 @@ namespace Whyce.Runtime.EventFabric;
 /// </summary>
 public sealed class ChainAnchorService
 {
-    // phase1.5-S5.2.1 / PC-5 (CHAIN-ANCHOR-OBS-01): canonical Whyce.Chain
+    // phase1.5-S5.2.1 / PC-5 (CHAIN-ANCHOR-OBS-01): canonical Whycespace.Chain
     // meter exporting two histograms that distinguish the two phases of
     // every anchor call.
     //
@@ -40,7 +40,7 @@ public sealed class ChainAnchorService
     //   outcome ∈ { "ok", "engine_failed", "exception" }
     // No correlation_id, no aggregate_id, no policy hash — those would
     // explode cardinality without serving a §5.3.x load-work need.
-    public static readonly Meter Meter = new("Whyce.Chain", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Chain", "1.0");
     private static readonly Histogram<double> WaitHistogram =
         Meter.CreateHistogram<double>("chain.anchor.wait_ms", unit: "ms");
     private static readonly Histogram<double> HoldHistogram =

@@ -1,7 +1,7 @@
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Systems.Midstream.Wss;
+namespace Whycespace.Systems.Midstream.Wss;
 
 public sealed class WorkflowDispatcher : IWorkflowDispatcher
 {

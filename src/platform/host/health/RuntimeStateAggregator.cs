@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Hosting;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Health;
+namespace Whycespace.Platform.Host.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01): canonical
 /// runtime-state aggregator. Single source of truth for the
-/// <see cref="RuntimeState"/> rule. Read by <see cref="Whyce.Platform.Api.Health.HealthAggregator"/>
+/// <see cref="RuntimeState"/> rule. Read by <see cref="Whycespace.Platform.Api.Health.HealthAggregator"/>
 /// in HC-2 and (in later patches) by the <c>/ready</c> endpoint, the
 /// degraded-mode response contract, and any §5.3.x certification
 /// harness.
@@ -20,7 +20,7 @@ namespace Whyce.Platform.Host.Health;
 ///   - host shutdown via <see cref="IHostApplicationLifetime.ApplicationStopping"/>
 ///   - the existing <see cref="IHealthCheck"/> fan-out (consumed via
 ///     the <see cref="ComputeFromResults"/> overload that the
-///     <see cref="Whyce.Platform.Api.Health.HealthAggregator"/> calls
+///     <see cref="Whycespace.Platform.Api.Health.HealthAggregator"/> calls
 ///     after its parallel fan-out)
 ///   - <see cref="OpaPolicyEvaluator.IsBreakerOpen"/> via the new
 ///     side-effect-free public getter
@@ -39,7 +39,7 @@ namespace Whyce.Platform.Host.Health;
 /// (no MeterListener, no Prometheus parsing, no counter scraping).
 ///
 /// Critical-services rule: the canonical "which IHealthCheck names are
-/// load-bearing" set lives here, not in <see cref="Whyce.Platform.Api.Health.HealthAggregator"/>.
+/// load-bearing" set lives here, not in <see cref="Whycespace.Platform.Api.Health.HealthAggregator"/>.
 /// HC-2 preserves the existing set verbatim — { "postgres", "kafka",
 /// "opa" } — but moves ownership of the rule to one place.
 ///
@@ -51,7 +51,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
 {
     /// <summary>
     /// Canonical critical-services set. Pre-HC-2 this lived in
-    /// <see cref="Whyce.Platform.Api.Health.HealthAggregator"/>;
+    /// <see cref="Whycespace.Platform.Api.Health.HealthAggregator"/>;
     /// HC-2 moves it here so the rule has a single owner.
     /// </summary>
     public static readonly IReadOnlySet<string> CriticalHealthCheckNames =
@@ -137,7 +137,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
     /// <summary>
     /// Folds an already-fetched set of <see cref="HealthCheckResult"/>
     /// into the canonical state. Called by
-    /// <see cref="Whyce.Platform.Api.Health.HealthAggregator"/> after
+    /// <see cref="Whycespace.Platform.Api.Health.HealthAggregator"/> after
     /// it has run its existing parallel fan-out, so the fan-out is
     /// not duplicated. The aggregation rule is identical to
     /// <see cref="GetCurrentStateAsync"/>.

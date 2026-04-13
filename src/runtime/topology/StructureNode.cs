@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Topology;
+namespace Whycespace.Runtime.Topology;
 
 /// <summary>
 /// One node in the constitutional structure registry. Encodes the trust

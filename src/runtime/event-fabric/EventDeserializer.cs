@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Accepts a Guid encoded either as a raw JSON string ("...") or as a value-object

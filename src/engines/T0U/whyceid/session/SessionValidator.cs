@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Engines.T0U.WhyceId.Session;
+namespace Whycespace.Engines.T0U.WhyceId.Session;
 
 /// <summary>
 /// Validates sessions deterministically.

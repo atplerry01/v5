@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// phase1.5-S5.2.2 / KC-4 (PROJECTIONS-POOL-01): named singleton

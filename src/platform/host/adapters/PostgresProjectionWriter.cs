@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Npgsql;
-using Whyce.Runtime.Projection;
+using Whycespace.Runtime.Projection;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// Generic Postgres projection table writer.

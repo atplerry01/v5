@@ -1,6 +1,6 @@
-using Whyce.Runtime.Projection;
+using Whycespace.Runtime.Projection;
 
-namespace Whyce.Runtime.EventFabric.Workers;
+namespace Whycespace.Runtime.EventFabric.Workers;
 
 /// <summary>
 /// Projection Async Worker — processes projection handlers asynchronously

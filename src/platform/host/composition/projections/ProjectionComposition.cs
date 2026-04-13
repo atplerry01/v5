@@ -1,14 +1,14 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T0U.WhyceChain.Engine;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Infrastructure.Chain;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Engines.T0U.WhyceChain.Engine;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Projections;
+namespace Whycespace.Platform.Host.Composition.Projections;
 
 /// <summary>
 /// Projection registry, event-fabric services, schema registry, and the EventFabric
@@ -40,7 +40,7 @@ public static class ProjectionComposition
             new ChainAnchorService(
                 sp.GetRequiredService<WhyceChainEngine>(),
                 sp.GetRequiredService<IChainAnchor>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Admission.ChainAnchorOptions>()));
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Admission.ChainAnchorOptions>()));
         services.AddSingleton<OutboxService>(sp =>
             new OutboxService(sp.GetRequiredService<IOutbox>()));
         services.AddSingleton<EventSchemaRegistry>(sp =>

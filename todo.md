@@ -38,3 +38,13 @@ Whycespace => Whyce
 validate the 2 endpoints TODO & Kanban
 
 enterprise grade solutions
+
+
+##
+
+src/platform/host/composition/orchestration/workflow/WorkflowExecutionBootstrap.cs
+src/platform/host/adapters/InMemoryWorkflowExecutionProjectionStore.cs
+src/runtime/topology/InMemoryStructureRegistry.cs
+src/platform/host/composition/runtime/RuntimeComposition.cs
+
+The code even labels some of them as placeholders.

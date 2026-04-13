@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
+namespace Whycespace.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
 
 public sealed record KanbanCardCreatedEventSchema(Guid AggregateId, Guid CardId, Guid ListId, string Title, string Description, int Position, string? Priority);
 

@@ -2,14 +2,14 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
-using Whyce.Shared.Contracts.Common;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Common;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Api.Controllers.Operational.Sandbox.Kanban;
+namespace Whycespace.Platform.Api.Controllers.Operational.Sandbox.Kanban;
 
 [ApiController]
 [Route("api/kanban")]

@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Whyce.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Generic, domain-agnostic implementation of <see cref="IPayloadTypeRegistry"/>.

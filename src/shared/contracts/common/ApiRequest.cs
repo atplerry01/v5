@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Common;
+namespace Whycespace.Shared.Contracts.Common;
 
 /// <summary>
 /// Standard API request envelope. POST endpoints accept this shape.

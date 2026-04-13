@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Runtime;
+namespace Whycespace.Shared.Contracts.Runtime;
 
 public interface IWorkflowRegistry
 {

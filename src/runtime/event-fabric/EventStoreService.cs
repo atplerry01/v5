@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Store Service — handles event persistence through the infrastructure abstraction.

@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Projection;
+namespace Whycespace.Shared.Contracts.Infrastructure.Projection;
 
 public interface IRedisClient
 {

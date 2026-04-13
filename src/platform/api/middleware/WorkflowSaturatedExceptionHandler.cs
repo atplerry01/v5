@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Api.Middleware;
+namespace Whycespace.Platform.Api.Middleware;
 
 /// <summary>
 /// phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): maps

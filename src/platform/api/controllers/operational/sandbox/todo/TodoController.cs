@@ -3,13 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Whyce.Shared.Contracts.Common;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Common;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Api.Controllers.Operational.Sandbox.Todo;
+namespace Whycespace.Platform.Api.Controllers.Operational.Sandbox.Todo;
 
 [ApiController]
 [Route("api/todo")]

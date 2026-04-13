@@ -3,13 +3,13 @@ using System.Text;
 using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// Generic Kafka projection consumer worker.
@@ -25,7 +25,7 @@ namespace Whyce.Platform.Host.Adapters;
 public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 {
     // phase1-gate-S6: observability meter shared across all worker instances.
-    public static readonly Meter Meter = new("Whyce.Projection.Consumer", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Projection.Consumer", "1.0");
     private static readonly Counter<long> ConsumedCounter = Meter.CreateCounter<long>("consumer.consumed");
     private static readonly Counter<long> DlqRoutedCounter = Meter.CreateCounter<long>("consumer.dlq_routed");
     private static readonly Counter<long> HandlerInvokedCounter = Meter.CreateCounter<long>("consumer.handler_invoked");

@@ -1,7 +1,7 @@
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
 
-namespace Whyce.Projections.Operational.Sandbox.Todo.Reducer;
+namespace Whycespace.Projections.Operational.Sandbox.Todo.Reducer;
 
 /// <summary>
 /// Pure state reducer for the Todo read model.

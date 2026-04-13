@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Admission;
+namespace Whycespace.Shared.Contracts.Infrastructure.Admission;
 
 /// <summary>
 /// Tunable behavior for the runtime HTTP intake admission limiter.

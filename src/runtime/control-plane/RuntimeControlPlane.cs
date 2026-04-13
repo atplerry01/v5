@@ -1,12 +1,12 @@
-using Whyce.Engines.T0U.Determinism.Sequence;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Middleware;
-using Whyce.Runtime.Topology;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Determinism;
+using Whycespace.Engines.T0U.Determinism.Sequence;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Runtime.Topology;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Determinism;
 
-namespace Whyce.Runtime.ControlPlane;
+namespace Whycespace.Runtime.ControlPlane;
 
 /// <summary>
 /// Runtime Control Plane — SINGLE ENTRY POINT for all command execution.
@@ -58,7 +58,7 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
     // control plane consults the canonical IRuntimeStateAggregator
     // contract (NOT the host-side concrete) so the runtime → host
     // dependency edge forbidden by DG-R5-EXCEPT-01 is preserved.
-    // The contract lives in Whyce.Shared.Contracts which Whyce.Runtime
+    // The contract lives in Whycespace.Shared.Contracts which Whycespace.Runtime
     // already references; the host-side concrete continues to be
     // the only implementer.
     public RuntimeControlPlane(

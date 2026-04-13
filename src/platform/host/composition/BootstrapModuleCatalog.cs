@@ -1,9 +1,9 @@
-using Whyce.Platform.Host.Composition.Constitutional.Policy;
-using Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban;
-using Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
-using Whyce.Platform.Host.Composition.Orchestration.Workflow;
+using Whycespace.Platform.Host.Composition.Constitutional.Policy;
+using Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban;
+using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo;
+using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
 
-namespace Whyce.Platform.Host.Composition;
+namespace Whycespace.Platform.Host.Composition;
 
 /// <summary>
 /// Static catalog of all domain bootstrap modules. The single seam where Program.cs

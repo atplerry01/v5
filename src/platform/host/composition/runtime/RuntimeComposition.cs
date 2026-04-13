@@ -1,37 +1,37 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T0U.Determinism;
-using Whyce.Engines.T0U.Determinism.Sequence;
-using Whyce.Engines.T0U.Determinism.Time;
-using Whyce.Platform.Host.Bootstrap;
-using Whyce.Runtime.Topology;
-using Whyce.Engines.T0U.WhyceChain.Engine;
-using Whyce.Engines.T0U.WhyceId.Engine;
-using Whyce.Engines.T0U.WhycePolicy.Engine;
-using Whyce.Shared.Kernel.Determinism;
-using Whyce.Engines.T1M.Core.Lifecycle;
-using Whyce.Engines.T1M.Core.StepExecutor;
-using Whyce.Engines.T1M.Core.WorkflowEngine;
-using Whyce.Runtime.ControlPlane;
-using Whyce.Runtime.Dispatcher;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Middleware;
-using Whyce.Runtime.Middleware.Execution;
-using Whyce.Runtime.Middleware.Observability;
-using Whyce.Runtime.Middleware.PostPolicy;
-using Whyce.Runtime.Middleware.PrePolicy;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
-using Whyce.Shared.Contracts.Policy;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
-using RuntimeMiddleware = Whyce.Runtime.Middleware.IMiddleware;
-using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
+using Whycespace.Engines.T0U.Determinism;
+using Whycespace.Engines.T0U.Determinism.Sequence;
+using Whycespace.Engines.T0U.Determinism.Time;
+using Whycespace.Platform.Host.Bootstrap;
+using Whycespace.Runtime.Topology;
+using Whycespace.Engines.T0U.WhyceChain.Engine;
+using Whycespace.Engines.T0U.WhyceId.Engine;
+using Whycespace.Engines.T0U.WhycePolicy.Engine;
+using Whycespace.Shared.Kernel.Determinism;
+using Whycespace.Engines.T1M.Core.Lifecycle;
+using Whycespace.Engines.T1M.Core.StepExecutor;
+using Whycespace.Engines.T1M.Core.WorkflowEngine;
+using Whycespace.Runtime.ControlPlane;
+using Whycespace.Runtime.Dispatcher;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Runtime.Middleware.Execution;
+using Whycespace.Runtime.Middleware.Observability;
+using Whycespace.Runtime.Middleware.PostPolicy;
+using Whycespace.Runtime.Middleware.PrePolicy;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Policy;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
+using RuntimeMiddleware = Whycespace.Runtime.Middleware.IMiddleware;
+using PolicyMw = Whycespace.Runtime.Middleware.Policy.PolicyMiddleware;
 
-namespace Whyce.Platform.Host.Composition.Runtime;
+namespace Whycespace.Platform.Host.Composition.Runtime;
 
 /// <summary>
 /// Runtime control plane composition: T0U + T1M engines, registries populated by
@@ -79,7 +79,7 @@ public static class RuntimeComposition
 
         // Policy decision event factory — engine-layer constructor for policy
         // domain events (runtime middleware cannot reference Whycespace.Domain.*).
-        services.AddSingleton<IPolicyDecisionEventFactory, Whyce.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory>();
+        services.AddSingleton<IPolicyDecisionEventFactory, Whycespace.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory>();
 
         // Payload type registry — populated by domain bootstrap modules,
         // consumed by WorkflowLifecycleEventFactory (write side stamps
@@ -119,7 +119,7 @@ public static class RuntimeComposition
 
             return new RuntimeControlPlaneBuilder()
                 .UseTracing(new TracingMiddleware())
-                .UseMetrics(new Whyce.Runtime.Middleware.Observability.MetricsMiddleware())
+                .UseMetrics(new Whycespace.Runtime.Middleware.Observability.MetricsMiddleware())
                 .UseContextGuard(new ContextGuardMiddleware())
                 .UseValidation(new ValidationMiddleware())
                 .UsePolicy(policyMiddleware)
@@ -132,14 +132,14 @@ public static class RuntimeComposition
         // Workflow registry — populated by domain bootstrap modules
         services.AddSingleton<IWorkflowRegistry>(sp =>
         {
-            var registry = new Whyce.Runtime.Workflow.WorkflowRegistry();
+            var registry = new Whycespace.Runtime.Workflow.WorkflowRegistry();
             foreach (var module in sp.GetServices<IDomainBootstrapModule>())
                 module.RegisterWorkflows(registry);
             return registry;
         });
 
         // Workflow dispatcher — systems entry point for workflow execution
-        services.AddSingleton<IWorkflowDispatcher, Whyce.Systems.Midstream.Wss.WorkflowDispatcher>();
+        services.AddSingleton<IWorkflowDispatcher, Whycespace.Systems.Midstream.Wss.WorkflowDispatcher>();
 
         // Runtime control plane — single entry point (uses EventFabric)
         services.AddSingleton<IRuntimeControlPlane>(sp =>
@@ -150,9 +150,9 @@ public static class RuntimeComposition
                 sp.GetRequiredService<IDeterministicIdEngine>(),
                 sp.GetRequiredService<ISequenceResolver>(),
                 sp.GetRequiredService<ITopologyResolver>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IRuntimeStateAggregator>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IRuntimeMaintenanceModeProvider>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Runtime.IExecutionLockProvider>()));
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IRuntimeStateAggregator>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IRuntimeMaintenanceModeProvider>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Runtime.IExecutionLockProvider>()));
 
         // phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): bind
         // WorkflowOptions from configuration with the record's
@@ -210,8 +210,8 @@ public static class RuntimeComposition
         services.AddSingleton(chainAnchorOptions);
 
         // Command dispatcher (pure router) + system intent dispatcher
-        services.AddSingleton<ICommandDispatcher, Whyce.Runtime.Dispatcher.RuntimeCommandDispatcher>();
-        services.AddSingleton<ISystemIntentDispatcher, Whyce.Runtime.Dispatcher.SystemIntentDispatcher>();
+        services.AddSingleton<ICommandDispatcher, Whycespace.Runtime.Dispatcher.RuntimeCommandDispatcher>();
+        services.AddSingleton<ISystemIntentDispatcher, Whycespace.Runtime.Dispatcher.SystemIntentDispatcher>();
 
         return services;
     }

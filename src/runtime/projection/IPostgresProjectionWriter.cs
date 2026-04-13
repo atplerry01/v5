@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Projection;
+namespace Whycespace.Runtime.Projection;
 
 /// <summary>
 /// Generic projection table writer. One instance per projection table —

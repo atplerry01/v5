@@ -1,6 +1,6 @@
-using Whyce.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric;
 
-namespace Whyce.Runtime.Projection;
+namespace Whycespace.Runtime.Projection;
 
 /// <summary>
 /// Projection dispatcher contract. Dispatches event envelopes to registered

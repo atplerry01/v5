@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Kernel.Determinism;
+namespace Whycespace.Shared.Kernel.Determinism;
 
 /// <summary>
 /// HSID v2.1 topology segment (CCC + XXX + SSSSSS = 12 chars).

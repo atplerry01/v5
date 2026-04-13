@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Concrete <see cref="ISchemaSink"/> over <see cref="EventSchemaRegistry"/>.

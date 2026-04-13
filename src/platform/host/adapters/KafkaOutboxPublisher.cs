@@ -2,12 +2,12 @@ using System.Diagnostics.Metrics;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// Background service that polls the Postgres outbox table and publishes
@@ -24,7 +24,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 {
     // phase1-gate-S6: observability meter. Counters are exported via any
     // registered MeterListener (OTel, Prometheus exporter, dotnet-counters, ...).
-    public static readonly Meter Meter = new("Whyce.Outbox", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Outbox", "1.0");
     private static readonly Counter<long> PublishedCounter    = Meter.CreateCounter<long>("outbox.published");
     private static readonly Counter<long> FailedCounter       = Meter.CreateCounter<long>("outbox.failed");
     private static readonly Counter<long> DeadletteredCounter = Meter.CreateCounter<long>("outbox.deadlettered");

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Engines.T0U.WhyceId.Trust;
+namespace Whycespace.Engines.T0U.WhyceId.Trust;
 
 /// <summary>
 /// Evaluates trust score based on identity attributes.

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Core;
+namespace Whycespace.Platform.Host.Composition.Core;
 
 /// <summary>
 /// Core deterministic primitives (clock + id generator).

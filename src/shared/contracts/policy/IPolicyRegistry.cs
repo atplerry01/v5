@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Policy;
+namespace Whycespace.Shared.Contracts.Policy;
 
 /// <summary>
 /// Contract for external policy rule providers.

@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Whyce.Platform.Api.Health;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Api.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Api.Controllers.Platform.Infrastructure.Health;
+namespace Whycespace.Platform.Api.Controllers.Platform.Infrastructure.Health;
 
 [ApiController]
 [Route("[controller]")]

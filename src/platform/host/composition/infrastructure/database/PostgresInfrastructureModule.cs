@@ -1,14 +1,14 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Database;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Database;
 
 /// <summary>
 /// Postgres capability — connection pools, data sources, event store,
@@ -110,7 +110,7 @@ public static class PostgresInfrastructureModule
         // than a guess. The catalog must be derived from the same
         // PostgresPoolOptions instances used to build the data
         // sources above so the two cannot drift.
-        services.AddSingleton(new Whyce.Platform.Host.Health.PostgresPoolCatalog(
+        services.AddSingleton(new Whycespace.Platform.Host.Health.PostgresPoolCatalog(
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 [eventStorePoolOptions.PoolName] = eventStorePoolOptions.MaxPoolSize,

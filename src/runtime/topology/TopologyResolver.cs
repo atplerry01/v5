@@ -1,6 +1,6 @@
-using Whyce.Shared.Kernel.Determinism;
+using Whycespace.Shared.Kernel.Determinism;
 
-namespace Whyce.Runtime.Topology;
+namespace Whycespace.Runtime.Topology;
 
 /// <summary>
 /// Trusted-source topology resolver. Always reads from

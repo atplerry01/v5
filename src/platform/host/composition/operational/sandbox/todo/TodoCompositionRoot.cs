@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Application;
-using Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Infrastructure;
-using Whyce.Platform.Host.Composition.Operational.Sandbox.Todo.Projection;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.EventFabric.DomainSchemas;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Application;
+using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Infrastructure;
+using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo.Projection;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric.DomainSchemas;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Todo;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo;
 
 /// <summary>
 /// Composition root for operational/sandbox/todo. Delegates to modular sub-units

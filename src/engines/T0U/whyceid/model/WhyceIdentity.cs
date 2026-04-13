@@ -1,7 +1,7 @@
-using Whyce.Engines.T0U.WhyceId.Consent;
-using Whyce.Engines.T0U.WhyceId.Verification;
+using Whycespace.Engines.T0U.WhyceId.Consent;
+using Whycespace.Engines.T0U.WhyceId.Verification;
 
-namespace Whyce.Engines.T0U.WhyceId.Model;
+namespace Whycespace.Engines.T0U.WhyceId.Model;
 
 public sealed record WhyceIdentity(
     string IdentityId,

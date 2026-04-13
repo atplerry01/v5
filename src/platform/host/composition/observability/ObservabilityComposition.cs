@@ -2,13 +2,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
 using StackExchange.Redis;
-using Whyce.Platform.Api.Extensions;
-using Whyce.Platform.Api.Health;
-using Whyce.Platform.Host.Health;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Api.Extensions;
+using Whycespace.Platform.Api.Health;
+using Whycespace.Platform.Host.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Composition.Observability;
+namespace Whycespace.Platform.Host.Composition.Observability;
 
 /// <summary>
 /// Health checks (one per infra dependency), health aggregator, swagger,
@@ -112,7 +112,7 @@ public static class ObservabilityComposition
         services.AddSingleton<IHealthCheck>(sp => new WorkersHealthCheck(
             sp.GetRequiredService<IWorkerLivenessRegistry>(),
             sp.GetRequiredService<WorkerHealthOptions>(),
-            sp.GetRequiredService<Whyce.Shared.Kernel.Domain.IClock>()));
+            sp.GetRequiredService<Whycespace.Shared.Kernel.Domain.IClock>()));
 
         // phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
         // canonical runtime-state aggregator. Owns the rule that
@@ -136,7 +136,7 @@ public static class ObservabilityComposition
         services.AddSingleton<HealthAggregator>();
         services.AddWhyceSwagger();
         services.AddControllers()
-            .AddApplicationPart(typeof(Whyce.Platform.Api.Controllers.Platform.Infrastructure.Health.HealthController).Assembly);
+            .AddApplicationPart(typeof(Whycespace.Platform.Api.Controllers.Platform.Infrastructure.Health.HealthController).Assembly);
 
         return services;
     }

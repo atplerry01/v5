@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
-using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
+using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Composition.Operational.Sandbox.Kanban.Workflow;
+namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban.Workflow;
 
 /// <summary>
 /// Kanban workflow module — T1M workflow step DI registrations and workflow registry bindings.

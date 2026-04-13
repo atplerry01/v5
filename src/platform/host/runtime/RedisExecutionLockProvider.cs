@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using StackExchange.Redis;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Runtime;
+namespace Whycespace.Platform.Host.Runtime;
 
 /// <summary>
 /// phase1.5-S5.2.5 / MI-1 (DISTRIBUTED-EXECUTION-SAFETY-01):

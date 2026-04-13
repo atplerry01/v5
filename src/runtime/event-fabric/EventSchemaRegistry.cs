@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Whyce.Runtime.Deterministic;
+using Whycespace.Runtime.Deterministic;
 
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event Schema Registry — maintains versioned schema metadata for all event types.

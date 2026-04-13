@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Resolves canonical Kafka topic names from EventEnvelope routing metadata.

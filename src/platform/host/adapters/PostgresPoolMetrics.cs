@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Npgsql;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): canonical observability
 /// surface for the declared Npgsql logical pools. A dedicated
-/// <c>Whyce.Postgres</c> meter exports two counters tagged by the
+/// <c>Whycespace.Postgres</c> meter exports two counters tagged by the
 /// logical pool name:
 ///
 ///   - <c>postgres.pool.acquisitions</c>          — every successful
@@ -30,7 +30,7 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public static class PostgresPoolMetrics
 {
-    public static readonly Meter Meter = new("Whyce.Postgres", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Postgres", "1.0");
 
     private static readonly Counter<long> Acquisitions =
         Meter.CreateCounter<long>("postgres.pool.acquisitions");

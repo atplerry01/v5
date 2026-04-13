@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.Determinism.Sequence;
+namespace Whycespace.Engines.T0U.Determinism.Sequence;
 
 /// <summary>
 /// HSID v2.1 sequence resolver. Returns the next bounded sequence value

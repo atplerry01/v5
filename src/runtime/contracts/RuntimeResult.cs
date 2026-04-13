@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Contracts;
+namespace Whycespace.Runtime.Contracts;
 
 /// <summary>
 /// Runtime execution result. Returned by the RuntimeControlPlane after

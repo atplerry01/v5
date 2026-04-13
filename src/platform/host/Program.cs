@@ -2,12 +2,12 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
-using Whyce.Platform.Api.Middleware;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Platform.Host.Bootstrap;
-using Whyce.Platform.Host.Composition;
-using Whyce.Platform.Host.Composition.Loader;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Platform.Api.Middleware;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Platform.Host.Bootstrap;
+using Whycespace.Platform.Host.Composition;
+using Whycespace.Platform.Host.Composition.Loader;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,7 +92,7 @@ builder.Services.AddProblemDetails();
 // installing a partitioned concurrency limiter sized from IntakeOptions.
 // Partition key precedence: X-Tenant-Id header → remote IP. Overflow
 // returns HTTP 429 with Retry-After (RETRYABLE REFUSAL). The OnRejected
-// callback increments the Whyce.Intake meter so saturation is visible.
+// callback increments the Whycespace.Intake meter so saturation is visible.
 var intakeOptions = new IntakeOptions
 {
     GlobalConcurrency = builder.Configuration.GetValue<int?>("Intake:GlobalConcurrency")
@@ -180,7 +180,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // HTTP observability middleware (Prometheus) — before routing
-app.UseMiddleware<Whyce.Runtime.Observability.HttpMetricsMiddleware>();
+app.UseMiddleware<Whycespace.Runtime.Observability.HttpMetricsMiddleware>();
 app.UseRouting();
 
 // phase1.5-S5.2.1 / PC-1 (INTAKE-CONFIG-01): runtime intake admission
@@ -205,7 +205,7 @@ app.Use(async (context, next) =>
 // MapControllers so the linked token is in effect for the entire
 // downstream pipeline. Sits AFTER the rate limiter so a shutdown does
 // not perturb intake refusal accounting.
-app.UseMiddleware<Whyce.Platform.Api.Middleware.HostShutdownLinkingMiddleware>();
+app.UseMiddleware<Whycespace.Platform.Api.Middleware.HostShutdownLinkingMiddleware>();
 
 // phase1-gate-api-edge: invoke the registered IExceptionHandler chain
 // (currently just ConcurrencyConflictExceptionHandler -> 409). Must be

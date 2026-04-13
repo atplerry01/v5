@@ -1,12 +1,12 @@
-using Whyce.Projections.Operational.Sandbox.Kanban.Reducer;
-using Whyce.Projections.Shared;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.List;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Projection;
+using Whycespace.Projections.Operational.Sandbox.Kanban.Reducer;
+using Whycespace.Projections.Shared;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Projection;
 
-namespace Whyce.Projections.Operational.Sandbox.Kanban.List;
+namespace Whycespace.Projections.Operational.Sandbox.Kanban.List;
 
 public sealed class KanbanListProjectionHandler :
     IEnvelopeProjectionHandler,

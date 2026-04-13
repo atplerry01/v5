@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Safeguard;
+namespace Whycespace.Engines.T0U.WhycePolicy.Safeguard;
 
 /// <summary>
 /// Constitutional safeguard. Non-bypassable policy rules that protect system invariants.

@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Contracts;
+namespace Whycespace.Runtime.Contracts;
 
 /// <summary>
 /// Runtime command envelope. Wraps any command with its execution metadata

@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-1 (INTAKE-CONFIG-01): dedicated meter for the
@@ -27,7 +27,7 @@ namespace Whyce.Platform.Host.Adapters;
 /// </summary>
 public static class IntakeMetrics
 {
-    public static readonly Meter Meter = new("Whyce.Intake", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Intake", "1.0");
 
     public static readonly Counter<long> Admitted =
         Meter.CreateCounter<long>("intake.admitted");

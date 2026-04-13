@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Shared.Contracts.Infrastructure.Health;
+namespace Whycespace.Shared.Contracts.Infrastructure.Health;
 
 /// <summary>
 /// phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01):

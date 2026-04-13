@@ -1,7 +1,7 @@
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Runtime.Dispatcher;
+namespace Whycespace.Runtime.Dispatcher;
 
 /// <summary>
 /// System-level command dispatcher. Auto-generates deterministic IDs and context

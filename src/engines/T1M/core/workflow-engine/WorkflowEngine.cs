@@ -1,13 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Whyce.Engines.T1M.Core.Lifecycle;
-using Whyce.Engines.T1M.Core.StepExecutor;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Engines.T1M.Core.Lifecycle;
+using Whycespace.Engines.T1M.Core.StepExecutor;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Engines.T1M.Core.WorkflowEngine;
+namespace Whycespace.Engines.T1M.Core.WorkflowEngine;
 
 /// <summary>
 /// T1M workflow orchestrator. Executes a workflow definition step-by-step and

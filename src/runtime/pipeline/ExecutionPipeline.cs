@@ -1,8 +1,8 @@
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Pipeline;
+namespace Whycespace.Runtime.Pipeline;
 
 /// <summary>
 /// Execution Pipeline — orchestrates the full runtime execution flow.

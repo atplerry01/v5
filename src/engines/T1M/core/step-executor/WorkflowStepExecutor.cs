@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Engines.T1M.Core.StepExecutor;
+namespace Whycespace.Engines.T1M.Core.StepExecutor;
 
 public sealed class WorkflowStepExecutor
 {

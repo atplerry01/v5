@@ -1,13 +1,13 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
-using OutboxOptionsRecord = Whyce.Shared.Contracts.Infrastructure.Messaging.OutboxOptions;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
+using OutboxOptionsRecord = Whycespace.Shared.Contracts.Infrastructure.Messaging.OutboxOptions;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure.Messaging;
+namespace Whycespace.Platform.Host.Composition.Infrastructure.Messaging;
 
 /// <summary>
 /// Messaging capability — Kafka producer, consumer options, outbox adapter,
@@ -112,13 +112,13 @@ public static class KafkaInfrastructureModule
         // phase1.5-S5.2.1 / PC-3: outbox depth sampler — periodic probe
         // that publishes the latest count(*) and oldest-pending-age to
         // the shared snapshot and exports both as gauges on the
-        // Whyce.Outbox meter.
+        // Whycespace.Outbox meter.
         services.AddHostedService(sp =>
             new OutboxDepthSampler(
                 sp.GetRequiredService<EventStoreDataSource>(),
                 sp.GetRequiredService<IOutboxDepthSnapshot>(),
                 sp.GetRequiredService<OutboxOptionsRecord>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetRequiredService<IClock>()));
 
         // --- Kafka Outbox Publisher (background relay: Postgres outbox → Kafka) ---
@@ -132,7 +132,7 @@ public static class KafkaInfrastructureModule
                 sp.GetRequiredService<IProducer<string, string>>(),
                 sp.GetRequiredService<TopicNameResolver>(),
                 sp.GetRequiredService<OutboxOptionsRecord>(),
-                sp.GetRequiredService<Whyce.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetRequiredService<IClock>()));
 
         return services;

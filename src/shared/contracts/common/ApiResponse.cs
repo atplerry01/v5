@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Common;
+namespace Whycespace.Shared.Contracts.Common;
 
 /// <summary>
 /// Standard API response envelope. All endpoints return this shape.

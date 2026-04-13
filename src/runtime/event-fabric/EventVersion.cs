@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric;
+namespace Whycespace.Runtime.EventFabric;
 
 /// <summary>
 /// Event version. Semantic versioning for event schemas.

@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceId.Verification;
+namespace Whycespace.Engines.T0U.WhyceId.Verification;
 
 /// <summary>
 /// Represents the verification state of an identity.

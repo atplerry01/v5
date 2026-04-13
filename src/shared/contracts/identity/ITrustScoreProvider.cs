@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Identity;
+namespace Whycespace.Shared.Contracts.Identity;
 
 /// <summary>
 /// Contract for external trust score enrichment.

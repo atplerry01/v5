@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.Determinism.Time;
+namespace Whycespace.Engines.T0U.Determinism.Time;
 
 /// <summary>
 /// HSID v2.1 time-bucket provider. Returns the bucket segment (TTT, 3 chars)

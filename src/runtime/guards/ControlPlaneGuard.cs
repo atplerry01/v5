@@ -1,6 +1,6 @@
-using Whyce.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric;
 
-namespace Whyce.Runtime.Guards;
+namespace Whycespace.Runtime.Guards;
 
 /// <summary>
 /// Control Plane Guard — validates that the runtime control plane

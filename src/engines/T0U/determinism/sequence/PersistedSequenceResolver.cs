@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
-namespace Whyce.Engines.T0U.Determinism.Sequence;
+namespace Whycespace.Engines.T0U.Determinism.Sequence;
 
 /// <summary>
 /// HSID v2.1 sequence resolver backed by <see cref="ISequenceStore"/>. The

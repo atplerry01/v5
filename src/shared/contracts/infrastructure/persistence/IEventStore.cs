@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
 
-namespace Whyce.Shared.Contracts.Infrastructure.Persistence;
+namespace Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 public interface IEventStore
 {

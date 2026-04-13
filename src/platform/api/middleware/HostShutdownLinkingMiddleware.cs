@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 
-namespace Whyce.Platform.Api.Middleware;
+namespace Whycespace.Platform.Api.Middleware;
 
 /// <summary>
 /// phase1.5-S5.2.3 / TC-9 (HOST-SHUTDOWN-DRAIN-01): replaces

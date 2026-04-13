@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Deterministic;
+namespace Whycespace.Runtime.Deterministic;
 
 /// <summary>
 /// Execution Hash — deterministic fingerprint of a command execution.

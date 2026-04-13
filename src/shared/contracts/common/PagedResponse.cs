@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Common;
+namespace Whycespace.Shared.Contracts.Common;
 
 /// <summary>
 /// Standard pagination response. List endpoints return ApiResponse&lt;PagedResponse&lt;T&gt;&gt;.

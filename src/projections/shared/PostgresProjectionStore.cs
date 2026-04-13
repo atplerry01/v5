@@ -2,7 +2,7 @@ using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Npgsql;
 
-namespace Whyce.Projections.Shared;
+namespace Whycespace.Projections.Shared;
 
 /// <summary>
 /// Generic Postgres projection store. Provides instrumented connection acquisition,
@@ -18,7 +18,7 @@ public sealed class PostgresProjectionStore<TState> where TState : class
 {
     private const string PoolName = "projections";
 
-    private static readonly Meter PoolMeter = new("Whyce.Postgres", "1.0");
+    private static readonly Meter PoolMeter = new("Whycespace.Postgres", "1.0");
     private static readonly Counter<long> PoolAcquisitions =
         PoolMeter.CreateCounter<long>("postgres.pool.acquisitions");
     private static readonly Counter<long> PoolAcquisitionFailures =

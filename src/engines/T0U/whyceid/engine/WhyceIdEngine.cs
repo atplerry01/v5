@@ -1,16 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Engines.T0U.WhyceId.Command;
-using Whyce.Engines.T0U.WhyceId.Consent;
-using Whyce.Engines.T0U.WhyceId.Model;
-using Whyce.Engines.T0U.WhyceId.Resolver;
-using Whyce.Engines.T0U.WhyceId.Result;
-using Whyce.Engines.T0U.WhyceId.Session;
-using Whyce.Engines.T0U.WhyceId.Trust;
-using Whyce.Engines.T0U.WhyceId.Verification;
-using Whyce.Shared.Contracts.Engine;
+using Whycespace.Engines.T0U.WhyceId.Command;
+using Whycespace.Engines.T0U.WhyceId.Consent;
+using Whycespace.Engines.T0U.WhyceId.Model;
+using Whycespace.Engines.T0U.WhyceId.Resolver;
+using Whycespace.Engines.T0U.WhyceId.Result;
+using Whycespace.Engines.T0U.WhyceId.Session;
+using Whycespace.Engines.T0U.WhyceId.Trust;
+using Whycespace.Engines.T0U.WhyceId.Verification;
+using Whycespace.Shared.Contracts.Engine;
 
-namespace Whyce.Engines.T0U.WhyceId.Engine;
+namespace Whycespace.Engines.T0U.WhyceId.Engine;
 
 /// <summary>
 /// WhyceId — Constitutional Identity Engine (T0U).

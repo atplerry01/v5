@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Impact;
+namespace Whycespace.Engines.T0U.WhycePolicy.Impact;
 
 /// <summary>
 /// Assessment of a policy change impact.

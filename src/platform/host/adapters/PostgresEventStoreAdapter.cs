@@ -2,12 +2,12 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Npgsql;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// PostgreSQL-backed event store. Persists domain events as JSONB rows
@@ -19,10 +19,10 @@ namespace Whyce.Platform.Host.Adapters;
 public sealed class PostgresEventStoreAdapter : IEventStore
 {
     // phase1.5-S5.2.2 / KC-5 (EVENT-STORE-ADVISORY-LOCK-OBS-01):
-    // canonical Whyce.EventStore meter exporting two histograms that
+    // canonical Whycespace.EventStore meter exporting two histograms that
     // distinguish per-aggregate advisory-lock contention from pool
     // saturation. Pool acquisition time is already measured by
-    // Whyce.Postgres.postgres.pool.acquisitions (PC-4); KC-5 adds
+    // Whycespace.Postgres.postgres.pool.acquisitions (PC-4); KC-5 adds
     // the Postgres-side advisory-lock dimension that PC-4 does not
     // and cannot see.
     //
@@ -45,7 +45,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
     // tag — those would explode cardinality. The wait histogram
     // has zero tags; the hold histogram has one low-cardinality
     // outcome tag mirroring the PC-5 ChainAnchorService pattern.
-    public static readonly Meter Meter = new("Whyce.EventStore", "1.0");
+    public static readonly Meter Meter = new("Whycespace.EventStore", "1.0");
     private static readonly Histogram<double> AdvisoryLockWaitHistogram =
         Meter.CreateHistogram<double>("event_store.append.advisory_lock_wait_ms", unit: "ms");
     private static readonly Histogram<double> AppendHoldHistogram =
@@ -153,7 +153,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         // measure the wait separately from pool acquisition. The
         // pg_advisory_xact_lock call blocks inside Postgres until the
         // lock is granted, so the elapsed time around ExecuteNonQueryAsync
-        // is the in-database wait — distinct from the Whyce.Postgres
+        // is the in-database wait — distinct from the Whycespace.Postgres
         // pool acquisition time captured above by OpenInstrumentedAsync.
         var lockWaitStart = Stopwatch.GetTimestamp();
         await using (var lockCmd = new NpgsqlCommand(

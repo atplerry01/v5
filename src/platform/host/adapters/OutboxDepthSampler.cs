@@ -2,18 +2,18 @@ using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): periodic sampler that
 /// observes the outbox table depth and oldest-pending-row age and
 /// publishes both to the shared <see cref="IOutboxDepthSnapshot"/> seam.
 /// Also exports the observations as gauges on the existing
-/// <c>Whyce.Outbox</c> meter — separate Meter instance, same logical
+/// <c>Whycespace.Outbox</c> meter — separate Meter instance, same logical
 /// name, so a single scrape sees publisher counters and sampler gauges
 /// together.
 ///
@@ -34,11 +34,11 @@ namespace Whyce.Platform.Host.Adapters;
 public sealed class OutboxDepthSampler : BackgroundService
 {
     // phase1.5-S5.2.1 / PC-3: sampler-side instruments on the canonical
-    // Whyce.Outbox meter. Multiple Meter instances sharing a name are
+    // Whycespace.Outbox meter. Multiple Meter instances sharing a name are
     // collapsed by listeners (OTel, Prometheus exporter, etc.), so the
     // sampler and KafkaOutboxPublisher publish to the same logical
     // surface without coupling their files.
-    public static readonly Meter Meter = new("Whyce.Outbox", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Outbox", "1.0");
     private static long _latestDepth;
     private static double _latestOldestAgeSeconds;
     // phase1.5-S5.2.2 / KC-3 (DLQ-OBSERVABILITY-01): outbox-side

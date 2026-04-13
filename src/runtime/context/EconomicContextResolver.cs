@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Context;
+namespace Whycespace.Runtime.Context;
 
 /// <summary>
 /// Resolves economic context from command payload.

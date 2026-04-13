@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
 
-namespace Whyce.Platform.Api.Middleware;
+namespace Whycespace.Platform.Api.Middleware;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-2 (OPA-CONFIG-01): maps

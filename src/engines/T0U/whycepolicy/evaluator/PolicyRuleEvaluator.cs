@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Engines.T0U.WhycePolicy.Registry;
+using Whycespace.Engines.T0U.WhycePolicy.Registry;
 
-namespace Whyce.Engines.T0U.WhycePolicy.Evaluator;
+namespace Whycespace.Engines.T0U.WhycePolicy.Evaluator;
 
 /// <summary>
 /// Evaluates policy rules against a command execution context.

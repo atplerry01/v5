@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Guards;
+namespace Whycespace.Runtime.Guards;
 
 /// <summary>
 /// Fabric Invocation Guard — ensures ControlPlane → Fabric is

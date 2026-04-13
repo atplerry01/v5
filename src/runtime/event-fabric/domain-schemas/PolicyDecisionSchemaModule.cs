@@ -1,6 +1,6 @@
 using DomainEvents = Whycespace.Domain.ConstitutionalSystem.Policy.Decision;
 
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Schema module for the constitutional/policy/decision domain.

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Engines.T0U.WhycePolicy.Registry;
+namespace Whycespace.Engines.T0U.WhycePolicy.Registry;
 
 /// <summary>
 /// Immutable policy rule. Rules are evaluated deterministically.

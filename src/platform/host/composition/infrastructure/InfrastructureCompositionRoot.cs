@@ -1,13 +1,13 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Composition.Infrastructure.Cache;
-using Whyce.Platform.Host.Composition.Infrastructure.Chain;
-using Whyce.Platform.Host.Composition.Infrastructure.Database;
-using Whyce.Platform.Host.Composition.Infrastructure.Messaging;
-using Whyce.Platform.Host.Composition.Infrastructure.Observability;
-using Whyce.Platform.Host.Composition.Infrastructure.Policy;
+using Whycespace.Platform.Host.Composition.Infrastructure.Cache;
+using Whycespace.Platform.Host.Composition.Infrastructure.Chain;
+using Whycespace.Platform.Host.Composition.Infrastructure.Database;
+using Whycespace.Platform.Host.Composition.Infrastructure.Messaging;
+using Whycespace.Platform.Host.Composition.Infrastructure.Observability;
+using Whycespace.Platform.Host.Composition.Infrastructure.Policy;
 
-namespace Whyce.Platform.Host.Composition.Infrastructure;
+namespace Whycespace.Platform.Host.Composition.Infrastructure;
 
 /// <summary>
 /// Infrastructure composition root — delegates to capability-based sub-modules.

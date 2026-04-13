@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.Orchestration.Workflow;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.EventFabric.DomainSchemas;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Projections.Orchestration.Workflow;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric.DomainSchemas;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Projections.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Composition.Orchestration.Workflow;
+namespace Whycespace.Platform.Host.Composition.Orchestration.Workflow;
 
 /// <summary>
 /// Bootstrap module for the workflow execution lifecycle. Owns:

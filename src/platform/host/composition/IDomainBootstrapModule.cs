@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Composition;
+namespace Whycespace.Platform.Host.Composition;
 
 /// <summary>
 /// Per-domain bootstrap contract. Owns ALL wiring for a single classification/context/domain

@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceId.Audit;
+namespace Whycespace.Engines.T0U.WhyceId.Audit;
 
 /// <summary>
 /// Immutable audit record for identity operations.

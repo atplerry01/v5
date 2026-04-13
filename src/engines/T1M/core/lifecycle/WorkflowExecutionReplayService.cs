@@ -1,10 +1,10 @@
 using System.Text.Json;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 
-namespace Whyce.Engines.T1M.Core.Lifecycle;
+namespace Whycespace.Engines.T1M.Core.Lifecycle;
 
 /// <summary>
 /// Reconstructs <see cref="WorkflowExecutionAggregate"/> deterministically

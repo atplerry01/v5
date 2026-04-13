@@ -1,6 +1,6 @@
-using Whyce.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric;
 
-namespace Whyce.Runtime.Projection;
+namespace Whycespace.Runtime.Projection;
 
 /// <summary>
 /// Projection Rebuilder — delegates to EventReplayService for projection rebuilds.

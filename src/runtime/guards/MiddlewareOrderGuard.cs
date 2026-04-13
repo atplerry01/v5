@@ -1,10 +1,10 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Runtime.Middleware.Execution;
-using Whyce.Runtime.Middleware.Observability;
-using Whyce.Runtime.Middleware.PostPolicy;
-using Whyce.Runtime.Middleware.PrePolicy;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Runtime.Middleware.Execution;
+using Whycespace.Runtime.Middleware.Observability;
+using Whycespace.Runtime.Middleware.PostPolicy;
+using Whycespace.Runtime.Middleware.PrePolicy;
 
-namespace Whyce.Runtime.Guards;
+namespace Whycespace.Runtime.Guards;
 
 /// <summary>
 /// Middleware Order Guard — validates that the middleware pipeline
@@ -27,10 +27,10 @@ public static class MiddlewareOrderGuard
     private static readonly Type[] CanonicalOrder =
     [
         typeof(TracingMiddleware),
-        typeof(Whyce.Runtime.Middleware.Observability.MetricsMiddleware),
+        typeof(Whycespace.Runtime.Middleware.Observability.MetricsMiddleware),
         typeof(ContextGuardMiddleware),
         typeof(ValidationMiddleware),
-        typeof(Whyce.Runtime.Middleware.Policy.PolicyMiddleware),
+        typeof(Whycespace.Runtime.Middleware.Policy.PolicyMiddleware),
         typeof(AuthorizationGuardMiddleware),
         typeof(IdempotencyMiddleware),
         typeof(ExecutionGuardMiddleware)

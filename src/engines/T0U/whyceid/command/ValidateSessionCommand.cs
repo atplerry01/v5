@@ -1,3 +1,3 @@
-namespace Whyce.Engines.T0U.WhyceId.Command;
+namespace Whycespace.Engines.T0U.WhyceId.Command;
 
 public sealed record ValidateSessionCommand(string SessionId, string IdentityId, string? DeviceId);

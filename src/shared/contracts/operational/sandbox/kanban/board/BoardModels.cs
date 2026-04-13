@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
-namespace Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+namespace Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
 
 public sealed record KanbanBoardReadModel
 {

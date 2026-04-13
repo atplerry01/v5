@@ -1,7 +1,7 @@
 using Npgsql;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// PostgreSQL-backed idempotency store. Tracks processed command keys

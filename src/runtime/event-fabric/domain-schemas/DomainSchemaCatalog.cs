@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric.DomainSchemas;
+namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 
 /// <summary>
 /// Host-facing dispatcher for per-domain schema modules.

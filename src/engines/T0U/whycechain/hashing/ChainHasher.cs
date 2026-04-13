@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace Whyce.Engines.T0U.WhyceChain.Hashing;
+namespace Whycespace.Engines.T0U.WhyceChain.Hashing;
 
 /// <summary>
 /// Deterministic chain hasher. Implements the canonical hash rule:

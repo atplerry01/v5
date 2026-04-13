@@ -1,6 +1,6 @@
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
-namespace Whyce.Platform.Host.Bootstrap;
+namespace Whycespace.Platform.Host.Bootstrap;
 
 /// <summary>
 /// Fail-fast bootstrap validator for HSID v2.1 infrastructure. Calls

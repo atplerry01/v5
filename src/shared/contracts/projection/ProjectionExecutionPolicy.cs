@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Projection;
+namespace Whycespace.Shared.Contracts.Projection;
 
 /// <summary>
 /// Projection execution policy. Controls how projections are dispatched

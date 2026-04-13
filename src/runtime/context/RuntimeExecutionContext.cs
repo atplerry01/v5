@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Whyce.Runtime.Context;
+namespace Whycespace.Runtime.Context;
 
 /// <summary>
 /// Runtime execution context. Enriches the shared CommandContext with

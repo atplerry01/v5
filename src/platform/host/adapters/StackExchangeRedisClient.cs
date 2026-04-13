@@ -1,8 +1,8 @@
 using System.Text.Json;
 using StackExchange.Redis;
-using Whyce.Shared.Contracts.Infrastructure.Projection;
+using Whycespace.Shared.Contracts.Infrastructure.Projection;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// StackExchange.Redis-backed implementation of IRedisClient.

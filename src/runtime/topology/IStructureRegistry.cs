@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.Topology;
+namespace Whycespace.Runtime.Topology;
 
 /// <summary>
 /// Authoritative source of constitutional structure for HSID v2.1 topology

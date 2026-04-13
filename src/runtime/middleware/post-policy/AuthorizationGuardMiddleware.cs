@@ -1,7 +1,7 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.PostPolicy;
+namespace Whycespace.Runtime.Middleware.PostPolicy;
 
 /// <summary>
 /// Post-policy authorization guard. Runs AFTER policy evaluation.

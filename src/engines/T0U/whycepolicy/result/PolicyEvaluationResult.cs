@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Result;
+namespace Whycespace.Engines.T0U.WhycePolicy.Result;
 
 public sealed record PolicyEvaluationResult(
     bool IsCompliant,

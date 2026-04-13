@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Engines.T0U.WhyceId.Model;
+using Whycespace.Engines.T0U.WhyceId.Model;
 
-namespace Whyce.Engines.T0U.WhyceId.Resolver;
+namespace Whycespace.Engines.T0U.WhyceId.Resolver;
 
 /// <summary>
 /// Resolves an identity from token or userId input.

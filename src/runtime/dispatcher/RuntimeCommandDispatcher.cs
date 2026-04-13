@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
-namespace Whyce.Runtime.Dispatcher;
+namespace Whycespace.Runtime.Dispatcher;
 
 /// <summary>
 /// Routes commands to appropriate handlers: workflow orchestration (T1M) or

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Whyce.Runtime.Topology;
+namespace Whycespace.Runtime.Topology;
 
 /// <summary>
 /// In-memory <see cref="IStructureRegistry"/> stub. Seeded at composition

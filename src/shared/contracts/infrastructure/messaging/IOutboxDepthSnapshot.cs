@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Messaging;
+namespace Whycespace.Shared.Contracts.Infrastructure.Messaging;
 
 /// <summary>
 /// phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): shared seam by which the

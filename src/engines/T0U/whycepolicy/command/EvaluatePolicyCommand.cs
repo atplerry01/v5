@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhycePolicy.Command;
+namespace Whycespace.Engines.T0U.WhycePolicy.Command;
 
 public sealed record EvaluatePolicyCommand(
     string PolicyName,

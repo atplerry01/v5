@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
+namespace Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
 
 /// <summary>
 /// Canonical step identity constants for the Card Approval workflow.

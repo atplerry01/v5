@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.EventFabric.DomainSchemas;
-using Whyce.Runtime.Projection;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric.DomainSchemas;
+using Whycespace.Runtime.Projection;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Platform.Host.Composition.Constitutional.Policy;
+namespace Whycespace.Platform.Host.Composition.Constitutional.Policy;
 
 /// <summary>
 /// Constitutional policy bootstrap module — registers the policy decision event

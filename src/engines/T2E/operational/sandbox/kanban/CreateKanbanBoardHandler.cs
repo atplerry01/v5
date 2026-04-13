@@ -1,8 +1,8 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
-namespace Whyce.Engines.T2E.Operational.Sandbox.Kanban;
+namespace Whycespace.Engines.T2E.Operational.Sandbox.Kanban;
 
 public sealed class CreateKanbanBoardHandler : IEngine
 {

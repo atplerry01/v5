@@ -1,10 +1,10 @@
-using Whyce.Engines.T0U.WhyceChain.Command;
-using Whyce.Engines.T0U.WhyceChain.Hashing;
-using Whyce.Engines.T0U.WhyceChain.Integrity;
-using Whyce.Engines.T0U.WhyceChain.Result;
-using Whyce.Engines.T0U.WhyceChain.Sequencing;
+using Whycespace.Engines.T0U.WhyceChain.Command;
+using Whycespace.Engines.T0U.WhyceChain.Hashing;
+using Whycespace.Engines.T0U.WhyceChain.Integrity;
+using Whycespace.Engines.T0U.WhyceChain.Result;
+using Whycespace.Engines.T0U.WhyceChain.Sequencing;
 
-namespace Whyce.Engines.T0U.WhyceChain.Engine;
+namespace Whycespace.Engines.T0U.WhyceChain.Engine;
 
 /// <summary>
 /// WhyceChain — Constitutional Chain Engine (T0U).

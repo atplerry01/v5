@@ -2,7 +2,7 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Prometheus;
 
-namespace Whyce.Runtime.Observability;
+namespace Whycespace.Runtime.Observability;
 
 /// <summary>
 /// HTTP-level metrics middleware for Prometheus.

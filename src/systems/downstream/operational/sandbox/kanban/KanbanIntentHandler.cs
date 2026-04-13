@@ -1,10 +1,10 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
+namespace Whycespace.Systems.Downstream.Operational.Sandbox.Kanban;
 
 public sealed class KanbanIntentHandler : IKanbanIntentHandler
 {

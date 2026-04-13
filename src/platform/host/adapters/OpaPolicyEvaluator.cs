@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// OPA (Open Policy Agent) backed policy evaluator.
@@ -21,7 +21,7 @@ namespace Whyce.Platform.Host.Adapters;
 ///      HalfOpen) sized from <see cref="OpaOptions.BreakerThreshold"/> and
 ///      <see cref="OpaOptions.BreakerWindowSeconds"/>. Open-state calls
 ///      throw immediately, never silently allow.
-///   3. A <c>Whyce.Policy</c> meter exporting evaluation duration plus
+///   3. A <c>Whycespace.Policy</c> meter exporting evaluation duration plus
 ///      timeout / breaker-open / failure counters.
 ///
 /// Failure semantics: every transient failure (timeout, transport, non-2xx,
@@ -36,7 +36,7 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
     // Counter / histogram names use the `policy.evaluate.*` namespace so
     // they are unambiguous in any registered MeterListener (OTel,
     // Prometheus exporter, dotnet-counters, ...).
-    public static readonly Meter Meter = new("Whyce.Policy", "1.0");
+    public static readonly Meter Meter = new("Whycespace.Policy", "1.0");
     private static readonly Histogram<double> EvaluateDuration =
         Meter.CreateHistogram<double>("policy.evaluate.duration", unit: "ms");
     private static readonly Counter<long> TimeoutCounter =

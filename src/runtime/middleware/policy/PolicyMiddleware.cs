@@ -1,15 +1,15 @@
-using Whyce.Engines.T0U.WhyceId.Command;
-using Whyce.Engines.T0U.WhyceId.Engine;
-using Whyce.Engines.T0U.WhycePolicy.Command;
-using Whyce.Engines.T0U.WhycePolicy.Engine;
-using Whyce.Runtime.Deterministic;
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
-using Whyce.Shared.Contracts.Policy;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Engines.T0U.WhyceId.Command;
+using Whycespace.Engines.T0U.WhyceId.Engine;
+using Whycespace.Engines.T0U.WhycePolicy.Command;
+using Whycespace.Engines.T0U.WhycePolicy.Engine;
+using Whycespace.Runtime.Deterministic;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Policy;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Runtime.Middleware.Policy;
+namespace Whycespace.Runtime.Middleware.Policy;
 
 /// <summary>
 /// WHYCEPOLICY enforcement middleware. Every command MUST pass through policy evaluation.

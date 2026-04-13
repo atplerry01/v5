@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
-using Whyce.Engines.T0U.Determinism.Time;
-using Whyce.Shared.Kernel.Determinism;
+using Whycespace.Engines.T0U.Determinism.Time;
+using Whycespace.Shared.Kernel.Determinism;
 
-namespace Whyce.Engines.T0U.Determinism;
+namespace Whycespace.Engines.T0U.Determinism;
 
 /// <summary>
 /// HSID v2.1 — single source of truth for compact, topology-aware,

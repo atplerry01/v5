@@ -1,4 +1,4 @@
-namespace Whyce.Engines.T0U.WhyceChain.Sequencing;
+namespace Whycespace.Engines.T0U.WhyceChain.Sequencing;
 
 /// <summary>
 /// Enforces monotonically increasing sequence numbers on chain blocks.

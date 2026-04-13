@@ -3,11 +3,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Npgsql;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Infrastructure.Chain;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Shared.Kernel.Domain;
 
-namespace Whyce.Platform.Host.Adapters;
+namespace Whycespace.Platform.Host.Adapters;
 
 /// <summary>
 /// PostgreSQL-backed chain anchor. Persists immutable chain blocks to the
@@ -33,7 +33,7 @@ namespace Whyce.Platform.Host.Adapters;
 ///      <see cref="ChainAnchorOptions.BreakerWindowSeconds"/>. Open-state
 ///      calls throw <see cref="ChainAnchorUnavailableException"/>
 ///      immediately, never silently allow.
-///   3. A <c>Whyce.Chain</c>-meter failure counter tagged with a
+///   3. A <c>Whycespace.Chain</c>-meter failure counter tagged with a
 ///      low-cardinality outcome ("breaker_open" / "transport") so a
 ///      degraded chain-store is observable end-to-end without
 ///      exploding cardinality.
@@ -47,11 +47,11 @@ namespace Whyce.Platform.Host.Adapters;
 public sealed class WhyceChainPostgresAdapter : IChainAnchor
 {
     // phase1.5-S5.2.3 / TC-3: failure counter on the existing
-    // Whyce.Chain meter (defined by ChainAnchorService). Re-using the
+    // Whycespace.Chain meter (defined by ChainAnchorService). Re-using the
     // meter keeps the chain hot path's signals coherent in any
     // registered MeterListener (OTel, Prometheus, dotnet-counters).
     private static readonly Counter<long> FailureCounter =
-        Whyce.Runtime.EventFabric.ChainAnchorService.Meter
+        Whycespace.Runtime.EventFabric.ChainAnchorService.Meter
             .CreateCounter<long>("chain.store.failure");
 
     private readonly ChainDataSource _dataSource;

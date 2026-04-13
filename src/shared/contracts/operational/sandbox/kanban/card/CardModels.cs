@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+namespace Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
 
 public sealed record KanbanCardReadModel
 {

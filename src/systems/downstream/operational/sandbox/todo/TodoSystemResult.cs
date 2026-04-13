@@ -1,4 +1,4 @@
-namespace Whyce.Systems.Downstream.Operational.Sandbox.Todo;
+namespace Whycespace.Systems.Downstream.Operational.Sandbox.Todo;
 
 public sealed record TodoSystemResult(
     bool Success,

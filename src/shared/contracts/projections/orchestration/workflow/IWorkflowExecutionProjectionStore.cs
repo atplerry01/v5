@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
+namespace Whycespace.Shared.Contracts.Projections.Orchestration.Workflow;
 
 public interface IWorkflowExecutionProjectionStore
 {

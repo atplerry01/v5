@@ -1,4 +1,4 @@
-namespace Whyce.Runtime.EventFabric.Workers;
+namespace Whycespace.Runtime.EventFabric.Workers;
 
 /// <summary>
 /// Outbox Relay Worker — polls the outbox and relays events to

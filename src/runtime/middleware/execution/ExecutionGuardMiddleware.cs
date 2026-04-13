@@ -1,7 +1,7 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.Execution;
+namespace Whycespace.Runtime.Middleware.Execution;
 
 /// <summary>
 /// Final gate before command dispatch to engine.

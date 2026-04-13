@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.Observability;
+namespace Whycespace.Runtime.Middleware.Observability;
 
 /// <summary>
 /// Observability middleware: records command execution metrics (duration, count, errors).

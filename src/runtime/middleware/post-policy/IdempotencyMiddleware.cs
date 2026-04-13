@@ -1,8 +1,8 @@
-using Whyce.Runtime.Middleware;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Runtime;
 
-namespace Whyce.Runtime.Middleware.PostPolicy;
+namespace Whycespace.Runtime.Middleware.PostPolicy;
 
 /// <summary>
 /// Post-policy idempotency guard. Prevents duplicate command processing.

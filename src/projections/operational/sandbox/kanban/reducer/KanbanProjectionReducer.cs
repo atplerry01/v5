@@ -1,11 +1,11 @@
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban.List;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Board;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.Card;
-using Whyce.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Events.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
 
-namespace Whyce.Projections.Operational.Sandbox.Kanban.Reducer;
+namespace Whycespace.Projections.Operational.Sandbox.Kanban.Reducer;
 
 /// <summary>
 /// Pure state reducer for the Kanban board read model.

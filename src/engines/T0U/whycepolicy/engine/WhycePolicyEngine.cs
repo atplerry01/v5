@@ -1,14 +1,14 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Engines.T0U.WhycePolicy.Command;
-using Whyce.Engines.T0U.WhycePolicy.Context;
-using Whyce.Engines.T0U.WhycePolicy.Evaluator;
-using Whyce.Engines.T0U.WhycePolicy.Registry;
-using Whyce.Engines.T0U.WhycePolicy.Result;
-using Whyce.Engines.T0U.WhycePolicy.Safeguard;
-using Whyce.Engines.T0U.WhycePolicy.Simulation;
+using Whycespace.Engines.T0U.WhycePolicy.Command;
+using Whycespace.Engines.T0U.WhycePolicy.Context;
+using Whycespace.Engines.T0U.WhycePolicy.Evaluator;
+using Whycespace.Engines.T0U.WhycePolicy.Registry;
+using Whycespace.Engines.T0U.WhycePolicy.Result;
+using Whycespace.Engines.T0U.WhycePolicy.Safeguard;
+using Whycespace.Engines.T0U.WhycePolicy.Simulation;
 
-namespace Whyce.Engines.T0U.WhycePolicy.Engine;
+namespace Whycespace.Engines.T0U.WhycePolicy.Engine;
 
 /// <summary>
 /// WhycePolicy — Constitutional Policy Engine (T0U).

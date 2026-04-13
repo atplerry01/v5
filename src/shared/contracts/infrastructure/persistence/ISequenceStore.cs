@@ -1,4 +1,4 @@
-namespace Whyce.Shared.Contracts.Infrastructure.Persistence;
+namespace Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 /// <summary>
 /// HSID v2.1 sequence store. Persists the next monotonic counter per scope
