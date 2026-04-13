@@ -7,7 +7,7 @@ public sealed class ListingAggregate
     public ListingId Id { get; private set; }
     public ListingOwnerId OwnerId { get; private set; }
     public ListingItemReference ItemReference { get; private set; }
-    public string ListingTitle { get; private set; }
+    public string ListingTitle { get; private set; } = null!;
     public ListingStatus Status { get; private set; }
     public int Version { get; private set; }
 

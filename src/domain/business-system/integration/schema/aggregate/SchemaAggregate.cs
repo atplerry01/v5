@@ -38,13 +38,13 @@ public sealed class SchemaAggregate
         EnsureInvariants();
     }
 
-    public void Finalize()
+    public void MarkFinalized()
     {
         ValidateBeforeChange();
 
         var specification = new CanFinalizeSpecification();
         if (!specification.IsSatisfiedBy(Status))
-            throw SchemaErrors.InvalidStateTransition(Status, nameof(Finalize));
+            throw SchemaErrors.InvalidStateTransition(Status, nameof(MarkFinalized));
 
         var @event = new SchemaFinalizedEvent(Id);
         Apply(@event);

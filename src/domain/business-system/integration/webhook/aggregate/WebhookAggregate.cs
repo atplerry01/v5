@@ -5,7 +5,7 @@ public sealed class WebhookAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public WebhookId Id { get; private set; }
-    public WebhookDefinition Definition { get; private set; }
+    public WebhookDefinition Definition { get; private set; } = null!;
     public WebhookStatus Status { get; private set; }
     public int Version { get; private set; }
 

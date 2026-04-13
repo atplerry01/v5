@@ -6,7 +6,7 @@ public sealed class OfferAggregate
 
     public OfferId Id { get; private set; }
     public OfferListingReference ListingReference { get; private set; }
-    public OfferTerms Terms { get; private set; }
+    public OfferTerms Terms { get; private set; } = null!;
     public OfferStatus Status { get; private set; }
     public int Version { get; private set; }
 

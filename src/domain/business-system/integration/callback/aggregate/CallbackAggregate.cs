@@ -5,7 +5,7 @@ public sealed class CallbackAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public CallbackId Id { get; private set; }
-    public CallbackDefinition Definition { get; private set; }
+    public CallbackDefinition Definition { get; private set; } = null!;
     public CallbackStatus Status { get; private set; }
     public int Version { get; private set; }
 

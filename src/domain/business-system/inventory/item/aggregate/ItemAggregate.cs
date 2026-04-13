@@ -6,7 +6,7 @@ public sealed class ItemAggregate
 
     public ItemId Id { get; private set; }
     public ItemTypeId TypeId { get; private set; }
-    public string ItemName { get; private set; }
+    public string ItemName { get; private set; } = null!;
     public ItemStatus Status { get; private set; }
     public int Version { get; private set; }
 

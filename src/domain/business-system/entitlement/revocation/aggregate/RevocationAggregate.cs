@@ -7,7 +7,7 @@ public sealed class RevocationAggregate
     public RevocationId Id { get; private set; }
     public RevocationTargetId TargetId { get; private set; }
     public RevocationStatus Status { get; private set; }
-    public string RevocationReason { get; private set; }
+    public string RevocationReason { get; private set; } = null!;
     public int Version { get; private set; }
 
     private RevocationAggregate() { }
@@ -42,13 +42,13 @@ public sealed class RevocationAggregate
         EnsureInvariants();
     }
 
-    public void Finalize()
+    public void MarkFinalized()
     {
         ValidateBeforeChange();
 
         var specification = new CanFinalizeSpecification();
         if (!specification.IsSatisfiedBy(Status))
-            throw RevocationErrors.InvalidStateTransition(Status, nameof(Finalize));
+            throw RevocationErrors.InvalidStateTransition(Status, nameof(MarkFinalized));
 
         var @event = new RevocationFinalizedEvent(Id);
         Apply(@event);

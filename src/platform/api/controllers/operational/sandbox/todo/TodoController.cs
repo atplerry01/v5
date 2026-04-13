@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,9 @@ using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Api.Controllers.Operational.Sandbox.Todo;
 
+// WP-1: All operational endpoints require authenticated identity.
+// No request reaches execution without a valid JWT Bearer token.
+[Authorize]
 [ApiController]
 [Route("api/todo")]
 [ApiExplorerSettings(GroupName = "operational.sandbox.todo")]
@@ -19,6 +23,7 @@ public sealed class TodoController : ControllerBase
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IRedisClient _redis;
+    private readonly IClock _clock;
     private readonly ILogger<TodoController> _logger;
     private readonly string _projectionsConnectionString;
 
@@ -26,12 +31,14 @@ public sealed class TodoController : ControllerBase
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
         IRedisClient redis,
+        IClock clock,
         IConfiguration configuration,
         ILogger<TodoController> logger)
     {
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
         _redis = redis;
+        _clock = clock;
         _logger = logger;
         _projectionsConnectionString = configuration.GetValue<string>("Projections:ConnectionString")
             ?? throw new InvalidOperationException(
@@ -47,10 +54,11 @@ public sealed class TodoController : ControllerBase
         var cmd = new CreateTodoCommand(aggregateId, payload.Title);
         var result = await _dispatcher.DispatchAsync(cmd, TodoRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(ApiResponse.Ok(new CreateTodoResponseModel(aggregateId), result.CorrelationId))
+            ? Ok(ApiResponse.Ok(new CreateTodoResponseModel(aggregateId), result.CorrelationId, _clock.UtcNow))
             : BadRequest(ApiResponse.Fail(
                 "operational.sandbox.todo.create_failed",
                 result.Error ?? "Unknown error",
+                _clock.UtcNow,
                 result.CorrelationId));
     }
 
@@ -74,7 +82,8 @@ public sealed class TodoController : ControllerBase
         if (!found)
             return NotFound(ApiResponse.Fail(
                 "operational.sandbox.todo.not_found",
-                $"Todo {id} not found."));
+                $"Todo {id} not found.",
+                _clock.UtcNow));
 
         var lastEventType = reader.GetString(2);
         var stateJson = reader.GetString(3);
@@ -99,7 +108,7 @@ public sealed class TodoController : ControllerBase
             Title = title,
             IsCompleted = status == "completed",
             Status = status
-        }));
+        }, _clock.UtcNow));
     }
 
     private static readonly DomainRoute TodoRoute = new("operational", "sandbox", "todo");
@@ -109,10 +118,11 @@ public sealed class TodoController : ControllerBase
     {
         var result = await _dispatcher.DispatchAsync(request.Data, TodoRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(ApiResponse.Ok(new CommandAck("updated"), result.CorrelationId))
+            ? Ok(ApiResponse.Ok(new CommandAck("updated"), result.CorrelationId, _clock.UtcNow))
             : BadRequest(ApiResponse.Fail(
                 "operational.sandbox.todo.update_failed",
                 result.Error ?? "Unknown error",
+                _clock.UtcNow,
                 result.CorrelationId));
     }
 
@@ -121,10 +131,11 @@ public sealed class TodoController : ControllerBase
     {
         var result = await _dispatcher.DispatchAsync(request.Data, TodoRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(ApiResponse.Ok(new CommandAck("completed"), result.CorrelationId))
+            ? Ok(ApiResponse.Ok(new CommandAck("completed"), result.CorrelationId, _clock.UtcNow))
             : BadRequest(ApiResponse.Fail(
                 "operational.sandbox.todo.complete_failed",
                 result.Error ?? "Unknown error",
+                _clock.UtcNow,
                 result.CorrelationId));
     }
 }

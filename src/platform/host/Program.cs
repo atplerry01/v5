@@ -212,6 +212,15 @@ app.UseMiddleware<Whycespace.Platform.Api.Middleware.HostShutdownLinkingMiddlewa
 // before MapControllers so it sits in front of the controller pipeline.
 app.UseExceptionHandler();
 
+// WP-1 (Security Binding Completion): HTTP authentication + authorization
+// inserted after exception handler (so typed auth failures are caught) and
+// before MapControllers (so [Authorize] attributes are enforced). Fail-closed:
+// requests without valid JWT Bearer token receive 401 before reaching any
+// controller marked [Authorize]. Health/liveness/readiness endpoints use
+// [AllowAnonymous] and are exempt.
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {

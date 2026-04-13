@@ -43,13 +43,13 @@ public sealed class ContractDocumentAggregate
         EnsureInvariants();
     }
 
-    public void Finalize()
+    public void MarkFinalized()
     {
         ValidateBeforeChange();
 
         var specification = new CanFinalizeSpecification();
         if (!specification.IsSatisfiedBy(Status))
-            throw ContractDocumentErrors.InvalidStateTransition(Status, nameof(Finalize));
+            throw ContractDocumentErrors.InvalidStateTransition(Status, nameof(MarkFinalized));
 
         var @event = new ContractDocumentFinalizedEvent(Id);
         Apply(@event);

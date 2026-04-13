@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Whycespace.Platform.Host.Composition.Infrastructure.Authentication;
 using Whycespace.Platform.Host.Composition.Infrastructure.Cache;
 using Whycespace.Platform.Host.Composition.Infrastructure.Chain;
 using Whycespace.Platform.Host.Composition.Infrastructure.Database;
@@ -21,6 +22,9 @@ public static class InfrastructureCompositionRoot
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // WP-1: Authentication FIRST — fail-closed before any other
+        // infrastructure wiring. Missing signing key = startup halt.
+        services.AddAuthentication(configuration);
         services.AddDatabase(configuration);
         services.AddChain();
         services.AddCache(configuration);

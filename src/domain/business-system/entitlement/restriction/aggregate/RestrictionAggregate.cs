@@ -7,8 +7,8 @@ public sealed class RestrictionAggregate
     public RestrictionId Id { get; private set; }
     public RestrictionSubjectId SubjectId { get; private set; }
     public RestrictionStatus Status { get; private set; }
-    public string ConditionDescription { get; private set; }
-    public string ViolationReason { get; private set; }
+    public string ConditionDescription { get; private set; } = null!;
+    public string ViolationReason { get; private set; } = null!;
     public int Version { get; private set; }
 
     private RestrictionAggregate() { }

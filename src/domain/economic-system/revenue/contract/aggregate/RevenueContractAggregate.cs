@@ -8,7 +8,7 @@ public sealed class RevenueContractAggregate : AggregateRoot
 
     public RevenueContractId ContractId { get; private set; }
     public IReadOnlyList<ContractParty> Parties => _parties.AsReadOnly();
-    public ContractTerm Term { get; private set; }
+    public ContractTerm Term { get; private set; } = null!;
     public ContractStatus Status { get; private set; }
     public Timestamp CreatedAt { get; private set; }
 

@@ -5,7 +5,7 @@ public sealed class EntitlementGrantAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public EntitlementGrantId Id { get; private set; }
-    public EntitlementAssignment Assignment { get; private set; }
+    public EntitlementAssignment Assignment { get; private set; } = null!;
     public EntitlementGrantStatus Status { get; private set; }
     public int Version { get; private set; }
 

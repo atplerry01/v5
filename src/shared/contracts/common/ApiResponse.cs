@@ -18,31 +18,31 @@ public sealed class ApiResponse<T>
 /// </summary>
 public static class ApiResponse
 {
-    public static ApiResponse<T> Ok<T>(T data, Guid correlationId) => new()
+    public static ApiResponse<T> Ok<T>(T data, Guid correlationId, DateTimeOffset timestamp) => new()
     {
         Success = true,
         Data = data,
-        Meta = BuildMeta(correlationId)
+        Meta = BuildMeta(correlationId, timestamp)
     };
 
-    public static ApiResponse<T> Ok<T>(T data) => new()
+    public static ApiResponse<T> Ok<T>(T data, DateTimeOffset timestamp) => new()
     {
         Success = true,
         Data = data,
-        Meta = BuildMeta(Guid.Empty)
+        Meta = BuildMeta(Guid.Empty, timestamp)
     };
 
-    public static ApiResponse<object?> Fail(string code, string message, Guid correlationId = default) => new()
+    public static ApiResponse<object?> Fail(string code, string message, DateTimeOffset timestamp, Guid correlationId = default) => new()
     {
         Success = false,
         Data = null,
         Error = new ApiError(code, message),
-        Meta = BuildMeta(correlationId)
+        Meta = BuildMeta(correlationId, timestamp)
     };
 
-    private static ResponseMeta BuildMeta(Guid correlationId) => new()
+    private static ResponseMeta BuildMeta(Guid correlationId, DateTimeOffset timestamp) => new()
     {
         CorrelationId = correlationId.ToString(),
-        Timestamp = DateTime.UtcNow.ToString("o")
+        Timestamp = timestamp.ToString("o")
     };
 }

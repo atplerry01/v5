@@ -51,13 +51,13 @@ public sealed class CostAggregate
         EnsureInvariants();
     }
 
-    public void Finalize()
+    public void MarkFinalized()
     {
         ValidateBeforeChange();
 
         var specification = new CanFinalizeSpecification();
         if (!specification.IsSatisfiedBy(Status))
-            throw CostErrors.InvalidStateTransition(Status, nameof(Finalize));
+            throw CostErrors.InvalidStateTransition(Status, nameof(MarkFinalized));
 
         var @event = new CostFinalizedEvent(Id);
         Apply(@event);

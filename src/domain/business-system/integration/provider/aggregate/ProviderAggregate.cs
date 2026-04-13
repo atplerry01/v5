@@ -5,7 +5,7 @@ public sealed class ProviderAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public ProviderId Id { get; private set; }
-    public ProviderProfile Profile { get; private set; }
+    public ProviderProfile Profile { get; private set; } = null!;
     public ProviderStatus Status { get; private set; }
     public int Version { get; private set; }
 

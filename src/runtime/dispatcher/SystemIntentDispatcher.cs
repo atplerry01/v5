@@ -7,16 +7,26 @@ namespace Whycespace.Runtime.Dispatcher;
 /// System-level command dispatcher. Auto-generates deterministic IDs and context
 /// for system-originated commands. Routes through the RuntimeControlPlane
 /// ensuring all middleware (policy, guards, etc.) is applied.
+///
+/// WP-1 (Security Binding Completion): ActorId and TenantId are now sourced
+/// from the authenticated HTTP caller via ICallerIdentityAccessor. The previous
+/// hardcoded "system" / "default" values are removed — fail-closed. The accessor
+/// throws if no authenticated identity is present on the current request.
 /// </summary>
 public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
 {
     private readonly IRuntimeControlPlane _controlPlane;
     private readonly IIdGenerator _idGenerator;
+    private readonly ICallerIdentityAccessor _callerIdentity;
 
-    public SystemIntentDispatcher(IRuntimeControlPlane controlPlane, IIdGenerator idGenerator)
+    public SystemIntentDispatcher(
+        IRuntimeControlPlane controlPlane,
+        IIdGenerator idGenerator,
+        ICallerIdentityAccessor callerIdentity)
     {
         _controlPlane = controlPlane;
         _idGenerator = idGenerator;
+        _callerIdentity = callerIdentity;
     }
 
     public async Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default)
@@ -26,6 +36,11 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         // Extract aggregate ID from command by convention (Id property)
         var idProperty = commandType.GetProperty("Id");
         var aggregateId = idProperty is not null ? (Guid)idProperty.GetValue(command)! : Guid.Empty;
+
+        // WP-1: Extract identity from authenticated HTTP caller.
+        // Fail-closed — throws if no valid identity exists.
+        var actorId = _callerIdentity.GetActorId();
+        var tenantId = _callerIdentity.GetTenantId();
 
         // phase1.6-S1.1 (DET-SEED-DERIVATION-01): correlation/causation/command
         // ids derive ONLY from stable command coordinates — never from the
@@ -43,8 +58,8 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             CorrelationId = correlationId,
             CausationId = causationId,
             CommandId = commandId,
-            TenantId = "default",
-            ActorId = "system",
+            TenantId = tenantId,
+            ActorId = actorId,
             AggregateId = aggregateId,
             PolicyId = "whyce-policy-default",
             Classification = route.Classification,

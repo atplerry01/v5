@@ -5,7 +5,7 @@ public sealed class ContractAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public ContractId Id { get; private set; }
-    public ContractSchema Schema { get; private set; }
+    public ContractSchema Schema { get; private set; } = null!;
     public ContractStatus Status { get; private set; }
     public int Version { get; private set; }
 

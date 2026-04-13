@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -7,6 +8,9 @@ using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Api.Controllers.Platform.Infrastructure.Health;
 
+// WP-1: Health/liveness/readiness endpoints are exempt from authentication.
+// Platform probes must remain accessible without JWT tokens.
+[AllowAnonymous]
 [ApiController]
 [Route("[controller]")]
 [ApiExplorerSettings(GroupName = "platform.infrastructure.health")]

@@ -5,7 +5,7 @@ public sealed class RightAggregate
     private readonly List<object> _uncommittedEvents = new();
 
     public RightId Id { get; private set; }
-    public RightDefinition Definition { get; private set; }
+    public RightDefinition Definition { get; private set; } = null!;
     public RightStatus Status { get; private set; }
     public int Version { get; private set; }
 

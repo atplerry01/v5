@@ -33,8 +33,6 @@ enforcement hardening
 
 ###
 
-Whycespace => Whyce
-
 validate the 2 endpoints TODO & Kanban
 
 enterprise grade solutions

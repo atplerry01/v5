@@ -7,7 +7,7 @@ public sealed class FailureAggregate
     public FailureId Id { get; private set; }
     public FailureTypeId TypeId { get; private set; }
     public FailureStatus Status { get; private set; }
-    public string Classification { get; private set; }
+    public string Classification { get; private set; } = null!;
     public int Version { get; private set; }
 
     private FailureAggregate() { }

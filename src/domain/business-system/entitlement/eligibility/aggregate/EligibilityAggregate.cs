@@ -7,8 +7,8 @@ public sealed class EligibilityAggregate
     public EligibilityId Id { get; private set; }
     public SubjectId SubjectId { get; private set; }
     public EligibilityStatus Status { get; private set; }
-    public string CriteriaDescription { get; private set; }
-    public string IneligibilityReason { get; private set; }
+    public string CriteriaDescription { get; private set; } = null!;
+    public string IneligibilityReason { get; private set; } = null!;
     public int Version { get; private set; }
 
     private EligibilityAggregate() { }

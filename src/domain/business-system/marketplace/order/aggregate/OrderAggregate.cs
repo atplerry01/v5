@@ -6,7 +6,7 @@ public sealed class OrderAggregate
 
     public OrderId Id { get; private set; }
     public OrderSourceReference SourceReference { get; private set; }
-    public string OrderDescription { get; private set; }
+    public string OrderDescription { get; private set; } = null!;
     public OrderStatus Status { get; private set; }
     public int Version { get; private set; }
 
