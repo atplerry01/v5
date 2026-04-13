@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
+using Whyce.Shared.Contracts.Common;
 using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
@@ -32,76 +33,104 @@ public sealed class KanbanController : ControllerBase
     }
 
     [HttpPost("board/create")]
-    public async Task<IActionResult> CreateBoard([FromBody] CreateBoardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateBoard([FromBody] ApiRequest<CreateBoardRequestModel> request, CancellationToken cancellationToken)
     {
-        var boardId = _idGenerator.Generate($"kanban:board:{request.UserId}:{request.Name}");
-        var cmd = new CreateKanbanBoardCommand(boardId, request.Name, boardId);
+        var payload = request.Data;
+        var boardId = _idGenerator.Generate($"kanban:board:{payload.UserId}:{payload.Name}");
+        var cmd = new CreateKanbanBoardCommand(boardId, payload.Name, boardId);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "board_created", boardId, correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CreateBoardResponseModel(boardId), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.board_create_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("list/create")]
-    public async Task<IActionResult> CreateList([FromBody] CreateListRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateList([FromBody] ApiRequest<CreateListRequestModel> request, CancellationToken cancellationToken)
     {
-        var listId = _idGenerator.Generate($"kanban:list:{request.BoardId}:{request.Name}");
-        var cmd = new CreateKanbanListCommand(request.BoardId, listId, request.Name, request.Position);
+        var payload = request.Data;
+        var listId = _idGenerator.Generate($"kanban:list:{payload.BoardId}:{payload.Name}");
+        var cmd = new CreateKanbanListCommand(payload.BoardId, listId, payload.Name, payload.Position);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "list_created", listId, boardId = request.BoardId, correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CreateListResponseModel(listId, payload.BoardId), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.list_create_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("card/create")]
-    public async Task<IActionResult> CreateCard([FromBody] CreateCardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateCard([FromBody] ApiRequest<CreateCardRequestModel> request, CancellationToken cancellationToken)
     {
-        var cardId = _idGenerator.Generate($"kanban:card:{request.BoardId}:{request.ListId}:{request.Title}");
-        var cmd = new CreateKanbanCardCommand(request.BoardId, cardId, request.ListId, request.Title, request.Description, request.Position);
+        var payload = request.Data;
+        var cardId = _idGenerator.Generate($"kanban:card:{payload.BoardId}:{payload.ListId}:{payload.Title}");
+        var cmd = new CreateKanbanCardCommand(payload.BoardId, cardId, payload.ListId, payload.Title, payload.Description, payload.Position);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "card_created", cardId, boardId = request.BoardId, correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CreateCardResponseModel(cardId, payload.BoardId), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_create_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("card/move")]
-    public async Task<IActionResult> MoveCard([FromBody] MoveCardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> MoveCard([FromBody] ApiRequest<MoveCardRequestModel> request, CancellationToken cancellationToken)
     {
-        var cmd = new MoveKanbanCardCommand(request.BoardId, request.CardId, request.FromListId, request.ToListId, request.NewPosition);
+        var payload = request.Data;
+        var cmd = new MoveKanbanCardCommand(payload.BoardId, payload.CardId, payload.FromListId, payload.ToListId, payload.NewPosition);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "card_moved", correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CommandAck("card_moved"), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_move_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("card/reorder")]
-    public async Task<IActionResult> ReorderCard([FromBody] ReorderCardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> ReorderCard([FromBody] ApiRequest<ReorderCardRequestModel> request, CancellationToken cancellationToken)
     {
-        var cmd = new ReorderKanbanCardCommand(request.BoardId, request.CardId, request.ListId, request.NewPosition);
+        var payload = request.Data;
+        var cmd = new ReorderKanbanCardCommand(payload.BoardId, payload.CardId, payload.ListId, payload.NewPosition);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "card_reordered", correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CommandAck("card_reordered"), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_reorder_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("card/complete")]
-    public async Task<IActionResult> CompleteCard([FromBody] CompleteCardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CompleteCard([FromBody] ApiRequest<CompleteCardRequestModel> request, CancellationToken cancellationToken)
     {
-        var cmd = new CompleteKanbanCardCommand(request.BoardId, request.CardId);
+        var payload = request.Data;
+        var cmd = new CompleteKanbanCardCommand(payload.BoardId, payload.CardId);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "card_completed", correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CommandAck("card_completed"), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_complete_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpPost("card/update")]
-    public async Task<IActionResult> UpdateCard([FromBody] UpdateCardRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdateCard([FromBody] ApiRequest<UpdateCardRequestModel> request, CancellationToken cancellationToken)
     {
-        var cmd = new UpdateKanbanCardCommand(request.BoardId, request.CardId, request.Title, request.Description);
+        var payload = request.Data;
+        var cmd = new UpdateKanbanCardCommand(payload.BoardId, payload.CardId, payload.Title, payload.Description);
         var result = await _dispatcher.DispatchAsync(cmd, KanbanRoute, cancellationToken);
         return result.IsSuccess
-            ? Ok(new { status = "card_updated", correlationId = result.CorrelationId })
-            : BadRequest(new { error = result.Error });
+            ? Ok(ApiResponse.Ok(new CommandAck("card_updated"), result.CorrelationId))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_update_failed",
+                result.Error ?? "Unknown error",
+                result.CorrelationId));
     }
 
     [HttpGet("{boardId:guid}")]
@@ -121,19 +150,25 @@ public sealed class KanbanController : ControllerBase
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
-            return NotFound();
+            return NotFound(ApiResponse.Fail(
+                "operational.sandbox.kanban.board_not_found",
+                $"Board {boardId} not found."));
 
         var stateJson = reader.GetString(0);
-        var state = JsonSerializer.Deserialize<KanbanBoardDto>(stateJson,
+        var state = JsonSerializer.Deserialize<KanbanBoardReadModel>(stateJson,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        return Ok(state);
+        return Ok(ApiResponse.Ok(state!));
     }
 }
 
-public sealed record CreateBoardRequest(string Name, string UserId);
-public sealed record CreateListRequest(Guid BoardId, string Name, int Position);
-public sealed record CreateCardRequest(Guid BoardId, Guid ListId, string Title, string Description, int Position);
-public sealed record MoveCardRequest(Guid BoardId, Guid CardId, Guid FromListId, Guid ToListId, int NewPosition);
-public sealed record ReorderCardRequest(Guid BoardId, Guid CardId, Guid ListId, int NewPosition);
-public sealed record CompleteCardRequest(Guid BoardId, Guid CardId);
-public sealed record UpdateCardRequest(Guid BoardId, Guid CardId, string Title, string Description);
+public sealed record CreateBoardRequestModel(string Name, string UserId);
+public sealed record CreateListRequestModel(Guid BoardId, string Name, int Position);
+public sealed record CreateCardRequestModel(Guid BoardId, Guid ListId, string Title, string Description, int Position);
+public sealed record MoveCardRequestModel(Guid BoardId, Guid CardId, Guid FromListId, Guid ToListId, int NewPosition);
+public sealed record ReorderCardRequestModel(Guid BoardId, Guid CardId, Guid ListId, int NewPosition);
+public sealed record CompleteCardRequestModel(Guid BoardId, Guid CardId);
+public sealed record UpdateCardRequestModel(Guid BoardId, Guid CardId, string Title, string Description);
+
+public sealed record CreateBoardResponseModel(Guid BoardId);
+public sealed record CreateListResponseModel(Guid ListId, Guid BoardId);
+public sealed record CreateCardResponseModel(Guid CardId, Guid BoardId);

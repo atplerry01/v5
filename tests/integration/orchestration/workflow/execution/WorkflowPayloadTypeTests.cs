@@ -156,7 +156,7 @@ public sealed class WorkflowPayloadTypeTests
 
         public Task AppendEventsAsync(
             Guid aggregateId,
-            IReadOnlyList<object> events,
+            IReadOnlyList<IEventEnvelope> envelopes,
             int expectedVersion,
             CancellationToken cancellationToken = default) =>
             Task.CompletedTask;

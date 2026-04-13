@@ -16,6 +16,7 @@ public interface IEventEnvelope
     Guid EventId { get; }
     Guid AggregateId { get; }
     Guid CorrelationId { get; }
+    Guid CausationId { get; }
     string EventType { get; }
     string EventName { get; }
     string EventVersion { get; }

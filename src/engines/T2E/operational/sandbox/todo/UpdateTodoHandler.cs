@@ -12,7 +12,7 @@ public sealed class UpdateTodoHandler : IEngine
             return;
 
         var aggregate = (TodoAggregate)await context.LoadAggregateAsync(typeof(TodoAggregate));
-        aggregate.Update(cmd.Title);
+        aggregate.ReviseTitle(cmd.Title);
         context.EmitEvents(aggregate.DomainEvents);
     }
 }

@@ -22,12 +22,12 @@ public sealed class EventStoreService
     // calls honor cancellation.
     public async Task AppendAsync(
         Guid aggregateId,
-        IReadOnlyList<object> domainEvents,
+        IReadOnlyList<EventEnvelope> envelopes,
         int expectedVersion = -1,
         CancellationToken cancellationToken = default)
     {
-        if (domainEvents.Count == 0) return;
-        await _eventStore.AppendEventsAsync(aggregateId, domainEvents, expectedVersion, cancellationToken);
+        if (envelopes.Count == 0) return;
+        await _eventStore.AppendEventsAsync(aggregateId, envelopes, expectedVersion, cancellationToken);
     }
 
     public async Task<IReadOnlyList<object>> LoadAsync(

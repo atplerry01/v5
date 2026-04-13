@@ -1,3 +1,5 @@
+using Whyce.Shared.Contracts.EventFabric;
+
 namespace Whyce.Shared.Contracts.Infrastructure.Persistence;
 
 public interface IEventStore
@@ -14,7 +16,7 @@ public interface IEventStore
 
     Task AppendEventsAsync(
         Guid aggregateId,
-        IReadOnlyList<object> events,
+        IReadOnlyList<IEventEnvelope> envelopes,
         int expectedVersion,
         CancellationToken cancellationToken = default);
 }

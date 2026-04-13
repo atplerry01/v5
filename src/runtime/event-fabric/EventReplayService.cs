@@ -49,6 +49,7 @@ public sealed class EventReplayService
                 EventId = EventEnvelope.GenerateDeterministicId(correlationId, eventTypeName, i),
                 AggregateId = aggregateId,
                 CorrelationId = correlationId,
+                CausationId = correlationId,
                 EventType = eventTypeName,
                 EventName = schema.EventName,
                 EventVersion = schema.Version,

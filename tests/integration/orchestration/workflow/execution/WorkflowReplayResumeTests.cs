@@ -1,5 +1,6 @@
 using Whyce.Engines.T1M.Lifecycle;
 using Whyce.Runtime.EventFabric;
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
@@ -190,11 +191,11 @@ public sealed class WorkflowReplayResumeTests
 
         public Task AppendEventsAsync(
             Guid aggregateId,
-            IReadOnlyList<object> events,
+            IReadOnlyList<IEventEnvelope> envelopes,
             int expectedVersion,
             CancellationToken cancellationToken = default)
         {
-            _events.AddRange(events);
+            _events.AddRange(envelopes.Select(e => e.Payload));
             return Task.CompletedTask;
         }
 

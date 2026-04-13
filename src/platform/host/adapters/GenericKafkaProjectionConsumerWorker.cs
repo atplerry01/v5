@@ -276,11 +276,13 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 _logger?.LogDebug("Consumed {EventType} from {Topic}", eventType, _topic);
                 var @event = _deserializer.DeserializeInbound(eventType, rawPayload);
 
+                var causationIdHeader = ExtractHeader(result.Message.Headers, "causation-id");
                 var envelope = new EventEnvelope
                 {
                     EventId = parsedEventId,
                     AggregateId = parsedAggregateId,
                     CorrelationId = Guid.TryParse(correlationId, out var cid) ? cid : Guid.Empty,
+                    CausationId = Guid.TryParse(causationIdHeader, out var causId) ? causId : Guid.Empty,
                     EventType = eventType,
                     EventName = eventType,
                     EventVersion = EventVersion.Default,

@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Events.Todo;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Todo;
 using DomainEvents = Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 
 namespace Whyce.Runtime.EventFabric.DomainSchemas;
@@ -21,9 +21,9 @@ public sealed class TodoSchemaModule : ISchemaModule
             typeof(TodoCreatedEventSchema));
 
         sink.RegisterSchema(
-            "TodoUpdatedEvent",
+            "TodoTitleRevisedEvent",
             EventVersion.Default,
-            typeof(DomainEvents.TodoUpdatedEvent),
+            typeof(DomainEvents.TodoTitleRevisedEvent),
             typeof(TodoUpdatedEventSchema));
 
         sink.RegisterSchema(
@@ -37,9 +37,9 @@ public sealed class TodoSchemaModule : ISchemaModule
             var evt = (DomainEvents.TodoCreatedEvent)e;
             return new TodoCreatedEventSchema(evt.AggregateId.Value, evt.Title);
         });
-        sink.RegisterPayloadMapper("TodoUpdatedEvent", e =>
+        sink.RegisterPayloadMapper("TodoTitleRevisedEvent", e =>
         {
-            var evt = (DomainEvents.TodoUpdatedEvent)e;
+            var evt = (DomainEvents.TodoTitleRevisedEvent)e;
             return new TodoUpdatedEventSchema(evt.AggregateId.Value, evt.Title);
         });
         sink.RegisterPayloadMapper("TodoCompletedEvent", e =>

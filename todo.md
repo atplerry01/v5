@@ -73,3 +73,51 @@ enforcement hardening
 
 
 Whycespace => Whyce
+
+
+
+##
+3. Adopt the canonical T1M gate going forward
+A domain operation should enter T1M only if it has at least one of these:
+
+multi-aggregate coordination
+durable multi-step sequencing
+cross-domain orchestration
+long-running lifecycle management
+compensation/retry workflow state
+
+
+
+Example (future, not now):
+src/engines/T1M/operational/sandbox/kanban/
+  workflows/
+    CardLifecycleWorkflow.cs
+  steps/
+    ValidateCardStep.cs
+    MoveCardStep.cs
+    NotifyUserStep.cs
+  state/
+    CardWorkflowState.cs
+
+
+
+
+
+    WHAT WE SHOULD CLEAN (PROJECT-WIDE)
+✅ 1. Naming Standardization
+
+Ensure:
+
+Type	Pattern
+Command	CreateTodoCommand
+Handler	CreateTodoHandler
+Query	GetTodoQuery
+DTO	TodoReadModel
+Workflow	CardApprovalWorkflow
+Step	MoveToReviewStep
+
+
+
+contracts/commands/
+contracts/dtos/
+contracts/queries/

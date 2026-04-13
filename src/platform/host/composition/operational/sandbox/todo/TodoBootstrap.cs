@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Whyce.Engines.T1M.Steps.Operational.Sandbox.Todo;
 using Whyce.Engines.T2E.Operational.Sandbox.Todo;
 using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.Operational.Sandbox.Todo;
+using Whyce.Projections.Operational.Sandbox.Todo.Item;
+using Whyce.Projections.Shared;
 using Whyce.Runtime.EventFabric;
 using Whyce.Runtime.EventFabric.DomainSchemas;
 using Whyce.Runtime.Projection;
@@ -25,20 +25,17 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 {
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        // T1M workflow steps
-        services.AddTransient<ValidateIntentStep>();
-        services.AddTransient<CreateTodoStep>();
-        services.AddTransient<EmitCompletionStep>();
-
         // T2E handlers (one per command)
         services.AddTransient<CreateTodoHandler>();
         services.AddTransient<UpdateTodoHandler>();
         services.AddTransient<CompleteTodoHandler>();
 
-        // Projection layer
+        // Projection layer — factory-created store + handler
+        services.AddSingleton(sp =>
+            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+                .Create<TodoReadModel>("projection_operational_sandbox_todo", "todo_read_model", "Todo"));
         services.AddSingleton(sp => new TodoProjectionHandler(
-            sp.GetRequiredService<ProjectionsDataSource>().Inner));
-        services.AddSingleton<TodoProjectionConsumer>();
+            sp.GetRequiredService<PostgresProjectionStore<TodoReadModel>>()));
 
         // Systems.Downstream — Todo intent handler
         services.AddTransient<ITodoIntentHandler, TodoIntentHandler>();
@@ -81,7 +78,7 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
         var handler = provider.GetRequiredService<TodoProjectionHandler>();
 
         projection.Register("TodoCreatedEvent", handler);
-        projection.Register("TodoUpdatedEvent", handler);
+        projection.Register("TodoTitleRevisedEvent", handler);
         projection.Register("TodoCompletedEvent", handler);
     }
 
@@ -94,11 +91,6 @@ public sealed class TodoBootstrap : IDomainBootstrapModule
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)
     {
-        workflow.Register("todo.lifecycle.create", new[]
-        {
-            typeof(ValidateIntentStep),
-            typeof(CreateTodoStep),
-            typeof(EmitCompletionStep)
-        });
+        // No T1M workflows for Todo — all commands dispatch directly to T2E.
     }
 }

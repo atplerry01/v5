@@ -25,6 +25,7 @@ public sealed record EventEnvelope : IEventEnvelope
     public required Guid EventId { get; init; }
     public required Guid AggregateId { get; init; }
     public required Guid CorrelationId { get; init; }
+    public required Guid CausationId { get; init; }
     public required string EventType { get; init; }
     public required string EventName { get; init; }
     public required EventVersion EventVersion { get; init; }

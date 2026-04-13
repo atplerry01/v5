@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Whyce.Shared.Contracts.Runtime;
 
 public sealed class WorkflowExecutionContext : IDomainEventSink
@@ -21,4 +23,31 @@ public sealed class WorkflowExecutionContext : IDomainEventSink
     public void EmitEvent(object domainEvent) => AccumulatedEvents.Add(domainEvent);
 
     public void EmitEvents(IEnumerable<object> domainEvents) => AccumulatedEvents.AddRange(domainEvents);
+
+    // ── Typed workflow state ────────────────────────────────────────
+    // Stored as a serialized JSON string in the State dictionary under
+    // a well-known key. Replay-safe: the JSON survives serialization
+    // round-trips identically to the flat string entries.
+
+    private const string TypedStateKey = "__typed_state__";
+
+    /// <summary>
+    /// Deserializes the typed workflow state from the context.
+    /// Returns null if no typed state has been set.
+    /// </summary>
+    public T? GetState<T>() where T : class
+    {
+        return State.TryGetValue(TypedStateKey, out var json)
+            ? JsonSerializer.Deserialize<T>(json)
+            : null;
+    }
+
+    /// <summary>
+    /// Serializes and stores a typed workflow state object into the context.
+    /// Overwrites any previous typed state.
+    /// </summary>
+    public void SetState<T>(T state) where T : class
+    {
+        State[TypedStateKey] = JsonSerializer.Serialize(state);
+    }
 }

@@ -3,6 +3,7 @@ using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Npgsql;
 using Whyce.Runtime.EventFabric;
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 using Whyce.Shared.Kernel.Domain;
 
@@ -132,7 +133,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
 
     public async Task AppendEventsAsync(
         Guid aggregateId,
-        IReadOnlyList<object> events,
+        IReadOnlyList<IEventEnvelope> envelopes,
         int expectedVersion,
         CancellationToken cancellationToken = default)
     {
@@ -201,23 +202,31 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         // phase1-gate-H7-H9-safe (#8): single multi-row INSERT instead of one
         // command per event. Same INSERT semantics, same parameters, same
         // determinism — collapses N round-trips into 1.
-        if (events.Count > 0)
+        if (envelopes.Count > 0)
         {
             var sql = new System.Text.StringBuilder(
-                "INSERT INTO events (id, aggregate_id, aggregate_type, event_type, payload, version, created_at) VALUES ");
+                "INSERT INTO events (id, aggregate_id, aggregate_type, event_type, payload, version, created_at, " +
+                "execution_hash, correlation_id, causation_id, policy_decision_hash, policy_version) VALUES ");
 
             await using var cmd = new NpgsqlCommand { Connection = conn, Transaction = tx };
 
-            for (var i = 0; i < events.Count; i++)
+            for (var i = 0; i < envelopes.Count; i++)
             {
                 var version = currentMax + i + 1;
-                var domainEvent = events[i];
-                var eventType = domainEvent.GetType().Name;
+                var envelope = envelopes[i];
+                var domainEvent = envelope.Payload;
+                var eventType = envelope.EventType;
                 var aggregateType = ExtractAggregateType(domainEvent);
                 var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType());
 
+                if (envelope.CorrelationId == Guid.Empty)
+                    throw new InvalidOperationException($"Event {eventType} has empty CorrelationId — cannot persist without traceability.");
+                if (envelope.CausationId == Guid.Empty)
+                    throw new InvalidOperationException($"Event {eventType} has empty CausationId — cannot persist without traceability.");
+
                 if (i > 0) sql.Append(", ");
-                sql.Append($"(@id{i}, @agg{i}, @aggType{i}, @evtType{i}, @payload{i}::jsonb, @ver{i}, NOW())");
+                sql.Append($"(@id{i}, @agg{i}, @aggType{i}, @evtType{i}, @payload{i}::jsonb, @ver{i}, NOW(), " +
+                           $"@execHash{i}, @corrId{i}, @causeId{i}, @policyHash{i}, @policyVer{i})");
 
                 cmd.Parameters.AddWithValue($"id{i}", _idGenerator.Generate($"{aggregateId}:{version}"));
                 cmd.Parameters.AddWithValue($"agg{i}", aggregateId);
@@ -225,6 +234,11 @@ public sealed class PostgresEventStoreAdapter : IEventStore
                 cmd.Parameters.AddWithValue($"evtType{i}", eventType);
                 cmd.Parameters.AddWithValue($"payload{i}", payload);
                 cmd.Parameters.AddWithValue($"ver{i}", version);
+                cmd.Parameters.AddWithValue($"execHash{i}", envelope.ExecutionHash);
+                cmd.Parameters.AddWithValue($"corrId{i}", envelope.CorrelationId);
+                cmd.Parameters.AddWithValue($"causeId{i}", envelope.CausationId);
+                cmd.Parameters.AddWithValue($"policyHash{i}", (object?)envelope.PolicyHash ?? DBNull.Value);
+                cmd.Parameters.AddWithValue($"policyVer{i}", DBNull.Value);
             }
 
             cmd.CommandText = sql.ToString();

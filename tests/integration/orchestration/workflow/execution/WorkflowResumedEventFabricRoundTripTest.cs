@@ -198,6 +198,7 @@ public sealed class WorkflowResumedEventFabricRoundTripTest
             EventId = EventEnvelope.GenerateDeterministicId(ctx.CorrelationId, eventTypeName, sequence),
             AggregateId = ExecutionId,
             CorrelationId = ctx.CorrelationId,
+            CausationId = ctx.CausationId,
             EventType = eventTypeName,
             EventName = schemaEntry.EventName,
             EventVersion = schemaEntry.Version,

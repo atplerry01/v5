@@ -12,7 +12,7 @@ public sealed class UpdateKanbanCardHandler : IEngine
             return;
 
         var aggregate = (KanbanAggregate)await context.LoadAggregateAsync(typeof(KanbanAggregate));
-        aggregate.UpdateCard(
+        aggregate.ReviseCardDetail(
             new KanbanCardId(cmd.CardId),
             cmd.Title,
             cmd.Description);

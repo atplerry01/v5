@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Events.Kanban;
+using Whyce.Shared.Contracts.Events.Operational.Sandbox.Kanban;
 using DomainEvents = Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
 namespace Whyce.Runtime.EventFabric.DomainSchemas;
@@ -44,9 +44,9 @@ public sealed class KanbanSchemaModule : ISchemaModule
             typeof(KanbanCardCompletedEventSchema));
 
         sink.RegisterSchema(
-            "KanbanCardUpdatedEvent",
+            "KanbanCardDetailRevisedEvent",
             EventVersion.Default,
-            typeof(DomainEvents.KanbanCardUpdatedEvent),
+            typeof(DomainEvents.KanbanCardDetailRevisedEvent),
             typeof(KanbanCardUpdatedEventSchema));
 
         sink.RegisterPayloadMapper("KanbanBoardCreatedEvent", e =>
@@ -89,9 +89,9 @@ public sealed class KanbanSchemaModule : ISchemaModule
             return new KanbanCardCompletedEventSchema(evt.AggregateId.Value, evt.CardId.Value);
         });
 
-        sink.RegisterPayloadMapper("KanbanCardUpdatedEvent", e =>
+        sink.RegisterPayloadMapper("KanbanCardDetailRevisedEvent", e =>
         {
-            var evt = (DomainEvents.KanbanCardUpdatedEvent)e;
+            var evt = (DomainEvents.KanbanCardDetailRevisedEvent)e;
             return new KanbanCardUpdatedEventSchema(
                 evt.AggregateId.Value, evt.CardId.Value, evt.Title, evt.Description);
         });

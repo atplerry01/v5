@@ -1,3 +1,4 @@
+using Whyce.Shared.Contracts.EventFabric;
 using Whyce.Shared.Contracts.Infrastructure.Persistence;
 
 namespace Whycespace.Tests.Integration.Setup;
@@ -31,9 +32,9 @@ public sealed class InMemoryEventStore : IEventStore
         }
     }
 
-    public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<object> events, int expectedVersion, CancellationToken cancellationToken = default)
+    public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<IEventEnvelope> envelopes, int expectedVersion, CancellationToken cancellationToken = default)
     {
-        if (events.Count == 0) return Task.CompletedTask;
+        if (envelopes.Count == 0) return Task.CompletedTask;
 
         lock (_lock)
         {
@@ -45,14 +46,14 @@ public sealed class InMemoryEventStore : IEventStore
 
             var nextVersion = list.Count == 0 ? 0 : list[^1].Version + 1;
 
-            for (var i = 0; i < events.Count; i++)
+            for (var i = 0; i < envelopes.Count; i++)
             {
                 var version = nextVersion + i;
                 if (list.Any(e => e.Version == version))
                     throw new InvalidOperationException(
                         $"Duplicate version {version} for aggregate {aggregateId}. Append-only invariant violated.");
 
-                list.Add(new Stored(version, events[i]));
+                list.Add(new Stored(version, envelopes[i].Payload));
             }
         }
 

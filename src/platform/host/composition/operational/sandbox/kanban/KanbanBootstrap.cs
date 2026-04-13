@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
+using Whyce.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
 using Whyce.Engines.T2E.Operational.Sandbox.Kanban;
 using Whyce.Platform.Host.Adapters;
 using Whyce.Runtime.EventFabric;
@@ -9,7 +11,10 @@ using Whyce.Shared.Contracts.Operational.Sandbox.Kanban;
 using Whyce.Shared.Contracts.Engine;
 using Whyce.Shared.Contracts.Runtime;
 using Whyce.Shared.Kernel.Domain;
-using Whyce.Projections.Operational.Sandbox.Kanban;
+using Whyce.Projections.Operational.Sandbox.Kanban.Board;
+using Whyce.Projections.Operational.Sandbox.Kanban.List;
+using Whyce.Projections.Operational.Sandbox.Kanban.Card;
+using Whyce.Projections.Shared;
 using Whyce.Systems.Downstream.Operational.Sandbox.Kanban;
 using PostgresProjectionWriter = Whyce.Platform.Host.Adapters.PostgresProjectionWriter;
 
@@ -32,12 +37,25 @@ public sealed class KanbanBootstrap : IDomainBootstrapModule
         services.AddTransient<CompleteKanbanCardHandler>();
         services.AddTransient<UpdateKanbanCardHandler>();
 
+        // T1M workflow steps (card approval lifecycle)
+        services.AddTransient<ValidateCardStep>();
+        services.AddTransient<MoveToReviewStep>();
+        services.AddTransient<ApproveCardStep>();
+        services.AddTransient<CompleteCardStep>();
+
         // Systems.Downstream — Kanban intent handler
         services.AddTransient<IKanbanIntentHandler, KanbanIntentHandler>();
 
-        // Projection layer
-        services.AddSingleton(sp => new KanbanProjectionHandler(
-            sp.GetRequiredService<ProjectionsDataSource>().Inner));
+        // Projection layer — factory-created store + domain-focused handlers
+        services.AddSingleton(sp =>
+            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+                .Create<KanbanBoardReadModel>("projection_operational_sandbox_kanban", "kanban_read_model", "Kanban"));
+        services.AddSingleton(sp => new KanbanBoardProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<KanbanBoardReadModel>>()));
+        services.AddSingleton(sp => new KanbanListProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<KanbanBoardReadModel>>()));
+        services.AddSingleton(sp => new KanbanCardProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<KanbanBoardReadModel>>()));
 
         // Kafka projection consumer
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
@@ -76,15 +94,18 @@ public sealed class KanbanBootstrap : IDomainBootstrapModule
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
     {
-        var handler = provider.GetRequiredService<KanbanProjectionHandler>();
+        var boardHandler = provider.GetRequiredService<KanbanBoardProjectionHandler>();
+        projection.Register("KanbanBoardCreatedEvent", boardHandler);
 
-        projection.Register("KanbanBoardCreatedEvent", handler);
-        projection.Register("KanbanListCreatedEvent", handler);
-        projection.Register("KanbanCardCreatedEvent", handler);
-        projection.Register("KanbanCardMovedEvent", handler);
-        projection.Register("KanbanCardReorderedEvent", handler);
-        projection.Register("KanbanCardCompletedEvent", handler);
-        projection.Register("KanbanCardUpdatedEvent", handler);
+        var listHandler = provider.GetRequiredService<KanbanListProjectionHandler>();
+        projection.Register("KanbanListCreatedEvent", listHandler);
+
+        var cardHandler = provider.GetRequiredService<KanbanCardProjectionHandler>();
+        projection.Register("KanbanCardCreatedEvent", cardHandler);
+        projection.Register("KanbanCardMovedEvent", cardHandler);
+        projection.Register("KanbanCardReorderedEvent", cardHandler);
+        projection.Register("KanbanCardCompletedEvent", cardHandler);
+        projection.Register("KanbanCardDetailRevisedEvent", cardHandler);
     }
 
     public void RegisterEngines(IEngineRegistry engine)
@@ -100,6 +121,12 @@ public sealed class KanbanBootstrap : IDomainBootstrapModule
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)
     {
-        // No T1M workflows for Kanban yet
+        workflow.Register(CardApprovalWorkflowNames.Approve, new[]
+        {
+            typeof(ValidateCardStep),
+            typeof(MoveToReviewStep),
+            typeof(ApproveCardStep),
+            typeof(CompleteCardStep)
+        });
     }
 }

@@ -109,6 +109,7 @@ public sealed class EventFabric : IEventFabric
                     context.CorrelationId, eventTypeName, i),
                 AggregateId = aggregateId,
                 CorrelationId = context.CorrelationId,
+                CausationId = context.CausationId,
                 EventType = eventTypeName,
                 EventName = schema.EventName,
                 EventVersion = schema.Version,
@@ -136,7 +137,7 @@ public sealed class EventFabric : IEventFabric
         // append so PostgresEventStoreAdapter Execute*Async calls
         // honor cancellation.
         var expectedVersion = aggregateIdOverride is not null ? -1 : (context.ExpectedVersion ?? -1);
-        await _eventStoreService.AppendAsync(aggregateId, domainEvents, expectedVersion, cancellationToken);
+        await _eventStoreService.AppendAsync(aggregateId, envelopes, expectedVersion, cancellationToken);
 
         // Step 3: Anchor to WhyceChain (MUST happen AFTER persistence)
         // phase1.5-S5.2.3 / TC-2: forward the request/host-shutdown
