@@ -60,13 +60,20 @@ Defines how economic value is priced, recognized, distributed, and paid out acro
 - **RevenueContractTerminatedEvent** — Contract terminated with reason
 - **PriceDefinedEvent** — Price determined from contract and model
 - **PriceUpdatedEvent** — Price updated with reason tracking
-- **RevenueRecognizedEvent** — Value recognized from contract (R1)
-- **RevenueDistributedEvent** — Revenue marked as distributed
-- **DistributionCreatedEvent** — Revenue split initiated
-- **AllocationAssignedEvent** — Per-recipient allocation assigned (R2)
-- **PayoutInitiatedEvent** — Payout created from distribution (R3)
-- **PayoutCompletedEvent** — Payment finalized
+- **RevenueRecordedEvent** — SPV revenue recorded from external income (R1)
+- **DistributionCreatedEvent** — Ownership-based participant shares computed (R2)
+- **PayoutExecutedEvent** — Payout intent emitted; execution deferred to orchestration (R3)
 - **PayoutFailedEvent** — Payout failed with reason
+
+```text
+ECONOMIC FLOW
+
+1. RevenueAggregate → RevenueRecordedEvent
+2. DistributionAggregate → DistributionCreatedEvent
+3. PayoutAggregate → PayoutExecutedEvent
+
+Execution of vault mutation is handled outside the domain.
+```
 
 ## Specifications
 - **IsActiveSpecification** (contract) — Status == Active

@@ -120,6 +120,34 @@ Financial truth layer implementing a fully deterministic, append-only, double-en
 - **obligation <-> settlement** — Settlements fulfil obligations
 - **settlement <-> journal** — Settlements reference posted journals
 - **treasury <-> settlement** — Treasury provides liquidity for settlements
+- **expense -> journal** — `ExpenseRecordedEventSchema` (consumed by a downstream
+  orchestrator) triggers `PostJournalEntriesCommand` via
+  `ISystemIntentDispatcher`. The expense aggregate does NOT post entries itself
+  — a thin event-to-command adapter sits between the two domains to preserve
+  bounded-context isolation.
+
+## E1 -> EX Execution Path (Phase 2)
+1. `LedgerController` (POST /api/ledger/post) receives `PostJournalEntriesRequestModel`.
+2. Controller derives deterministic `JournalId` and per-entry `EntryId` via `IIdGenerator`.
+3. Builds `PostJournalEntriesCommand` (Whycespace.Shared.Contracts.Economic.Ledger.Journal).
+4. Dispatches via `ISystemIntentDispatcher` on route `economic/ledger/journal`.
+5. `PostJournalEntriesHandler` (T2E, Whycespace.Engines.T2E.Economic.Ledger.Journal):
+   - Creates `JournalAggregate`, adds entries, posts (enforces debit==credit).
+   - Loads `LedgerAggregate`, appends journal reference.
+   - Emits `JournalCreatedEvent`, `JournalEntryAddedEvent` (per entry),
+     `JournalPostedEvent`, `JournalAppendedToLedgerEvent`.
+6. Runtime persists events, writes outbox, publishes to Kafka topics:
+   - `whyce.economic.ledger.journal.events`
+   - `whyce.economic.ledger.ledger.events`
+7. `LedgerUpdatedProjectionHandler` (CQRS read side) reduces
+   `JournalEntryRecordedEventSchema` and `LedgerUpdatedEventSchema` into
+   `LedgerReadModel` (`Whycespace.Shared.Contracts.Economic.Ledger.Ledger`).
+
+## External Event Schemas
+Runtime emits these contract payloads (see `Whycespace.Shared.Contracts.Events.Economic.Ledger`):
+- `JournalEntryRecordedEventSchema` — mapped from `JournalEntryAddedEvent`
+- `JournalPostedEventSchema` — mapped from `JournalPostedEvent`
+- `LedgerUpdatedEventSchema` — mapped from `JournalAppendedToLedgerEvent`
 
 ## Lifecycle
 

@@ -2,22 +2,19 @@ namespace Whycespace.Domain.StructuralSystem.Humancapital.Participant;
 
 public sealed class ParticipantAggregate
 {
-    public static ParticipantAggregate Create()
+    public ParticipantId Id { get; private set; } = null!;
+
+    private ParticipantAggregate() { }
+
+    public static ParticipantAggregate Register(ParticipantId id)
     {
-        var aggregate = new ParticipantAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
-        return aggregate;
+        var agg = new ParticipantAggregate();
+        agg.Apply(new ParticipantRegisteredEvent(id.Value));
+        return agg;
     }
 
-    private void EnsureInvariants()
+    private void Apply(ParticipantRegisteredEvent e)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
+        Id = new ParticipantId(e.ParticipantId);
     }
 }

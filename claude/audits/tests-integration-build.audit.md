@@ -2,7 +2,7 @@
 
 ## PURPOSE
 
-Convert `tests.guard.md §T-BUILD-01` from a documented rule into an executing post-execution gate. The integration test project MUST compile on every CI run; a red integration project halts merge.
+Convert `runtime.guard.md §Test & E2E Validation §T-BUILD-01` from a documented rule into an executing post-execution gate. The integration test project MUST compile on every CI run; a red integration project halts merge.
 
 ## SOURCE
 

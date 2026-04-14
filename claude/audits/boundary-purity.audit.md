@@ -30,8 +30,8 @@ mechanically and canonically so neither bypass class can recur.
 - All composition-root wiring inside `src/platform/host/`.
 - All T1M and T2E execution paths reachable from platform entry points.
 - The guard files governing boundary purity:
-  `behavioral`, `domain`, `engine`, `policy`, `projection`, `runtime`,
-  `structural`, `systems`, `dependency-graph`.
+  the 4 canonical guards (`constitutional`, `runtime`, `domain`,
+  `infrastructure`) per GUARD-LAYER-MODEL-01.
 - The audit files governing the same surfaces.
 - `scripts/dependency-check.sh` mechanical enforcement.
 
@@ -212,7 +212,7 @@ documentation. Each non-comment hit reports under
 the script.
 
 **Guard rule wording strengthened.**
-- `claude/guards/dependency-graph.guard.md` — `DG-R5-HOST-DOMAIN-FORBIDDEN`
+- `claude/guards/runtime.guard.md` §Dependency Graph & Layer Boundaries — `DG-R5-HOST-DOMAIN-FORBIDDEN`
   expanded from clauses 1–3 to clauses 1–5, explicitly enumerating
   fully-qualified type expressions (clause 3) and namespace aliases
   (clause 4). Severity stays S0.

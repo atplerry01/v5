@@ -1,84 +1,103 @@
-using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Revenue.Distribution;
 
+/// <summary>
+/// Distribution of SPV revenue across participant shares. Shares are
+/// computed from CapitalAllocationAggregate ownership percentages supplied
+/// by the caller — this aggregate does not mutate the vault. Invariant:
+/// Sum(Percentage) across shares must equal 100.
+/// </summary>
 public sealed class DistributionAggregate : AggregateRoot
 {
-    private readonly List<Allocation> _allocations = new();
+    private readonly List<ParticipantShare> _shares = new();
 
     public DistributionId DistributionId { get; private set; }
-    public Guid RevenueId { get; private set; }
-    public Amount TotalAmount { get; private set; }
-    public Currency Currency { get; private set; }
-    public Timestamp CreatedAt { get; private set; }
-    public IReadOnlyList<Allocation> Allocations => _allocations.AsReadOnly();
+    public string SpvId { get; private set; } = string.Empty;
+    public decimal TotalAmount { get; private set; }
+    public DistributionStatus Status { get; private set; }
+    public IReadOnlyList<ParticipantShare> Shares => _shares.AsReadOnly();
 
     private DistributionAggregate() { }
 
-    // ── Factory ──────────────────────────────────────────────────
-
-    public static DistributionAggregate Distribute(
+    /// <summary>
+    /// Creates a distribution. Each allocation pair is (participantId, ownershipPercentage);
+    /// the share amount is computed as totalAmount * (ownershipPercentage / 100).
+    /// </summary>
+    public static DistributionAggregate CreateDistribution(
         DistributionId distributionId,
-        Guid revenueId,
-        Amount totalAmount,
-        Currency currency,
-        Timestamp createdAt)
+        string spvId,
+        decimal totalAmount,
+        IReadOnlyList<(string ParticipantId, decimal OwnershipPercentage)> allocations)
     {
-        if (totalAmount.Value <= 0m) throw DistributionErrors.InvalidAmount();
-        if (revenueId == Guid.Empty) throw DistributionErrors.MissingRevenueReference();
+        if (string.IsNullOrWhiteSpace(spvId))
+            throw new ArgumentException("SpvId cannot be empty.", nameof(spvId));
+
+        if (totalAmount <= 0m)
+            throw new ArgumentException("TotalAmount must be greater than zero.", nameof(totalAmount));
+
+        if (allocations is null || allocations.Count == 0)
+            throw new ArgumentException("Distribution requires at least one allocation.", nameof(allocations));
+
+        var computedShares = new List<ParticipantShare>(allocations.Count);
+        decimal percentageSum = 0m;
+
+        foreach (var (participantId, ownershipPct) in allocations)
+        {
+            var shareAmount = totalAmount * (ownershipPct / 100m);
+            computedShares.Add(new ParticipantShare(participantId, shareAmount, ownershipPct));
+            percentageSum += ownershipPct;
+        }
+
+        if (percentageSum != 100m)
+            throw new ArgumentException(
+                $"Sum of allocation percentages must equal 100 (was {percentageSum}).",
+                nameof(allocations));
 
         var aggregate = new DistributionAggregate();
+
         aggregate.RaiseDomainEvent(new DistributionCreatedEvent(
-            distributionId, revenueId, totalAmount, currency, createdAt));
+            distributionId.Value.ToString(),
+            spvId,
+            totalAmount));
+
+        foreach (var share in computedShares)
+        {
+            aggregate._shares.Add(share);
+        }
+
         return aggregate;
     }
-
-    // ── Behavior ─────────────────────────────────────────────────
-
-    public void AssignAllocation(Guid recipientId, Amount allocationAmount, decimal sharePercentage)
-    {
-        if (recipientId == Guid.Empty) throw DistributionErrors.InvalidRecipient();
-        if (sharePercentage <= 0m || sharePercentage > 100m) throw DistributionErrors.InvalidSharePercentage();
-
-        RaiseDomainEvent(new AllocationAssignedEvent(
-            DistributionId, recipientId, allocationAmount, sharePercentage));
-    }
-
-    // ── Apply ────────────────────────────────────────────────────
 
     protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
         {
             case DistributionCreatedEvent e:
-                DistributionId = e.DistributionId;
-                RevenueId = e.RevenueId;
+                DistributionId = DistributionId.From(Guid.Parse(e.DistributionId));
+                SpvId = e.SpvId;
                 TotalAmount = e.TotalAmount;
-                Currency = e.Currency;
-                CreatedAt = e.CreatedAt;
-                break;
-
-            case AllocationAssignedEvent e:
-                _allocations.Add(Allocation.Create(e.RecipientId, e.AllocationAmount, e.SharePercentage));
+                Status = DistributionStatus.Created;
                 break;
         }
     }
-
-    // ── Invariants ───────────────────────────────────────────────
 
     protected override void EnsureInvariants()
     {
-        if (TotalAmount.Value < 0m) throw DistributionErrors.NegativeDistributionAmount();
+        if (_shares.Count == 0)
+            return;
 
-        if (_allocations.Count > 0)
-        {
-            var allocationsSum = 0m;
-            foreach (var allocation in _allocations)
-                allocationsSum += allocation.Amount.Value;
+        decimal percentageSum = 0m;
+        foreach (var share in _shares)
+            percentageSum += share.Percentage;
 
-            if (allocationsSum > TotalAmount.Value)
-                throw DistributionErrors.AllocationsSumMismatch(new Amount(allocationsSum), TotalAmount);
-        }
+        if (percentageSum != 100m)
+            throw new DomainInvariantViolationException(
+                $"Invariant violated: ParticipantShare percentages must sum to 100 (was {percentageSum}).");
     }
+}
+
+public enum DistributionStatus
+{
+    Created
 }

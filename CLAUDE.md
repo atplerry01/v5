@@ -6,9 +6,19 @@ Policy Binding -> Guard Loading -> Integrity Validation -> Guard Validation -> E
 ## Pre-Execution Guard Loading ($1a)
 Before executing ANY prompt, read ALL guard files from `/claude/guards/`. Every `.guard.md` file MUST be loaded and its rules applied as validation constraints for the execution. Guard violations detected before or during execution = halt. Guards are non-negotiable and are never skipped, cached from memory, or summarized — they are read fresh each execution.
 
+**Canonical 4-layer guard model (LOCKED 2026-04-14, rule GUARD-LAYER-MODEL-01):**
+
+The guard system has exactly four canonical layers, realised as four files directly under `claude/guards/`:
+
+1. `constitutional.guard.md` — WHYCEPOLICY authority, determinism, deterministic identifiers (HSID), hash determinism, replay determinism.
+2. `runtime.guard.md` — execution pipeline & ordering, engine, projection, prompt-container, dependency graph & layer boundaries, contracts boundary, **code quality enforcement** (clean-code, no-dead-code, stub-detection), **test & E2E validation**.
+3. `domain.guard.md` — business truth: layer purity, domain structure, classification-suffix, DTO naming, behavioral, structural, and inlined domain-aligned guards (economic, governance, identity, observability, workflow).
+4. `infrastructure.guard.md` — platform, systems, kafka, config safety, composition loader, program composition.
+
+**Subsystem note:** Quality enforcement and test/E2E validation are subsystems of Runtime enforcement — they are NOT separate top-level guards. No fifth canonical guard file may exist. No subdirectories (including any reintroduction of `domain-aligned/`) may exist under `claude/guards/`.
+
 Guard discovery directive:
-- Load every `*.guard.md` file under `claude/guards/**`, including the `claude/guards/domain-aligned/**` subtree.
-- The directive form is canonical because the guard inventory grows over time (Phase 1.5 §5.1.x added several). Any static list in this document is an aid, not a limit — directory contents are authoritative.
+- Load every `*.guard.md` file under `claude/guards/` (four canonical files only). Presence of any additional `.guard.md` file or any subdirectory is drift per `GUARD-LAYER-MODEL-01` and MUST be captured under `/claude/new-rules/` per $1c.
 
 ## Post-Execution Audit Sweep ($1b)
 After executing ANY prompt, execute the audit prompts from `/claude/audits/` against the output and any modified files. The audit sweep checks for drift, violations, and structural integrity. Any drift or violation found MUST be fixed inline before the execution is considered complete.
@@ -73,7 +83,7 @@ Source architecture under `src/`:
 - `systems/` — System integrations
 
 Claude orchestration under `claude/`:
-- `guards/` — Pre-execution guard rules (loaded before every prompt execution per $1a; includes the `domain-aligned/` subtree).
+- `guards/` — Pre-execution guard rules (loaded before every prompt execution per $1a). **Canonical 4-layer model (LOCKED):** `constitutional.guard.md`, `runtime.guard.md`, `domain.guard.md`, `infrastructure.guard.md`. No subdirectories; domain-aligned guards are inlined as subsections of `domain.guard.md`.
 - `audits/` — Post-execution audit definitions (run after every prompt execution per $1b). Frozen `*.audit.output.md` files and the `phase1-evidence/` and `sweeps/` subdirectories are HISTORICAL BASELINE.
 - `new-rules/` — Captured new guard errors and drift rules discovered during execution per $1c. The `_archives/` subdirectory holds promoted/closed captures.
 - `project-prompts/` — **Canonical prompt storage per $2.** This is the only canonical location for prompts; the `phase1/` and `phase2/` subdirectories hold per-phase prompts.

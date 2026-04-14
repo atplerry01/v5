@@ -36,7 +36,7 @@ Build, dependency check, and folklore sweep all clean.
 - `README.md` — every section, with particular attention to §5.1.x
   workstream entries and the §6.0 master tracking table.
 - `CLAUDE.md` — execution rules and orchestration directory inventories.
-- `claude/guards/**/*.guard.md` (25 top-level + 5 `domain-aligned/`).
+- `claude/guards/**/*.guard.md` — 4 canonical guards (constitutional, runtime, domain, infrastructure) per GUARD-LAYER-MODEL-01.
 - `claude/audits/**/*.audit.md` (21 active definitions + 14 frozen
   `*.audit.output.md` outputs + `phase1-evidence/` and `sweeps/`
   subtrees).
@@ -91,9 +91,9 @@ without running the full Step B matrix:
 - **DOC-D02** — CLAUDE.md audit list omits 24+ active audits.
 - **DOC-D03** — CLAUDE.md `claude/` directory description stale and
   internally inconsistent with $2.
-- **DOC-D04** — `dependency-graph.guard.md` R5 body self-superseded
+- **DOC-D04** — `runtime.guard.md §Dependency Graph & Layer Boundaries` R5 body self-superseded
   by DG-R5-EXCEPT-01 in the same file but never rewritten.
-- **DOC-D05** — `dependency-graph.guard.md` CODE-LEVEL CHECKS
+- **DOC-D05** — `runtime.guard.md §Dependency Graph & Layer Boundaries` CODE-LEVEL CHECKS
   contradict DG-R5-EXCEPT-01.
 - **DOC-D06** — `dependency-graph.audit.md` C2 predicate has the
   same drift class as DOC-D05.
@@ -109,7 +109,7 @@ Step B Set 1 executed seven load-bearing probes (CT-INV B-1..B-3,
 GG-DG B-4..B-5, GG-AUD B-6..B-7). All seven returned **DRIFT** or
 **CONTRADICTION** with hard counts:
 
-- **B-1:** CLAUDE.md guard list = 12 files; actual = 25 top-level
+- **B-1:** **[STALE 2026-04-14 — inventory superseded by 4-layer canonical model; see GUARD-LAYER-MODEL-01]** CLAUDE.md guard list = 12 files; actual = 25 top-level
   + 5 `domain-aligned/` = **30 total**. Omission rate **18 of 30 =
   60%**, including `dependency-graph`, `runtime-order`,
   `stub-detection`, `config-safety`, the entire `domain-aligned/`
@@ -120,7 +120,7 @@ GG-DG B-4..B-5, GG-AUD B-6..B-7). All seven returned **DRIFT** or
 - **B-3:** CLAUDE.md `claude/` directory description omits four
   directories and contradicts $2 internally on the canonical
   prompt-store name.
-- **B-4:** `dependency-graph.guard.md` R5 body lines 59–64 contradict
+- **B-4:** `runtime.guard.md §Dependency Graph & Layer Boundaries` R5 body lines 59–64 contradict
   DG-R5-EXCEPT-01 lines 164+. The same file self-acknowledges the
   contradiction at lines 186–190 but the body was never rewritten.
 - **B-5:** CODE-LEVEL CHECKS lines 100–107 grep `src/platform` as a
@@ -157,7 +157,7 @@ Five high-leverage patches applied across three files:
   `claude/` directory description to enumerate all 12 actual
   entries; promoted `project-prompts/` as canonical per $2;
   explicitly labeled `prompts/` as a legacy supporting directory.
-- **P-D04** ([dependency-graph.guard.md](../guards/dependency-graph.guard.md))
+- **P-D04** ([runtime.guard.md §Dependency Graph & Layer Boundaries](../guards/runtime.guard.md))
   — three coordinated edits: R5 body now cross-references
   DG-R5-EXCEPT-01 and DG-R5-HOST-DOMAIN-FORBIDDEN; CODE-LEVEL CHECKS
   now name `scripts/dependency-check.sh` as authoritative and split
@@ -183,9 +183,11 @@ claude-root B-Root). Most returned **PASS**:
 
 - **B-8/B-9:** GG-OTHER spot-check of `runtime`, `platform`,
   `structural`, `engine`, `policy` guards plus the `domain-aligned/`
-  subtree → **PASS** (no R-DOM-01-class folklore-status-footer drift).
-  `dependency-graph.guard.md` remains the unique outlier
-  (already patched).
+  subtree (now consolidated into `runtime.guard.md`,
+  `infrastructure.guard.md`, and `domain.guard.md` per
+  GUARD-LAYER-MODEL-01) → **PASS** (no R-DOM-01-class
+  folklore-status-footer drift). `runtime.guard.md §Dependency Graph
+  & Layer Boundaries` remains the unique outlier (already patched).
 - **B-10:** NR promotion-status integrity → **DRIFT** (3 of 9 active
   captures lack a `STATUS:` field). New finding: **DOC-D10**.
 - **B-11:** FOL `Phase B*` sweep → **DRIFT** (13 sites in 9 files).
@@ -242,11 +244,11 @@ Detailed Step C Set 2 record at
 
 | ID | Title | Severity | Closed By |
 |---|---|---|---|
-| **DOC-D01** | CLAUDE.md guard list omits 18 of 30 actual guards | S2 | P-D01 (Step C Set 1) |
+| **DOC-D01** | **[STALE 2026-04-14 — inventory superseded by 4-layer canonical model; see GUARD-LAYER-MODEL-01]** CLAUDE.md guard list omits 18 of 30 actual guards | S2 | P-D01 (Step C Set 1) |
 | **DOC-D02** | CLAUDE.md audit list omits 10 of 21 actual audits | S2 | P-D02 (Step C Set 1) |
 | **DOC-D03** | CLAUDE.md `claude/` directory description stale + internally inconsistent with $2 | S3 | P-D03 (Step C Set 1) |
-| **DOC-D04** | `dependency-graph.guard.md` self-supersedes itself in three places (R5 body, CODE-LEVEL CHECKS, LOCK CONDITIONS) | S2 | P-D04 (Step C Set 1) |
-| **DOC-D05** | `dependency-graph.guard.md` CODE-LEVEL CHECKS predicate forbids legitimate composition-root usings | S2 | P-D04 (folded into Step C Set 1) |
+| **DOC-D04** | `runtime.guard.md §Dependency Graph & Layer Boundaries` self-supersedes itself in three places (R5 body, CODE-LEVEL CHECKS, LOCK CONDITIONS) | S2 | P-D04 (Step C Set 1) |
+| **DOC-D05** | `runtime.guard.md §Dependency Graph & Layer Boundaries` CODE-LEVEL CHECKS predicate forbids legitimate composition-root usings | S2 | P-D04 (folded into Step C Set 1) |
 | **DOC-D06** | `dependency-graph.audit.md` C2 predicate / INPUTS drift | S2 | P-D06 (Step C Set 1) |
 | **DOC-D07** | Stale `Phase B2a/B2b` markers in 13 source-comment sites across 9 files | S3 | P-D07 (Step C Set 2) |
 | **DOC-D08** | `claude/audits.zip` exists at `claude/` root with no canonical classification | S3 | P-D08 (Step C Set 2 — deleted) |
@@ -356,7 +358,7 @@ Acceptance criteria (§5.1.3 opening pack §2.9 / §4):
 All ten drift items closed. CURRENT TRUTH / HISTORICAL BASELINE /
 ARCHIVAL RECORD discipline model established and applied. CLAUDE.md
 inventories now self-discover from the actual `claude/` tree.
-`dependency-graph.guard.md` and `dependency-graph.audit.md` aligned
+`runtime.guard.md §Dependency Graph & Layer Boundaries` and `dependency-graph.audit.md` aligned
 with `scripts/dependency-check.sh` enforcement reality. Stale
 `Phase B2a/B2b` source comments cleaned. New-rules promotion-status
 integrity restored for the three ambiguous captures. Stale and empty

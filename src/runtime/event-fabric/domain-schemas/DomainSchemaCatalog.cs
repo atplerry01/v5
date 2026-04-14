@@ -25,4 +25,7 @@ public static class DomainSchemaCatalog
 
     public static void RegisterOperationalSandboxKanban(EventSchemaRegistry registry)
         => new KanbanSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterEconomic(EventSchemaRegistry registry)
+        => new EconomicSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

@@ -19,9 +19,9 @@ IIdGenerator)` tuple, the audit asks whether the following equalities hold:
 |---|---|---|
 | `events_run2 == events_run1` (element-wise, by type + payload) | **PASS** | Engine and aggregate code is pure given identical inputs; no hidden state. |
 | `eventIds_run2 == eventIds_run1` | **PASS** | `EventEnvelope.GenerateDeterministicId(correlationId, eventTypeName, sequenceIndex)` is a pure function of its inputs. See [EventFabric.cs:64-65](../../src/runtime/event-fabric/EventFabric.cs#L64-L65). |
-| `executionHash_run2 == executionHash_run1` | **PASS** | `ExecutionHash.Compute` inputs are all deterministic. See [hash-determinism.guard.md](../guards/hash-determinism.guard.md) and [ExecutionHash.cs](../../src/runtime/deterministic/ExecutionHash.cs). |
+| `executionHash_run2 == executionHash_run1` | **PASS** | `ExecutionHash.Compute` inputs are all deterministic. See [constitutional.guard.md §Hash Determinism](../guards/constitutional.guard.md) and [ExecutionHash.cs](../../src/runtime/deterministic/ExecutionHash.cs). |
 | `decisionHash_run2 == decisionHash_run1` | **PASS** (conditional) | The decision hash is produced by the policy engine. As long as the policy itself is deterministic and the policy version is held constant, the decision hash is reproducible. |
-| `projectionState_run2 == projectionState_run1` | **PASS** (conditional) | Projection handlers must be pure functions of the event stream. The projection guard ([projection.guard.md](../guards/projection.guard.md)) enforces this. |
+| `projectionState_run2 == projectionState_run1` | **PASS** (conditional) | Projection handlers must be pure functions of the event stream. The projection guard ([runtime.guard.md §Projection Layer](../guards/runtime.guard.md)) enforces this. |
 | `envelopeTimestamp_run2 == envelopeTimestamp_run1` | **PASS** (conditional) | Only true when the same `IClock` instance is supplied. `EventFabric.cs:75` reads `_clock.UtcNow`. With a frozen test clock, this is stable. With `SystemClock`, it varies. |
 
 ## Replay Path Distinction
@@ -75,7 +75,7 @@ store rather than reconstructing them. That is a design change, not a fix.
 
 1. **For Replay Type A:** verify by inspection that
    - `ExecutionHash.Compute` has only permitted inputs (see
-     `hash-determinism.guard.md`)
+     `constitutional.guard.md §Hash Determinism`)
    - `EventEnvelope.GenerateDeterministicId` is a pure function
    - `RuntimeCommandDispatcher.ExecuteEngineAsync` does not introduce
      non-determinism (no clock reads, no RNG)

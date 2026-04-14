@@ -4,5 +4,6 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Transaction;
 
 public sealed record TransactionInitiatedEvent(
     TransactionId TransactionId,
-    Guid InstructionId,
+    string Kind,
+    IReadOnlyList<TransactionReference> References,
     Timestamp InitiatedAt) : DomainEvent;

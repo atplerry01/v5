@@ -6,12 +6,12 @@ public sealed class IsFullyAllocatedSpecification : Specification<DistributionAg
 {
     public override bool IsSatisfiedBy(DistributionAggregate distribution)
     {
-        if (distribution.Allocations.Count == 0) return false;
+        if (distribution.Shares.Count == 0) return false;
 
-        var allocationsSum = 0m;
-        foreach (var allocation in distribution.Allocations)
-            allocationsSum += allocation.Amount.Value;
+        decimal percentageSum = 0m;
+        foreach (var share in distribution.Shares)
+            percentageSum += share.Percentage;
 
-        return allocationsSum == distribution.TotalAmount.Value;
+        return percentageSum == 100m;
     }
 }

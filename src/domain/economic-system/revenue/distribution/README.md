@@ -26,8 +26,17 @@ Splits revenue among parties based on contract rules. A distribution takes total
 - **DistributionId** — Typed Guid wrapper with From() factory for unique distribution identity
 
 ## Domain Events
-- **DistributionCreatedEvent** — Revenue split initiated (captures RevenueId, TotalAmount, Currency)
-- **AllocationAssignedEvent** — Per-recipient allocation assigned (captures RecipientId, AllocationAmount, SharePercentage)
+- **DistributionCreatedEvent** — Ownership-based participant shares computed (captures RevenueId, TotalAmount, Currency)
+
+```text
+ECONOMIC FLOW
+
+1. RevenueAggregate → RevenueRecordedEvent
+2. DistributionAggregate → DistributionCreatedEvent
+3. PayoutAggregate → PayoutExecutedEvent
+
+Execution of vault mutation is handled outside the domain.
+```
 
 ## Specifications
 - **IsFullyAllocatedSpecification** — All allocations sum exactly to TotalAmount (returns false if no allocations)

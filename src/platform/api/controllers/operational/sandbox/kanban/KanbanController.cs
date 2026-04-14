@@ -7,6 +7,7 @@ using Whycespace.Shared.Contracts.Common;
 using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Board;
 using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
 using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.List;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Workflow;
 using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -22,17 +23,20 @@ public sealed class KanbanController : ControllerBase
     private static readonly DomainRoute KanbanRoute = new("operational", "sandbox", "kanban");
 
     private readonly ISystemIntentDispatcher _dispatcher;
+    private readonly IWorkflowDispatcher _workflowDispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
     private readonly string _projectionsConnectionString;
 
     public KanbanController(
         ISystemIntentDispatcher dispatcher,
+        IWorkflowDispatcher workflowDispatcher,
         IIdGenerator idGenerator,
         IClock clock,
         IConfiguration configuration)
     {
         _dispatcher = dispatcher;
+        _workflowDispatcher = workflowDispatcher;
         _idGenerator = idGenerator;
         _clock = clock;
         _projectionsConnectionString = configuration.GetValue<string>("Projections:ConnectionString")
@@ -148,6 +152,26 @@ public sealed class KanbanController : ControllerBase
                 result.CorrelationId));
     }
 
+    [HttpPost("card/approval/start")]
+    public async Task<IActionResult> StartCardApproval([FromBody] ApiRequest<StartCardApprovalRequestModel> request, CancellationToken cancellationToken)
+    {
+        var payload = request.Data;
+        var intent = new CardApprovalIntent(
+            payload.BoardId,
+            payload.CardId,
+            payload.FromListId,
+            payload.ReviewListId,
+            payload.UserId);
+        var result = await _workflowDispatcher.StartWorkflowAsync(
+            CardApprovalWorkflowNames.Approve, intent, KanbanRoute);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok(new CommandAck("card_approval_started"), _clock.UtcNow))
+            : BadRequest(ApiResponse.Fail(
+                "operational.sandbox.kanban.card_approval_failed",
+                result.Error ?? "Unknown error",
+                _clock.UtcNow));
+    }
+
     [HttpGet("{boardId:guid}")]
     public async Task<IActionResult> GetBoard(Guid boardId, CancellationToken cancellationToken)
     {
@@ -184,6 +208,8 @@ public sealed record MoveCardRequestModel(Guid BoardId, Guid CardId, Guid FromLi
 public sealed record ReorderCardRequestModel(Guid BoardId, Guid CardId, Guid ListId, int NewPosition);
 public sealed record CompleteCardRequestModel(Guid BoardId, Guid CardId);
 public sealed record UpdateCardRequestModel(Guid BoardId, Guid CardId, string Title, string Description);
+
+public sealed record StartCardApprovalRequestModel(Guid BoardId, Guid CardId, Guid FromListId, Guid ReviewListId, string UserId);
 
 public sealed record CreateBoardResponseModel(Guid BoardId);
 public sealed record CreateListResponseModel(Guid ListId, Guid BoardId);

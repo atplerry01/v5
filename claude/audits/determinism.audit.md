@@ -1,7 +1,7 @@
 # determinism.audit.md
 
 Post-execution audit consolidating determinism enforcement across all layers.
-Pairs with `claude/guards/determinism.guard.md`.
+Pairs with `claude/guards/constitutional.guard.md` §Determinism.
 
 ## SCOPE
 Determinism block list applies to:

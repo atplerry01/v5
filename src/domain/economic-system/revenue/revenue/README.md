@@ -27,8 +27,17 @@ None
 - **RevenueStatus** — Enum: Recognized, Distributed
 
 ## Domain Events
-- **RevenueRecognizedEvent** — Value recognized from contract (captures RevenueId, ContractId, Amount, Currency)
-- **RevenueDistributedEvent** — Revenue marked as distributed
+- **RevenueRecordedEvent** — SPV revenue recorded from external income (captures RevenueId, ContractId, Amount, Currency)
+
+```text
+ECONOMIC FLOW
+
+1. RevenueAggregate → RevenueRecordedEvent
+2. DistributionAggregate → DistributionCreatedEvent
+3. PayoutAggregate → PayoutExecutedEvent
+
+Execution of vault mutation is handled outside the domain.
+```
 
 ## Specifications
 - **CanDistributeSpecification** — Status == Recognized

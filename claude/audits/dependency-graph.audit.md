@@ -9,7 +9,7 @@ S0
 ## PURPOSE
 Post-execution verification that the canonical layer dependency rules
 hold across the repository. The full rule set is R1–R7 plus the DG-*
-additions in `dependency-graph.guard.md`: `DG-R5-EXCEPT-01`
+additions in `runtime.guard.md §Dependency Graph & Layer Boundaries`: `DG-R5-EXCEPT-01`
 (composition-root permission), `DG-R5-HOST-DOMAIN-FORBIDDEN`
 (host→domain prohibition, strengthened §5.1.2 Step C-G to cover
 fully-qualified and aliased forms), and `DG-R7-01` (projections→runtime,
@@ -29,7 +29,7 @@ authoritative mechanical enforcement.
 
 ### C1 — Project Reference Graph
 Parse every `<ProjectReference>` in `src/**/*.csproj`. For each layer, assert
-references conform to the matrix in `dependency-graph.guard.md`.
+references conform to the matrix in `runtime.guard.md §Dependency Graph & Layer Boundaries`.
 
 ### C2 — Namespace Usage Violations
 Grep `using` directives. The `src/platform` predicate is split between

@@ -1,6 +1,6 @@
 # tests.audit.md
 
-Post-execution audit for the test surface. Pairs with `claude/guards/tests.guard.md`.
+Post-execution audit for the test surface. Pairs with `claude/guards/runtime.guard.md` §Test & E2E Validation.
 
 ## SCOPE
 - `tests/integration/**`

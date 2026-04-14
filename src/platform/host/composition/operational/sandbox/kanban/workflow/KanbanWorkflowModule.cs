@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Steps;
-using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Workflow;
 using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban.Workflow;

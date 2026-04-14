@@ -3,70 +3,64 @@ using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Revenue.Revenue;
 
+/// <summary>
+/// Revenue recorded against an SPV. Per doctrine, revenue originates from
+/// an SPV and is recorded before being normalized into the SPV's vault
+/// (Slice1 via VaultAccountAggregate.ApplyRevenue). This aggregate records
+/// the fact only — no vault logic here.
+/// </summary>
 public sealed class RevenueAggregate : AggregateRoot
 {
     public RevenueId RevenueId { get; private set; }
-    public Guid ContractId { get; private set; }
+    public string SpvId { get; private set; } = string.Empty;
     public Amount Amount { get; private set; }
     public Currency Currency { get; private set; }
+    public string SourceRef { get; private set; } = string.Empty;
     public RevenueStatus Status { get; private set; }
-    public Timestamp RecognizedAt { get; private set; }
 
     private RevenueAggregate() { }
 
-    // ── Factory ──────────────────────────────────────────────────
-
-    public static RevenueAggregate Recognize(
+    public static RevenueAggregate RecordRevenue(
         RevenueId revenueId,
-        Guid contractId,
-        Amount amount,
-        Currency currency,
-        Timestamp recognizedAt)
+        string spvId,
+        decimal amount,
+        string currency,
+        string sourceRef)
     {
-        if (amount.Value <= 0m) throw RevenueErrors.InvalidAmount();
-        if (contractId == Guid.Empty) throw RevenueErrors.MissingContractReference();
+        if (amount <= 0m)
+            throw new ArgumentException("Revenue amount must be greater than zero.", nameof(amount));
+
+        // Per prompt: SpvId existence is assumed valid — no structural lookup here.
 
         var aggregate = new RevenueAggregate();
-        aggregate.RaiseDomainEvent(new RevenueRecognizedEvent(
-            revenueId, contractId, amount, currency, recognizedAt));
+        aggregate.RaiseDomainEvent(new RevenueRecordedEvent(
+            revenueId.Value.ToString(),
+            spvId,
+            amount,
+            currency,
+            sourceRef));
         return aggregate;
     }
-
-    // ── Behavior ─────────────────────────────────────────────────
-
-    public void MarkDistributed(Timestamp distributedAt)
-    {
-        if (Status == RevenueStatus.Distributed) throw RevenueErrors.RevenueAlreadyDistributed();
-        if (Status != RevenueStatus.Recognized) throw RevenueErrors.RevenueNotRecognized();
-
-        RaiseDomainEvent(new RevenueDistributedEvent(RevenueId, distributedAt));
-    }
-
-    // ── Apply ────────────────────────────────────────────────────
 
     protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
         {
-            case RevenueRecognizedEvent e:
-                RevenueId = e.RevenueId;
-                ContractId = e.ContractId;
-                Amount = e.Amount;
-                Currency = e.Currency;
-                Status = RevenueStatus.Recognized;
-                RecognizedAt = e.RecognizedAt;
-                break;
-
-            case RevenueDistributedEvent:
-                Status = RevenueStatus.Distributed;
+            case RevenueRecordedEvent e:
+                RevenueId = RevenueId.From(Guid.Parse(e.RevenueId));
+                SpvId = e.SpvId;
+                Amount = new Amount(e.Amount);
+                Currency = new Currency(e.Currency);
+                SourceRef = e.SourceRef;
+                Status = RevenueStatus.Recorded;
                 break;
         }
     }
 
-    // ── Invariants ───────────────────────────────────────────────
-
     protected override void EnsureInvariants()
     {
-        if (Amount.Value < 0m) throw RevenueErrors.NegativeRevenue();
+        if (Status == RevenueStatus.Recorded && Amount.Value <= 0m)
+            throw new DomainInvariantViolationException(
+                "Invariant violated: recorded revenue amount must be greater than zero.");
     }
 }

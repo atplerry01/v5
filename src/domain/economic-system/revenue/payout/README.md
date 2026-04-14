@@ -27,9 +27,18 @@ None
 - **PayoutStatus** — Enum: Pending, Completed, Failed
 
 ## Domain Events
-- **PayoutInitiatedEvent** — Payout created from distribution reference
-- **PayoutCompletedEvent** — Payment finalized
+- **PayoutExecutedEvent** — Payout intent emitted; execution deferred to orchestration (no direct vault mutation)
 - **PayoutFailedEvent** — Payout failed with reason
+
+```text
+ECONOMIC FLOW
+
+1. RevenueAggregate → RevenueRecordedEvent
+2. DistributionAggregate → DistributionCreatedEvent
+3. PayoutAggregate → PayoutExecutedEvent
+
+Execution of vault mutation is handled outside the domain.
+```
 
 ## Specifications
 - **CanCompleteSpecification** — Status == Pending

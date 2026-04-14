@@ -1,5 +1,5 @@
 using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.State;
-using Whycespace.Engines.T1M.Domains.Operational.Sandbox.Kanban.Workflows;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Workflow;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Runtime;
 

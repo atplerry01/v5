@@ -7,42 +7,49 @@
 - global pricing system domain entity
 
 
-
-⚡ My Direct Recommendation
-
-Proceed with your current prompt exactly as written.
-
-But while Claude executes:
-
-Watch for leakage of infrastructure concepts
-Watch for missing precondition invariants
-Watch for incorrect lifecycle modeling
-
-If those are clean → you’re perfectly on track.
-
-Namespace consistency
-
 ###
 
-Run a short, aggressive Phase 1.5 completion sprint (2–4 days) focused ONLY on:
-
-resilience
-load
-structural consistency
-enforcement hardening
-
-###
-
-validate the 2 endpoints TODO & Kanban
-
-enterprise grade solutions
+capital/
+  account/
+  allocation/
+  movement/
+  provenance/
+  classification/
 
 
-##
 
-src/platform/host/composition/orchestration/workflow/WorkflowExecutionBootstrap.cs
-src/platform/host/adapters/InMemoryWorkflowExecutionProjectionStore.cs
-src/runtime/topology/InMemoryStructureRegistry.cs
-src/platform/host/composition/runtime/RuntimeComposition.cs
 
-The code even labels some of them as placeholders.
+
+Policy Mapping
+
+
+
+
+we move to Phase 2C — SPV + Revenue + Distribution
+
+
+## ######
+=> Phase 2C is implemented:
+  real capital lifecycle
+  real profit flow
+  real distribution engine
+
+=> Phase 2D: workflow orchestration (T1M integration)
+
+
+## Payout Execuion Workflow
+
+Step 1: Load Distribution
+Step 2: Resolve SPV EconomicSubject
+Step 3: Resolve SPV VaultAccount
+
+Step 4: FOR EACH ParticipantShare:
+
+    → Resolve Participant EconomicSubject
+    → Resolve Participant VaultAccount
+
+    → Dispatch DebitSliceCommand (SPV, Slice1)
+    → Dispatch CreditSliceCommand (Participant, Slice1)
+
+Step 5: Validate total debit == total credit
+Step 6: Mark workflow complete

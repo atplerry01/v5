@@ -21,12 +21,13 @@ public sealed class LedgerAggregate : AggregateRoot
 
     public void AppendJournal(Guid journalId, Timestamp appendedAt)
     {
-        Guard.Against(journalId == Guid.Empty, "Journal reference cannot be empty.");
+        Guard.Against(journalId == Guid.Empty, LedgerErrors.InvalidJournalReference().Message);
 
         if (_journals.Any(j => j.JournalId == journalId))
             throw LedgerErrors.DuplicateJournal(journalId);
 
         RaiseDomainEvent(new JournalAppendedToLedgerEvent(LedgerId, journalId, appendedAt));
+        RaiseDomainEvent(new LedgerUpdatedEvent(LedgerId, journalId, _journals.Count, appendedAt));
     }
 
     protected override void Apply(object domainEvent)
@@ -41,6 +42,9 @@ public sealed class LedgerAggregate : AggregateRoot
 
             case JournalAppendedToLedgerEvent e:
                 _journals.Add(PostedJournalReference.Create(e.JournalId, e.AppendedAt));
+                break;
+
+            case LedgerUpdatedEvent:
                 break;
         }
     }

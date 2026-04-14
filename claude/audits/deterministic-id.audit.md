@@ -1,6 +1,6 @@
 # Deterministic ID Audit (HSID v2.1)
 
-Mirror of [deterministic-id.guard.md](../guards/deterministic-id.guard.md).
+Mirror of [constitutional.guard.md §Deterministic Identifiers](../guards/constitutional.guard.md).
 Run after any change touching `src/engines/T0U/determinism/**`,
 `src/shared/kernel/determinism/**`, or
 `src/runtime/control-plane/RuntimeControlPlane.cs`.
@@ -59,7 +59,7 @@ Ripgrep `src/domain/` for `IDeterministicIdEngine`, `Whyce.Shared.Kernel.Determi
 
 Open `src/runtime/control-plane/RuntimeControlPlaneBuilder.cs`. Confirm
 `Build()` still returns exactly 8 middlewares in the order locked by
-`runtime-order.guard.md`. If the prelude addition tempted anyone to add a
+`runtime.guard.md §Execution Pipeline & Ordering`. If the prelude addition tempted anyone to add a
 9th middleware, this audit FAILS.
 
 ## A8 — Write-once Hsid

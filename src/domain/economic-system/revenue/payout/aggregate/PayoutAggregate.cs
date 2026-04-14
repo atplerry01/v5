@@ -1,79 +1,54 @@
+using Whycespace.Domain.EconomicSystem.Revenue.Distribution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Revenue.Payout;
 
+/// <summary>
+/// Records the intent that a payout has been executed. Pure domain state;
+/// emits a single intent event. No vault references, no cross-aggregate
+/// calls — full SPV-debit / participant-credit conservation is the
+/// responsibility of the Phase 2D orchestration layer.
+/// </summary>
 public sealed class PayoutAggregate : AggregateRoot
 {
     public PayoutId PayoutId { get; private set; }
-    public Guid DistributionId { get; private set; }
+    public DistributionId DistributionId { get; private set; }
     public PayoutStatus Status { get; private set; }
-    public Timestamp InitiatedAt { get; private set; }
 
     private PayoutAggregate() { }
 
-    // ── Factory ──────────────────────────────────────────────────
-
-    public static PayoutAggregate Initiate(
-        PayoutId payoutId,
-        Guid distributionId,
-        Timestamp initiatedAt)
+    public static PayoutAggregate ExecutePayout(
+        string payoutId,
+        string distributionId,
+        IReadOnlyList<ParticipantShare> shares)
     {
-        if (distributionId == Guid.Empty) throw PayoutErrors.MissingDistributionReference();
+        if (shares is null || shares.Count == 0)
+            throw new ArgumentException("Shares cannot be empty");
 
-        var aggregate = new PayoutAggregate();
-        aggregate.RaiseDomainEvent(new PayoutInitiatedEvent(
-            payoutId, distributionId, initiatedAt));
-        return aggregate;
+        var total = shares.Sum(s => s.Amount);
+
+        if (total <= 0)
+            throw new InvalidOperationException("Total payout must be > 0");
+
+        var agg = new PayoutAggregate();
+
+        agg.RaiseDomainEvent(new PayoutExecutedEvent(
+            payoutId,
+            distributionId
+        ));
+
+        return agg;
     }
-
-    // ── Behavior ─────────────────────────────────────────────────
-
-    public void Complete(Timestamp completedAt)
-    {
-        if (Status == PayoutStatus.Failed) throw PayoutErrors.CannotCompleteFailedPayout();
-        if (Status == PayoutStatus.Completed) throw PayoutErrors.PayoutAlreadyCompleted();
-        if (Status != PayoutStatus.Pending) throw PayoutErrors.PayoutNotPending();
-
-        RaiseDomainEvent(new PayoutCompletedEvent(PayoutId, completedAt));
-    }
-
-    public void Fail(string reason, Timestamp failedAt)
-    {
-        if (Status == PayoutStatus.Completed) throw PayoutErrors.CannotFailCompletedPayout();
-        if (Status == PayoutStatus.Failed) throw PayoutErrors.PayoutAlreadyFailed();
-        if (Status != PayoutStatus.Pending) throw PayoutErrors.PayoutNotPending();
-
-        RaiseDomainEvent(new PayoutFailedEvent(PayoutId, reason, failedAt));
-    }
-
-    // ── Apply ────────────────────────────────────────────────────
 
     protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
         {
-            case PayoutInitiatedEvent e:
-                PayoutId = e.PayoutId;
-                DistributionId = e.DistributionId;
-                Status = PayoutStatus.Pending;
-                InitiatedAt = e.InitiatedAt;
-                break;
-
-            case PayoutCompletedEvent:
+            case PayoutExecutedEvent e:
+                PayoutId = PayoutId.From(Guid.Parse(e.PayoutId));
+                DistributionId = DistributionId.From(Guid.Parse(e.DistributionId));
                 Status = PayoutStatus.Completed;
                 break;
-
-            case PayoutFailedEvent:
-                Status = PayoutStatus.Failed;
-                break;
         }
-    }
-
-    // ── Invariants ───────────────────────────────────────────────
-
-    protected override void EnsureInvariants()
-    {
-        if (DistributionId == Guid.Empty)
-            throw PayoutErrors.MissingDistributionReference();
     }
 }

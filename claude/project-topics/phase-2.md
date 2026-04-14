@@ -157,4 +157,3 @@ Locked.
 * T3I remains excluded.
 * Phase 2 closes only when implementation proof, integration proof, test proof, and operational proof are complete.
 
-If you want, I’ll continue with **Phase 3 in the same locked format**.

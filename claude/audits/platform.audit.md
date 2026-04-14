@@ -1,7 +1,7 @@
 # platform.audit.md
 
 Post-execution audit for the platform/host composition root. Pairs with
-`claude/guards/platform.guard.md`.
+`claude/guards/infrastructure.guard.md` §Platform Boundaries (R-PLAT-*).
 
 ## SCOPE
 - `src/platform/host/**`
