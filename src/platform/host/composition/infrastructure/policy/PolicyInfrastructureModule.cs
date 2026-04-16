@@ -49,6 +49,11 @@ public static class PolicyInfrastructureModule
                 sp.GetRequiredService<IClock>()));
         services.AddSingleton<IPolicyEvaluator>(sp => sp.GetRequiredService<OpaPolicyEvaluator>());
 
+        // Phase 2.6 hardening: fire a single best-effort warm-up ping at
+        // OPA during host startup so the first real policy evaluation
+        // does not pay the cold-start cost. Non-blocking, never throws.
+        services.AddHostedService<OpaWarmupService>();
+
         return services;
     }
 }

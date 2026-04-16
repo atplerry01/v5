@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.transaction.settlement.commands",
+    "whyce.economic.transaction.settlement.events",
+    "whyce.economic.transaction.settlement.retry",
+    "whyce.economic.transaction.settlement.deadletter"
+  ]
+}

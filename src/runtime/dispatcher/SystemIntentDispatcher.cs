@@ -18,24 +18,52 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
     private readonly IRuntimeControlPlane _controlPlane;
     private readonly IIdGenerator _idGenerator;
     private readonly ICallerIdentityAccessor _callerIdentity;
+    private readonly ICommandPolicyIdRegistry _policyIdRegistry;
 
     public SystemIntentDispatcher(
         IRuntimeControlPlane controlPlane,
         IIdGenerator idGenerator,
-        ICallerIdentityAccessor callerIdentity)
+        ICallerIdentityAccessor callerIdentity,
+        ICommandPolicyIdRegistry policyIdRegistry)
     {
         _controlPlane = controlPlane;
         _idGenerator = idGenerator;
         _callerIdentity = callerIdentity;
+        _policyIdRegistry = policyIdRegistry;
     }
+
+    // Canonical aggregate-id property names accepted as the reflection
+    // fallback. Order matters only for the very rare case of a command record
+    // that declares more than one of these — the first match wins, matching
+    // the historical "Id" precedence used by Todo/Kanban. Capital commands
+    // declare exactly one of {AccountId, …, VaultId}, so collisions are not
+    // possible in current contracts.
+    private static readonly string[] AggregateIdPropertyCandidates =
+    [
+        "Id",
+        "AccountId",
+        "AllocationId",
+        "AssetId",
+        "BindingId",
+        "PoolId",
+        "ReserveId",
+        "VaultId",
+        "LedgerId",
+        "JournalId",
+        "EntryId",
+        "ObligationId",
+        "TreasuryId"
+    ];
 
     public async Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType();
 
-        // Extract aggregate ID from command by convention (Id property)
-        var idProperty = commandType.GetProperty("Id");
-        var aggregateId = idProperty is not null ? (Guid)idProperty.GetValue(command)! : Guid.Empty;
+        // Aggregate-id resolution. Preferred: command opts into IHasAggregateId.
+        // Fallback: reflect over the canonical property-name list above. No
+        // loose Guid scanning — preserves determinism and prevents accidental
+        // binding to an unrelated Guid field.
+        var aggregateId = ResolveAggregateId(command, commandType);
 
         // WP-1: Extract identity from authenticated HTTP caller.
         // Fail-closed — throws if no valid identity exists.
@@ -61,7 +89,11 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             TenantId = tenantId,
             ActorId = actorId,
             AggregateId = aggregateId,
-            PolicyId = "whyce-policy-default",
+            // E5.1 — per-command policy id resolved via the registry. Capital
+            // commands resolve to their canonical Capital{Domain}PolicyIds value;
+            // unmapped commands fall back to "whyce-policy-default" so existing
+            // flows (Todo, Kanban, etc.) continue unchanged until they bind.
+            PolicyId = _policyIdRegistry.Resolve(commandType),
             Classification = route.Classification,
             Context = route.Context,
             Domain = route.Domain
@@ -76,5 +108,29 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         // WhyceChain / Outbox onto the response so the API caller can trace
         // a single request through every persistence boundary.
         return result with { CorrelationId = correlationId };
+    }
+
+    private static Guid ResolveAggregateId(object command, Type commandType)
+    {
+        // 1. Explicit interface — preferred.
+        if (command is IHasAggregateId typed)
+            return typed.AggregateId;
+
+        // 2. Canonical property-name list — covers Todo/Kanban (Id) and
+        //    capital commands (AccountId, AllocationId, …).
+        foreach (var name in AggregateIdPropertyCandidates)
+        {
+            var prop = commandType.GetProperty(name);
+            if (prop is not null && prop.PropertyType == typeof(Guid))
+                return (Guid)prop.GetValue(command)!;
+        }
+
+        // 3. No match — fail loud rather than silently dispatch with
+        //    Guid.Empty. The caller has wired a command type the dispatcher
+        //    cannot route; surfacing it immediately is the right answer.
+        throw new InvalidOperationException(
+            $"SystemIntentDispatcher cannot resolve an aggregate id for command type '{commandType.FullName}'. " +
+            $"Implement IHasAggregateId, or expose a Guid property named one of: " +
+            $"{string.Join(", ", AggregateIdPropertyCandidates)}.");
     }
 }

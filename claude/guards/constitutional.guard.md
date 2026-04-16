@@ -314,7 +314,7 @@ The following are FORBIDDEN as direct or indirect inputs to any hash computed in
 - Per-event signatures lack position indexing.
 - An unordered collection is hashed without an explicit sort.
 
-Hash drift is silent and breaks replay verification without producing an error at the point of mistake. Block merge until remediated; the matching `replay-determinism.audit.md` must re-PASS.
+Hash drift is silent and breaks replay verification without producing an error at the point of mistake. Block merge until remediated; the matching `replay-determinism.audit.output.md` must re-PASS.
 
 ---
 
@@ -326,7 +326,7 @@ Lock the design intent behind `EventReplayService.ReplayAsync` and protect the s
 
 - `src/runtime/event-fabric/EventReplayService.cs`
 - Any future `EventReplay*.cs` file under `src/runtime/event-fabric/`
-- The audit document `claude/audits/replay-determinism.audit.md` which records the by-design rationale and is the source of truth for this section.
+- The audit document `claude/audits/replay-determinism.audit.output.md` which records the by-design rationale and is the source of truth for this section.
 
 ### Background: Two Notions of Replay
 
@@ -355,7 +355,7 @@ Located at `EventReplayService.cs:55-59`.
 
 **REPLAY-SENTINEL-LIFT-01 — How to lift the protection (S1).** The protection is **not absolute**, but lifting it requires a documented design change, not a hardening fix. The path to changing the sentinel behavior is:
 
-1. **First** update `claude/audits/replay-determinism.audit.md` to remove the by-design clause at lines 53-72 and record the new requirement that justifies the change. Without this update, no downstream change is permitted.
+1. **First** update `claude/audits/replay-determinism.audit.output.md` to remove the by-design clause at lines 53-72 and record the new requirement that justifies the change. Without this update, no downstream change is permitted.
 2. Extend `EventStoreService` (or its successor) to persist and return per-event envelope metadata (`PolicyHash`, `ExecutionHash`, `Timestamp`) at the time the events are appended to the store.
 3. Modify `EventReplayService.ReplayAsync` to read those values from the store rather than reconstructing envelopes from raw events.
 
@@ -369,6 +369,19 @@ Steps 2 and 3 may not be performed in any commit that does not also contain step
 Asserting Type A equality on a Type B replay is a misclassification and a violation of this rule.
 
 **POLICY-REPLAY-INTEGRITY-01 (S0).** `EventReplayService` MUST NOT re-evaluate policy during replay. Stored `PolicyEvaluatedEvent` / `PolicyDeniedEvent` records are the source of truth for replayed decisions. Re-evaluation would risk drift if policy versions or trust scores have changed since original evaluation.
+
+**INV-REPLAY-LOSSLESS-VALUEOBJECT-01 — Event-Sourcing Round-Trip Losslessness For Value Objects (S1).** The aggregate state reconstructed from the event store on replay MUST equal the state that produced those events at write time (modulo intentional sentinels documented under REPLAY-SENTINEL-PROTECTED-01). Any silent data loss in the `write → JSONB → read → aggregate` round trip is a violation.
+
+Every domain event whose constructor parameters include a value-object wrapper struct (e.g. `record struct VaultAccountId(Guid Value)`, `record struct Currency(string Code)`) MUST round-trip through `PostgresEventStoreAdapter` + `EventDeserializer.DeserializeStored` losslessly. Concretely:
+
+- Every value-object type that appears as a domain-event constructor parameter MUST have a corresponding `JsonConverter<T>` registered in `EventDeserializer.StoredOptions` (`src/runtime/event-fabric/EventDeserializer.cs`). The converter MUST accept BOTH the raw primitive form (the schema-mapped shape persisted to JSONB) and the legacy `{"Value": ...}` envelope form (back-compat with prior writes).
+- Every domain event whose constructor parameter name differs from the schema's JSON key MUST carry a `[property: JsonPropertyName("<schema-key>")]` attribute on the parameter, so STJ binds the JSON key to the constructor parameter on replay.
+- Every aggregate type that is replay-loaded MUST have a regression test that (1) constructs the aggregate via its factory, (2) schema-maps the seed event the same way `OutboxAdapter`/`PostgresEventStoreAdapter` does, (3) serializes to JSONB, (4) deserializes via `EventDeserializer.DeserializeStored`, (5) replays via `LoadFromHistory`, (6) asserts every value-object field on the aggregate equals its pre-write value. The vault regression test `tests/integration/economic-system/vault/account/VaultAccountReplayRegressionTest.cs` is the canonical template.
+
+Static check: enumerate every aggregate under `src/domain/**/aggregate/` and every domain event referenced by its `Apply` method; for each constructor parameter whose CLR type is `record struct`, confirm a converter is registered in `EventDeserializer.StoredOptions`. Each missing converter is an S1 fail. Failure mode is silent — no exception at write time, no exception on apply; the aggregate happily sets `Currency = default(Currency)` and the mismatch surfaces only when downstream code reads the post-apply state.
+
+Complements REPLAY-SENTINEL-PROTECTED-01: sentinels are explicit, documented exceptions; silent value-object data loss is the failure this rule prevents.
+**Source:** new-rules 2026-04-16 (revenue-domain validation D10).
 
 ---
 
@@ -462,7 +475,7 @@ These five global enforcement clauses appear in the source guards and are canoni
 ### Replay checks
 
 1. Open `EventReplayService.cs`. Verify the three sentinel assignments are present, in the order shown above, with the exact literal values (`"replay"`, `"replay"`, `DateTimeOffset.MinValue`).
-2. Grep `src/runtime/event-fabric/EventReplay*.cs` for any code that reads `ExecutionHash`, `PolicyHash`, or `Timestamp` from a stored event metadata source — if present, confirm `replay-determinism.audit.md` no longer contains the by-design clause (i.e. step 1 of the lift procedure has been completed). If the audit still has the clause, the read is a violation of REPLAY-SENTINEL-LIFT-01.
+2. Grep `src/runtime/event-fabric/EventReplay*.cs` for any code that reads `ExecutionHash`, `PolicyHash`, or `Timestamp` from a stored event metadata source — if present, confirm `replay-determinism.audit.output.md` no longer contains the by-design clause (i.e. step 1 of the lift procedure has been completed). If the audit still has the clause, the read is a violation of REPLAY-SENTINEL-LIFT-01.
 3. Grep `tests/**` and `claude/audits/**` for assertions on `ExecutionHash` or `PolicyHash` equality across replays. For each hit, classify as Type A or Type B per REPLAY-A-vs-B-DISTINCTION-01.
 
 ---
@@ -593,7 +606,7 @@ Registered in `guard.registry.json` as `constitutional` with severity `blocking`
 This guard does not replace `behavioral.guard.md`, `domain.guard.md`, `engine.guard.md`, or `runtime.guard.md` GE-01 sections — it supplements them by widening the enforcement surface to platform adapters and consolidating the WHYCEPOLICY / determinism / hashing / replay surfaces into one constitutional artifact. Where this guard and an existing guard overlap, the stricter rule wins.
 
 Related audits:
-- `claude/audits/replay-determinism.audit.md` — the by-design source-of-truth for the sentinel pattern.
+- `claude/audits/replay-determinism.audit.output.md` — the by-design source-of-truth for the sentinel pattern.
 - Any audit under `claude/audits/**` that references policy binding, determinism, HSID, hash composition, or replay envelope equality.
 
 ## Provenance
@@ -606,3 +619,952 @@ Consolidated 2026-04-14 from:
 - `deterministic-id.guard.md` (HSID v2.1, including H2–H6 hardening additions)
 - `hash-determinism.guard.md`
 - `replay-determinism.guard.md` (including 2026-04-07 policy-eventification integration)
+
+## System Invariants & Enforcement Doctrine
+
+Tier-0 constitutional invariants. Cross-layer guarantees not owned by any single guard. WHYCEPOLICY is the control authority; runtime enforces; chain anchors evidence. No invariant below may be bypassed by any lower-tier guard.
+
+### 1. System Execution Invariants
+
+#### INV-001 — Command Outcome Totality
+
+Definition:
+Every command MUST produce either ≥1 domain event or an explicit `CommandResult.Failure`. No silent-success paths are permitted.
+
+Enforcement:
+The runtime command dispatcher MUST emit a structured `CommandResult` for every command, and that result MUST carry either an event list (≥1 entry) or a typed failure with canonical reason. Empty event lists on `Success` are an enforcement-stage error.
+
+Violation:
+A command that returns success without events, or returns void/null, or fails without a typed failure result.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` R7 (persist/publish/anchor)
+- `runtime.guard.md` GE-04 (event-first architecture)
+- `runtime.guard.md` R-EVENT-AUDIT-COLS-01
+
+---
+
+#### INV-002 — Persist · Anchor · Outbox Atomicity
+
+Definition:
+Every successful execution MUST persist its events, anchor the execution to WhyceChain, and enqueue the resulting envelope to the outbox — as one indivisible unit of work.
+
+Enforcement:
+The runtime control plane MUST commit (events, chain-anchor row, outbox row) inside a single transaction. Partial commits are forbidden. On crash mid-commit, recovery MUST restore the atomic boundary, never a partial state.
+
+Violation:
+Events persisted without chain anchor; chain anchor written without outbox row; outbox row published without persisted event lineage.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` R7
+- `runtime.guard.md` R-UOW-01
+- WhyceChain anchoring rules
+
+---
+
+#### INV-003 — No Silent Success
+
+Definition:
+A command path that returns success without producing observable evidence (event, decision capture, chain anchor) is a constitutional violation.
+
+Enforcement:
+Audit gate `RULES_CHECKED ⇒ INV-003` scans dispatcher exit points for any branch that returns `Success` without invoking the persist/anchor/outbox triplet.
+
+Violation:
+Code path returning `CommandResult.Success` without writing to the event store, the chain table, and the outbox.
+
+Severity:
+S0
+
+References:
+- INV-001, INV-002
+- `runtime.guard.md` GE-04
+
+---
+
+### 2. Economic Integrity Invariants
+
+#### INV-101 — Double-Entry Enforcement
+
+Definition:
+Every value-affecting transaction MUST satisfy the double-entry invariant: the sum of debits equals the sum of credits, per ledger, per transaction boundary.
+
+Enforcement:
+The ledger aggregate MUST refuse to commit any transaction whose debit/credit lines do not balance to zero. The check MUST execute before event emission, not after.
+
+Violation:
+A persisted ledger transaction whose lines do not balance.
+
+Severity:
+S0 — CRITICAL (financial integrity breach)
+
+References:
+- `domain.guard.md` ledger invariants
+- WHYCEPOLICY economic policy bindings
+
+---
+
+#### INV-102 — Conservation of Value
+
+Definition:
+Value MAY NOT be created or destroyed outside policy-authorized flows. Every value movement MUST originate from a typed economic intent that has passed WHYCEPOLICY pre-execution authorization.
+
+Enforcement:
+The runtime MUST reject any ledger mutation whose causation chain does not terminate at a policy-authorized economic intent. Mints, burns, write-offs, and adjustments are economic intents and MUST carry policy decisions.
+
+Violation:
+A ledger entry without an upstream policy-authorized intent; an adjustment booked outside the authorized adjustment intent.
+
+Severity:
+S0 — CRITICAL (financial integrity breach)
+
+References:
+- WHYCEPOLICY authority (this guard, Group A–B)
+- `domain.guard.md` economic-system rules
+
+---
+
+#### INV-103 — Settlement Irreversibility
+
+Definition:
+Once a settlement transaction is committed and chain-anchored, it MUST NOT be mutated, deleted, or re-executed. Reversal is modelled as a compensating transaction, never as state mutation.
+
+Enforcement:
+The settlement aggregate MUST refuse update/delete operations on committed transactions. Compensations MUST be authored as new, separately-anchored transactions referencing the original via causation.
+
+Violation:
+An attempt to update or delete a committed settlement; a "reversal" implemented as state rewind rather than compensating entry.
+
+Severity:
+S0 — CRITICAL (financial integrity breach)
+
+References:
+- `domain.guard.md` settlement invariants
+- INV-102
+
+---
+
+#### INV-104 — Reconciliation Convergence
+
+Definition:
+Internal economic truth and external counterparty truth MUST converge. Reconciliation runs that fail to converge MUST surface as policy-evaluated discrepancies, never as silent data drift.
+
+Enforcement:
+Reconciliation processes MUST emit a typed reconciliation event on every run, including a convergence verdict. Non-converging runs MUST trigger a policy-bound discrepancy capture and HALT downstream economic flows until resolved.
+
+Violation:
+A reconciliation run that completes silently without verdict; a discrepancy ignored or swept; downstream economic flows continuing on a non-converged ledger.
+
+Severity:
+S0 — CRITICAL (financial integrity breach)
+
+References:
+- `domain.guard.md` reconciliation invariants (RC1..RC5)
+- WHYCEPOLICY reconciliation policy bindings
+
+---
+
+### 3. Identity & Trust Invariants
+
+#### INV-201 — Mandatory Actor Context
+
+Definition:
+Every command MUST carry both an `ActorId` and a `WhyceID` context. Commands missing either field MUST be rejected at the runtime entry seam.
+
+Enforcement:
+Runtime context propagation MUST extract and validate `ActorId` and `WhyceID` before policy binding. Missing fields produce `NoActorContext` rejection prior to any policy evaluation.
+
+Violation:
+A command processed without `ActorId` or `WhyceID`; a context object with null/empty actor or whyceID fields reaching the dispatcher.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` R-CTX-01 (context propagation)
+- WHYCEPOLICY enforcement (this guard, Group A)
+
+---
+
+#### INV-202 — No Anonymous Execution
+
+Definition:
+Anonymous execution is FORBIDDEN. There is no system actor, no default actor, no fallback identity. Every execution traces to a real, declared identity.
+
+Enforcement:
+The actor resolver MUST reject sentinel/empty/anonymous identities. System-level operations (replay, projection rebuild, scheduled jobs) MUST execute under declared service identities, not anonymous contexts.
+
+Violation:
+Any command processed under an empty, default, or sentinel actor; any internal job executing without a declared service identity.
+
+Severity:
+S0
+
+References:
+- INV-201
+- WHYCEPOLICY enforcement
+
+---
+
+#### INV-203 — Trust Score Mandatory
+
+Definition:
+A `TrustScore` MUST be present on the command context and MUST be policy-evaluated before execution proceeds.
+
+Enforcement:
+Pre-execution policy binding (PB-gate) MUST consult `TrustScore` as a policy input. Commands lacking a resolvable `TrustScore` MUST be rejected with a typed identity-evaluation failure.
+
+Violation:
+A command executed without TrustScore evaluation; a policy decision rendered without TrustScore as input.
+
+Severity:
+S0
+
+References:
+- WHYCEPOLICY pre-execution gate (this guard, Group A)
+- INV-201
+
+---
+
+#### INV-204 — Privileged Action Traceability
+
+Definition:
+All privileged actions MUST be traceable end-to-end to a declared identity, with the identity captured in the chain-anchored decision record.
+
+Enforcement:
+The decision capture pipeline MUST persist the resolving `ActorId`, `WhyceID`, and `TrustScore` snapshot on every privileged-action policy decision. Audit must be able to reconstruct the actor lineage from chain anchors alone.
+
+Violation:
+A privileged action whose chain anchor lacks identity fields; a decision record where actor lineage cannot be reconstructed.
+
+Severity:
+S0
+
+References:
+- INV-201, INV-202, INV-203
+- WhyceChain anchoring rules
+
+---
+
+### 4. Event & Audit Invariants
+
+#### INV-301 — State Change ⇒ Event
+
+Definition:
+Every state change MUST emit at least one event. State mutations without corresponding events are forbidden.
+
+Enforcement:
+The aggregate base MUST refuse to commit state changes that do not produce events. Direct state mutation outside the event-emission path is a constitutional violation.
+
+Violation:
+An aggregate field changed without a corresponding domain event; persistence layer writes that bypass the event stream.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` GE-04 (event-first)
+- `runtime.guard.md` R-EVENT-AUDIT-COLS-01
+
+---
+
+#### INV-302 — Mandatory Event Metadata
+
+Definition:
+Every emitted event MUST carry the canonical metadata fields: `EventId`, `CorrelationId`, `CausationId`, `ExecutionHash`, `PolicyDecisionHash`.
+
+Enforcement:
+The event envelope constructor MUST validate the presence of all five fields and reject envelopes missing any. Audit gate verifies field presence on every persisted envelope.
+
+Violation:
+An emitted or persisted event missing any of the five canonical metadata fields; a null/empty value in any required field.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` R-EVENT-AUDIT-COLS-01
+- `runtime.guard.md` R-CHAIN-CORRELATION-01
+
+---
+
+#### INV-303 — Persisted Events Are Chain-Anchored & Replay-Safe
+
+Definition:
+Every persisted event MUST be chain-anchored at commit time and MUST be replay-safe (deterministic re-derivation of state from the event stream alone).
+
+Enforcement:
+The event store commit path MUST write the chain anchor row inside the same transaction. Replay paths MUST reconstruct state purely from event history without consulting external mutable sources.
+
+Violation:
+A persisted event without a corresponding chain-anchor row; an event whose replay produces non-deterministic state.
+
+Severity:
+S0
+
+References:
+- INV-002 (persist · anchor · outbox)
+- `runtime.guard.md` PROJ-REPLAY-SAFE-01
+- WhyceChain anchoring rules
+
+---
+
+### 5. Workflow Integrity Invariants
+
+#### INV-401 — Workflow Lifecycle Totality
+
+Definition:
+Every workflow MUST traverse the lifecycle: `start → progress → terminate (Completed | Failed)`. Workflows that begin MUST eventually terminate.
+
+Enforcement:
+The workflow engine MUST emit a terminal event (`WorkflowCompleted` or `WorkflowFailed`) for every started workflow. Long-running workflows MUST register a deadline and emit a terminal event on deadline expiry.
+
+Violation:
+A started workflow without a terminal event; a workflow stuck `InProgress` past its declared deadline without emission.
+
+Severity:
+S1
+
+References:
+- `runtime.guard.md` R-WF-EVENTIFIED-01
+- `runtime.guard.md` R-WORKFLOW-PIPE-01
+
+---
+
+#### INV-402 — No Orphan Workflows
+
+Definition:
+Orphan workflows (no parent causation, no terminal event, no resume token) are FORBIDDEN.
+
+Enforcement:
+Workflow registration MUST establish parent causation at start. Audit gate scans workflow state for orphans on every run; orphans MUST be reconciled by either resume, compensation, or explicit administrative termination.
+
+Violation:
+A workflow row with neither parent causation nor terminal event for >N policy-defined hours.
+
+Severity:
+S1
+
+References:
+- INV-401
+- `runtime.guard.md` R-WF-RESUME-01
+
+---
+
+#### INV-403 — Deterministic Resume
+
+Definition:
+Workflow resume MUST be deterministic: it MUST replay from event history alone, with no consultation of mutable external state.
+
+Enforcement:
+The resume service MUST reconstruct workflow state by replaying persisted events through pure step handlers. Reads of live mutable state during resume are forbidden.
+
+Violation:
+Resume code that reads from live caches, current time, current external API state, or any non-event source to reconstruct workflow state.
+
+Severity:
+S0
+
+References:
+- `runtime.guard.md` R-WF-RESUME-01
+- `runtime.guard.md` REPLAY-A-vs-B-DISTINCTION-01
+- INV-303
+
+---
+
+#### INV-404 — Step Output Reproducibility
+
+Definition:
+Every workflow step output MUST be reproducible from the event history that preceded it.
+
+Enforcement:
+Step handlers MUST be pure functions of (input event, prior workflow state). Step outputs MUST hash identically on replay given identical inputs.
+
+Violation:
+A step whose output varies between runs given the same event history; a step that consumes ambient state (clock, RNG, environment).
+
+Severity:
+S0
+
+References:
+- INV-403
+- `runtime.guard.md` GE-01 (deterministic execution)
+- `runtime.guard.md` PROJ-REPLAY-SAFE-01
+
+---
+
+### 6. Observability & Operability Invariants
+
+#### INV-501 — Mandatory Telemetry Emission
+
+Definition:
+Every command MUST emit, at minimum: a distributed trace, runtime metrics (latency, outcome, decision count), and a structured `CommandResult`.
+
+Enforcement:
+The runtime control plane MUST wrap every command execution in a trace span and a metrics scope. Missing trace context or metrics on a completed command is an enforcement violation.
+
+Violation:
+A command path that returns without a trace span; a metrics scope not closed; a `CommandResult` returned without structured fields populated.
+
+Severity:
+S1
+
+References:
+- Phase 1.5 runtime rules (`runtime.guard.md` R-RT-01..10)
+- `runtime.guard.md` DET-STOPWATCH-OBSERVABILITY-01
+
+---
+
+#### INV-502 — Canonical Failure Reasons
+
+Definition:
+Every failure MUST produce a canonical, typed reason code. Free-text-only failures are FORBIDDEN.
+
+Enforcement:
+`CommandResult.Failure` and all typed failure exceptions MUST carry a canonical reason from the enumerated reason registry. Free-text fields MAY accompany the canonical reason but MAY NOT replace it.
+
+Violation:
+A failure raised or returned with only a free-text message; a failure whose reason is not in the canonical reason registry.
+
+Severity:
+S1
+
+References:
+- INV-001
+- WHYCEPOLICY decision capture (this guard, Group E)
+
+---
+
+#### INV-503 — Infrastructure Health & Reason Mapping
+
+Definition:
+Every infrastructure dependency MUST expose a health check endpoint, and every health-check failure MUST map to a canonical reason consumable by the runtime.
+
+Enforcement:
+Each adapter MUST register a health check at composition. The health-check aggregator MUST translate adapter-specific failure modes into canonical reasons before surfacing them to the runtime.
+
+Violation:
+An adapter without a registered health check; a health-check failure surfaced as opaque exception text rather than canonical reason.
+
+Severity:
+S1
+
+References:
+- `infrastructure.guard.md` platform/systems/kafka/config rules
+- INV-502
+
+---
+
+### Guard Precedence Doctrine
+
+Order of authority:
+
+1. Constitutional Guard (this file)
+2. Runtime Guard
+3. Domain Guard
+4. Infrastructure Guard
+
+If a conflict occurs:
+- Higher layer overrides lower layer
+- Constitutional rules are final and non-overridable
+
+### 7. Invariant–Policy Binding Doctrine
+
+Every invariant MUST be enforceable via WHYCEPOLICY. No invariant may exist without a corresponding policy evaluation path. Every invariant check MUST produce a policy decision record.
+
+#### INV-POL-001 — Invariant Requires Policy Binding
+
+Definition:
+Every invariant declared in this guard MUST map to at least one WHYCEPOLICY rule or decision path capable of evaluating conformance at runtime.
+
+Enforcement:
+The policy registry MUST expose a binding entry for each invariant ID. Unbound invariants fail the pre-execution policy-binding stage and halt the pipeline.
+
+Violation:
+An invariant referenced in guards, audits, or runtime checks that has no corresponding WHYCEPOLICY rule or decision path.
+
+Severity:
+S0
+
+References:
+- `constitutional.guard.md` WHYCEPOLICY Authority — Policy Declaration and Binding
+- GE-02 (WHYCEPOLICY ENFORCEMENT)
+- CLAUDE.md $8 (Policy)
+
+---
+
+#### INV-POL-002 — Policy Decision on Invariant Evaluation
+
+Definition:
+Every invariant evaluation MUST produce a `PolicyDecision` carrying an explicit allow/deny outcome. Implicit or inferred conformance is forbidden.
+
+Enforcement:
+Runtime invariant checks MUST call through the policy evaluator and persist the returned `PolicyDecision` to the evaluation audit trail.
+
+Violation:
+An invariant evaluation that completes without emitting a `PolicyDecision`, or returns a boolean/exception in place of the decision record.
+
+Severity:
+S0
+
+References:
+- `constitutional.guard.md` Policy Evaluation Audit Trail
+- INV-POL-001
+
+---
+
+#### INV-POL-003 — Invariant Violations Are Policy Violations
+
+Definition:
+Any invariant violation MUST be treated as a policy denial event and handled through the same denial pathway as native WHYCEPOLICY deny outcomes.
+
+Enforcement:
+The runtime MUST route invariant-failure results into the policy denial handler — never into ad-hoc exception branches — producing a denial envelope with canonical reason.
+
+Violation:
+An invariant failure surfaced as a generic exception, log-only message, or bypassed denial handler.
+
+Severity:
+S0
+
+References:
+- INV-POL-002
+- INV-502 (Canonical Failure Reasons)
+
+---
+
+#### INV-POL-004 — Policy Evidence Anchoring
+
+Definition:
+All invariant-related policy decisions MUST be chain-anchored to WhyceChain alongside the execution they govern.
+
+Enforcement:
+The policy decision record for every invariant evaluation MUST be included in the execution's chain-anchor payload and committed atomically with the execution UoW.
+
+Violation:
+A policy decision for an invariant that is not present in the chain-anchor row for its execution.
+
+Severity:
+S0
+
+References:
+- `constitutional.guard.md` Policy Decision Hashing and Chain Anchoring
+- GE-03 (WHYCECHAIN ANCHORING)
+- INV-002 (Persist · Anchor · Outbox Atomicity)
+
+---
+
+### 8. Invariant Violation Handling Doctrine
+
+Defines system behavior when invariants fail. Handling is severity-driven and MUST be uniform across all guards.
+
+#### INV-HAND-001 — S0 Immediate Halt
+
+Definition:
+Any S0 invariant violation MUST immediately halt the execution pipeline. No retry, no fallback, no degraded-mode continuation is permitted.
+
+Enforcement:
+The runtime control plane MUST terminate the current unit of work on S0 detection, emit the structured failure report, and refuse further stage progression.
+
+Violation:
+An S0 violation followed by retry, compensating action, or continued stage execution.
+
+Severity:
+S0
+
+References:
+- CLAUDE.md $12 (Failure)
+- `constitutional.guard.md` Severity Matrix
+- INV-001 (Command Outcome Totality)
+
+---
+
+#### INV-HAND-002 — S1 Controlled Failure
+
+Definition:
+S1 invariant violations MAY permit controlled retry or fallback, but only when the retry/fallback path is itself policy-evaluated and approved.
+
+Enforcement:
+Any retry or fallback path for an S1 violation MUST request a `PolicyDecision` before execution and record the decision in the audit trail.
+
+Violation:
+An S1 retry or fallback executed without a preceding policy evaluation or without decision recording.
+
+Severity:
+S1
+
+References:
+- INV-POL-002
+- `constitutional.guard.md` Severity Matrix
+
+---
+
+#### INV-HAND-003 — S2 Degraded Mode
+
+Definition:
+S2 invariant violations MAY allow continued execution under degraded mode, provided warning-level telemetry is emitted for every occurrence.
+
+Enforcement:
+Degraded-mode continuation MUST emit a canonical warning telemetry event identifying the invariant ID, the degraded capability, and the scope of continuation.
+
+Violation:
+Degraded-mode continuation without warning-level telemetry, or silent downgrade of capability.
+
+Severity:
+S2
+
+References:
+- INV-501 (Mandatory Telemetry Emission)
+- `constitutional.guard.md` Severity Matrix
+
+---
+
+#### INV-HAND-004 — Mandatory Incident Emission
+
+Definition:
+Every invariant violation, regardless of severity, MUST emit an incident event carrying the invariant ID, severity, canonical reason, and execution context.
+
+Enforcement:
+The runtime incident emitter MUST be invoked on every invariant-failure branch; the emitted event MUST conform to the canonical incident schema.
+
+Violation:
+An invariant violation that passes without a corresponding incident event, or an incident event missing required fields.
+
+Severity:
+S1
+
+References:
+- INV-301 (State Change ⇒ Event)
+- INV-302 (Mandatory Event Metadata)
+
+---
+
+#### INV-HAND-005 — Chain-Anchored Violation Record
+
+Definition:
+All invariant violations MUST be recorded and anchored in WhyceChain as part of the execution's evidence lineage.
+
+Enforcement:
+The violation record (invariant ID, severity, policy decision, incident event reference) MUST be committed to the chain-anchor row for the execution that produced it.
+
+Violation:
+A detected invariant violation with no corresponding WhyceChain anchor entry.
+
+Severity:
+S0
+
+References:
+- INV-POL-004
+- INV-303 (Persisted Events Are Chain-Anchored & Replay-Safe)
+- GE-03 (WHYCECHAIN ANCHORING)
+
+---
+
+#### INV-IDEMPOTENT-LIFECYCLE-INIT-01 — Layered-Defense Idempotency For Lifecycle-Init Aggregates (S1)
+
+Definition:
+Aggregates whose lifecycle-init action is a `public static` factory method (constructing a fresh aggregate instance and raising the seed event) MUST be guarded by a three-layer idempotency composition. The single-layer `IdempotencyMiddleware` cache is insufficient across hosts; the storage UNIQUE constraint alone surfaces untyped `Npgsql.PostgresException` → HTTP 500 violating INV-502.
+
+Canonical three-layer model:
+
+| Layer | Surface | Lifetime | Catches | Returns |
+|---|---|---|---|---|
+| 1. `IdempotencyMiddleware` | runtime middleware pipeline | per-host process (in-memory cache) | duplicate dispatch from same host before cache eviction | `CommandResult.Failure("Duplicate command detected.")` → HTTP 400 |
+| 2. Engine handler load-then-guard | engine handler invoking a static-factory aggregate | persistent (event-store query per dispatch) | duplicate dispatch from a different host, after a restart, after cache eviction | typed `<Domain>Errors.Already<X>Recorded` `DomainException` → HTTP 400 via `DomainExceptionHandler` |
+| 3. `(aggregate_id, version)` UNIQUE | Postgres event-store INSERT | persistent + cross-host (storage constraint) | last-resort race where two handlers both passed Layer 2 simultaneously | `ConcurrencyConflictException` → HTTP 500 (not canonical-reason-typed) |
+
+Enforcement:
+Every T2E handler that targets a `public static` factory aggregate MUST (1) inject `IEventStore` (or equivalent persistent prior-state probe); (2) call `IEventStore.LoadEventsAsync(aggregateId)` BEFORE invoking the static factory; (3) if `prior.Count > 0`, throw a typed `<Domain>Errors.Already<X>Recorded` / `Already<X>Created` `DomainException` — the error message MUST contain the substring matching the literal noun in the rule name (e.g. "already recorded"); (4) only invoke the factory and emit events when `prior.Count == 0`.
+
+Static check: every engine handler that dispatches to a static-factory aggregate MUST inject `IEventStore` and contain the load-then-throw pattern. Any handler that calls a static factory without first probing the event store is a violation. Cross-host validation test is mandatory (fresh handler instance against an `IEventStore` already holding the seed event, asserting the typed exception).
+
+Violation:
+A lifecycle-init handler that relies solely on `IdempotencyMiddleware` (Layer 1) — the cross-host/post-restart scenario bypasses it; or a handler that relies solely on the UNIQUE constraint (Layer 3) — its failure surface is untyped and breaks INV-502.
+
+Severity:
+S1 — replay correctness and canonical-reason discipline. The shadowing of Layer 2 by Layer 1 in same-host tests is by design (defense-in-depth, not redundancy); removing Layer 2 because Layer 1 fires first in some paths would erode the cross-host guarantee.
+
+References:
+- INV-502 (Canonical Failure Reasons)
+- `domain.guard.md` DOM-LIFECYCLE-INIT-IDEMPOTENT-01 (instance-method shape)
+- INV-001 (Command Outcome Totality), INV-303 (Replay-Safe)
+**Source:** new-rules 2026-04-16 (revenue-domain validation D5).
+
+---
+
+### 9. Audit Coverage Doctrine
+
+Every guard rule MUST be verifiable by a canonical audit. Audit coverage is a first-class constitutional property, not an optional sweep.
+
+#### AUD-COV-001 — Every Rule Must Be Audited
+
+Definition:
+Every rule declared in any canonical guard MUST appear in at least one canonical audit under `claude/audits/`.
+
+Enforcement:
+The audit registry MUST enumerate rule IDs covered. Uncovered rules are flagged by the coverage sweep and fail the post-execution audit stage.
+
+Violation:
+A guard rule ID absent from every canonical audit's coverage manifest.
+
+Severity:
+S1
+
+References:
+- CLAUDE.md $1b (Post-Execution Audit Sweep)
+
+---
+
+#### AUD-COV-002 — Missing Audit Is Violation
+
+Definition:
+A guard rule without audit coverage constitutes a governance violation in its own right and MUST be captured under `/claude/new-rules/` per CLAUDE.md §1c.
+
+Enforcement:
+The coverage sweep MUST raise a drift capture for every uncovered rule and halt the sweep until the capture is recorded.
+
+Violation:
+An uncovered rule detected without a corresponding new-rules capture entry.
+
+Severity:
+S1
+
+References:
+- CLAUDE.md $1c (New Rules Capture)
+- AUD-COV-001
+
+---
+
+#### AUD-COV-003 — Audit Must Reference Rule ID
+
+Definition:
+All audits MUST validate behavior by referencing canonical rule IDs. Free-text validation that does not anchor to a declared rule ID is forbidden.
+
+Enforcement:
+The audit loader MUST reject any audit whose assertions do not bind to at least one declared rule ID in the canonical guard set.
+
+Violation:
+An audit that asserts behavior without citing a rule ID, or cites an ID not present in canonical guards.
+
+Severity:
+S2
+
+References:
+- AUD-COV-001
+- `constitutional.guard.md` Provenance
+
+---
+
+#### AUD-COV-004 — No Duplicate Audit Ownership
+
+Definition:
+A rule MUST NOT be validated by multiple audits unless it is explicitly declared shared (e.g., GE-series global-enforcement rules).
+
+Enforcement:
+The coverage sweep MUST detect duplicate ownership and fail unless the rule is present on the explicit shared-ownership allowlist.
+
+Violation:
+Two or more audits claiming exclusive ownership of the same non-shared rule ID.
+
+Severity:
+S2
+
+References:
+- GE-01 through GE-05
+- AUD-COV-001
+
+---
+
+#### AUD-COV-005 — Audit Reflects Guard Changes
+
+Definition:
+Any modification to a canonical guard MUST trigger a corresponding audit update within the same change set.
+
+Enforcement:
+Guard edits MUST be accompanied by audit updates covering the modified rule IDs; unpaired guard changes fail the coverage sweep.
+
+Violation:
+A guard modification merged without the matching audit update.
+
+Severity:
+S1
+
+References:
+- CLAUDE.md $1b
+- GUARD-VERS-001
+
+---
+
+### 10. Guard Evolution & Versioning Doctrine
+
+Guards are constitutional artifacts. Their evolution MUST be traceable, non-silent, and backward-safe.
+
+#### GUARD-VERS-001 — Guard Changes Require New-Rule Capture
+
+Definition:
+All guard changes MUST be recorded via the new-rules capture pathway defined in CLAUDE.md §1c before promotion into canonical guards.
+
+Enforcement:
+The guard loader MUST cross-check recent guard modifications against `/claude/new-rules/` entries and fail on uncaptured changes.
+
+Violation:
+A guard edit landed in `claude/guards/` without a preceding or accompanying capture under `/claude/new-rules/`.
+
+Severity:
+S1
+
+References:
+- CLAUDE.md $1c (New Rules Capture)
+
+---
+
+#### GUARD-VERS-002 — No Silent Guard Mutation
+
+Definition:
+Guard rules MUST NOT be modified without a traceable change record linking edit, rationale, and authorising policy decision.
+
+Enforcement:
+Guard modifications MUST include a provenance entry (author, timestamp, rule IDs touched) and a policy decision reference in the change record.
+
+Violation:
+A guard-file diff with no corresponding provenance or policy decision record.
+
+Severity:
+S1
+
+References:
+- GUARD-VERS-001
+- `constitutional.guard.md` Provenance
+
+---
+
+#### GUARD-VERS-003 — Backward Compatibility Enforcement
+
+Definition:
+Guard changes MUST NOT break existing audits. Any breaking change MUST be accompanied by simultaneous audit updates in the same change set.
+
+Enforcement:
+The change-set validator MUST run the audit coverage sweep against the proposed guard state and reject any diff that leaves audits in a broken state.
+
+Violation:
+A guard change merged while one or more audits relying on it are unresolved or failing.
+
+Severity:
+S1
+
+References:
+- AUD-COV-005
+- CLAUDE.md $1b
+
+---
+
+#### GUARD-VERS-004 — Versioned Rule Identity
+
+Definition:
+Each rule ID MUST remain stable across guard versions. Rule IDs are immutable identifiers; renaming an active rule is forbidden.
+
+Enforcement:
+The guard loader MUST fail if a rule ID present in prior versions disappears without a matching deprecation marker per GUARD-VERS-005.
+
+Violation:
+A rule ID silently renamed, removed, or reassigned between versions.
+
+Severity:
+S1
+
+References:
+- GUARD-VERS-005
+- `constitutional.guard.md` Registry Entry
+
+---
+
+#### GUARD-VERS-005 — Deprecation Protocol
+
+Definition:
+Deprecated rules MUST be marked explicitly as `REVOKED` or `SUPERSEDED`, including the superseding rule ID where applicable. Silent removal is forbidden.
+
+Enforcement:
+Deprecation markers MUST appear inline in the guard file and in the registry entry; the loader MUST treat unmarked removal as drift.
+
+Violation:
+A rule removed from a guard without a `REVOKED` or `SUPERSEDED` marker and registry update.
+
+Severity:
+S1
+
+References:
+- GUARD-VERS-004
+- CLAUDE.md $1c
+
+---
+
+### 11. Cross-System Invariants
+
+Light-touch invariants covering state, identity, and ordering across system boundaries. These complement — not replace — the system-specific rules in `infrastructure.guard.md` and `domain.guard.md`.
+
+#### INV-XSYS-001 — Cross-Boundary Consistency
+
+Definition:
+State shared across systems MUST remain consistent. Divergent views of the same canonical state across system boundaries are forbidden.
+
+Enforcement:
+Cross-system state transfers MUST flow through the canonical event/outbox path and reconcile to a single authoritative projection. Ad-hoc cross-system writes are forbidden.
+
+Violation:
+Two systems holding conflicting values for the same canonical state key without a reconciliation path.
+
+Severity:
+S1
+
+References:
+- INV-104 (Reconciliation Convergence)
+- GE-04 (Event-First Architecture)
+- GE-05 (CQRS Enforcement)
+
+---
+
+#### INV-XSYS-002 — Distributed Identity Integrity
+
+Definition:
+Identity context (actor, tenant, trust score, policy scope) MUST remain intact across system boundaries. No boundary traversal may drop, mutate, or synthesise identity fields.
+
+Enforcement:
+Cross-system envelopes MUST carry the canonical identity block; receivers MUST reject envelopes whose identity block is absent, truncated, or re-signed by a non-authoritative source.
+
+Violation:
+An envelope crossing a system boundary with missing, altered, or fabricated identity context.
+
+Severity:
+S0
+
+References:
+- INV-201 (Mandatory Actor Context)
+- INV-202 (No Anonymous Execution)
+- INV-203 (Trust Score Mandatory)
+
+---
+
+#### INV-XSYS-003 — Event Ordering Integrity
+
+Definition:
+Cross-system event flows MUST preserve causation order. Causally related events MUST be observed in the same relative order on every consuming system.
+
+Enforcement:
+Cross-system transport MUST carry causation metadata (causation ID, sequence); consumers MUST reject or quarantine envelopes that violate causation ordering.
+
+Violation:
+A consumer applying a caused event before its cause, or reordering causally linked events during transport.
+
+Severity:
+S1
+
+References:
+- INV-301 (State Change ⇒ Event)
+- INV-302 (Mandatory Event Metadata)
+- `infrastructure.guard.md` kafka ordering rules

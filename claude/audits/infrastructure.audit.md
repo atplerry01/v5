@@ -1,229 +1,165 @@
-# INFRASTRUCTURE AUDIT — WBSM v3
+# Infrastructure Audit (Canonical)
+
+**Validates:** [`claude/guards/infrastructure.guard.md`](../../guards/infrastructure.guard.md)
+**Type:** Pure validation layer — defines NO rules. All rules live in the guard.
+
+---
+
+## Purpose
+
+Verify that the infrastructure layer (platform + systems edge) complies with all rules consolidated in the canonical infrastructure guard: platform API boundaries, systems integration points, Kafka event fabric (topics, headers, DLQ, partitions), config/secret safety, and composition-loader / program-composition discipline at the host seam.
+
+## Scope
+
+- `src/platform/**` — platform APIs, host composition
+- `src/platform/host/composition/` — composition loader
+- `src/platform/host/Program.cs` — program composition root
+- `src/systems/**` — system integrations (upstream / midstream / downstream adapters)
+- `infrastructure/event-fabric/kafka/**` — Kafka topic definitions, create-topics scripts
+- `infrastructure/**` and `docker-compose*.yml` — config files, secrets, environment
+- All Kafka producer/consumer call sites
+
+## Source guard
+
+This audit checks the rules defined in [`claude/guards/infrastructure.guard.md`](../../guards/infrastructure.guard.md). Rule ID conventions (R-PLAT-01..12 with G-PLATFORM-* aliases, R-SYS-01..15 with SYS-BOUND-01/SYS-NO-STEP-01 aliases, R-K-01..25 with K-TOPIC/K-DETERMINISTIC/K-DLQ/K-HEADER aliases, R-CFG-R1..R5 + R-CFG-DC1 + R-CFG-K1 with CFG-* aliases, G-COMPLOAD-01..07, G-PROGCOMP-01..05, GE-01..05) are owned by that guard.
+
+---
+
+## Validation Checklist
+
+### Section 1 — Platform Boundaries
+
+- [ ] **R-PLAT-01** (alias G-PLATFORM-01) — API layer purity
+- [ ] **R-PLAT-02** (alias G-PLATFORM-02) — host layer purity
+- [ ] **R-PLAT-03** (alias G-PLATFORM-03) — no controllers in host
+- [ ] **R-PLAT-04** (alias G-PLATFORM-04) — no DI in API
+- [ ] **R-PLAT-05** (alias G-PLATFORM-05) — API must not reference runtime or engines
+- [ ] **R-PLAT-06** (alias G-PLATFORM-06) — API calls systems layer only (via `ISystemIntentDispatcher`)
+- [ ] **R-PLAT-07** (alias G-PLATFORM-07) — host wires all layers *(host → domain reference is FORBIDDEN per domain guard DG-R5-HOST-DOMAIN-FORBIDDEN; legacy alias G-PLATFORM-07 no longer permits it)*
+- [ ] **R-PLAT-08** (alias PLAT-NO-DOMAIN-01) — platform must not reference domain
+- [ ] **R-PLAT-09** (alias PLAT-RESOLVER-01) — platform resolver constraint
+- [ ] **R-PLAT-10** (alias PLAT-KAFKA-GENERIC-01) — platform Kafka generic
+- [ ] **R-PLAT-11** (alias PLAT-DET-01) — platform determinism
+- [ ] **R-PLAT-12** (alias PLAT-DISPATCH-ONLY-01) — dispatch-only platform
+
+### Section 2 — Systems Integration
+
+- [ ] **R-SYS-01** — composition only
+- [ ] **R-SYS-02** — no execution logic
+- [ ] **R-SYS-03** — no domain mutation
+- [ ] **R-SYS-04** — no direct persistence
+- [ ] **R-SYS-05** — upstream / midstream / downstream placement
+- [ ] **R-SYS-06** — systems compose via runtime
+- [ ] **R-SYS-07** — no domain type construction
+- [ ] **R-SYS-08** — system boundary declaration
+- [ ] **R-SYS-09** — no infrastructure imports inside systems
+- [ ] **R-SYS-10** — idempotent composition
+- [ ] **R-SYS-11** — systems must not hold state
+- [ ] **R-SYS-12** — systems must not evaluate policy
+- [ ] **R-SYS-13** — systems must not emit events
+- [ ] **R-SYS-14** (alias SYS-BOUND-01) — `ISystemIntentDispatcher` permitted at systems entry points
+- [ ] **R-SYS-15** (alias SYS-NO-STEP-01) — no step execution in systems
+
+### Section 3 — Kafka Event Fabric
+
+- [ ] **R-K-01** — Kafka used only through runtime
+- [ ] **R-K-02** — dual-topic pattern
+- [ ] **R-K-03** — topic naming convention
+- [ ] **R-K-04** — no direct Kafka in domain
+- [ ] **R-K-05** — no direct Kafka in engines
+- [ ] **R-K-06** — outbox pattern mandatory
+- [ ] **R-K-07** — consumer group naming
+- [ ] **R-K-08** — dead letter topic required
+- [ ] **R-K-09** — schema governance
+- [ ] **R-K-10** — no Kafka configuration in domain or engines
+- [ ] **R-K-11** — partition key alignment
+- [ ] **R-K-12** — exactly-once semantics
+- [ ] **R-K-13** — runtime outbox only
+- [ ] **R-K-14** — event schema versioning required
+- [ ] **R-K-15** — order guarantee by aggregate id
+- [ ] **R-K-16** (alias K-TOPIC-01) — topic naming rule 1
+- [ ] **R-K-17** (alias K-TOPIC-02) — topic naming rule 2
+- [ ] **R-K-18** (alias K-TOPIC-CANONICAL-01) — canonical topic discipline
+- [ ] **R-K-19** (alias K-DETERMINISTIC-01) — deterministic partition keys
+- [ ] **R-K-20** (alias K-TOPIC-COVERAGE-01) — every event has a declared topic
+- [ ] **R-K-21** (alias K-OUTBOX-ISOLATION-01) — outbox isolation
+- [ ] **R-K-22** (alias K-TOPIC-DOC-CONSISTENCY-01) — docs match `create-topics.sh`
+- [ ] **R-K-23** (alias K-DLQ-PUBLISH-01) — DLQ publish rules
+- [ ] **R-K-24** (alias K-HEADER-CONTRACT-01) — header contract (correlation, chain, policy-decision id)
+- [ ] **R-K-25** (alias K-DLQ-001) — DLQ ordering
+- [ ] **R-K-26** (alias K-AGGREGATE-ID-HEADER-01) — non-empty `aggregate-id` header + key; startup probe rejects zero Guid when payload AggregateId non-empty
+- [ ] **R-K-27** (alias INFRA-KAFKA-LISTENER-SYMMETRY-01) — host-machine `appsettings*.json` `Kafka:BootstrapServers` aligns with EXTERNAL listener in `docker-compose.yml`
+- [ ] **R-K-28** (alias INTEGRATION-BRIDGE-OUTBOX-01) — cross-topic event-emitting bridges route through an outbox-backed aggregate OR are declared in the integration-bridge registry; direct `IProducer<>` from `src/platform/host/adapters/**` (other than `KafkaOutboxPublisher`) = violation
+
+### Section 4 — Config & Secret Safety
+
+- [ ] **R-CFG-R1** (alias CFG-R1) — no plaintext secrets
+- [ ] **R-CFG-R2** (alias CFG-R2) — no committed credentials
+- [ ] **R-CFG-R3** (alias CFG-R3) — env-var sourcing discipline
+- [ ] **R-CFG-R4** (alias CFG-R4) — config source canonicalization
+- [ ] **R-CFG-R5** (alias CFG-R5) — secret surface minimization
+- [ ] **R-CFG-DC1** (CFG-R1 Docker Compose extension) — compose-scan globs catch secrets in `docker-compose*.yml`
+- [ ] **R-CFG-K1** (alias CFG-K1) — Kafka-specific config safety (broker creds, SASL)
+
+### Section 5 — Composition Loader
+
+- [ ] **G-COMPLOAD-01** — registry membership
+- [ ] **G-COMPLOAD-02** — explicit order
+- [ ] **G-COMPLOAD-03** — locked execution sequence
+- [ ] **G-COMPLOAD-04** — loader-only composition
+- [ ] **G-COMPLOAD-05** — `BootstrapModuleCatalog` preserved
+- [ ] **G-COMPLOAD-06** — no reflection discovery
+- [ ] **G-COMPLOAD-07** — modules are orchestration-only
+
+### Section 6 — Program Composition
+
+- [ ] **G-PROGCOMP-01** — composition only at `Program.cs`
+- [ ] **G-PROGCOMP-02** — size cap
+- [ ] **G-PROGCOMP-03** — classification-aligned domain wiring
+- [ ] **G-PROGCOMP-04** — no inline middleware definition
+- [ ] **G-PROGCOMP-05** — locked pipeline order
+
+### Section 7 — WBSM v3 Global Enforcement (shared)
+
+- [ ] **GE-01** — deterministic execution
+- [ ] **GE-02** — WHYCEPOLICY enforcement
+- [ ] **GE-03** — WHYCECHAIN anchoring
+- [ ] **GE-04** — event-first architecture
+- [ ] **GE-05** — CQRS enforcement
+
+---
+
+## Check Procedure
+
+1. Load the infrastructure guard rule set.
+2. Execute per-section `Check Procedure` blocks in the guard.
+3. Run docker-compose scan globs across `infrastructure/**` and root compose files.
+4. Diff `infrastructure/event-fabric/kafka/create-topics.sh` against documented topic inventory.
+5. Record verdicts with file:line evidence.
+
+## Pass / Fail Criteria
+
+- **PASS:** All rules `PASS` or `N/A`.
+- **FAIL:** Any S0/S1 failure.
+- **CONDITIONAL:** S2/S3 per $1c.
+
+## Output Format
 
 ```
-AUDIT ID:       INFRA-AUDIT-v2
-REVISION:       REV 3
-DATE:           2026-04-04
-AUTHOR:         Architecture Office
-STATUS:         ACTIVE
+AUDIT:           infrastructure
+GUARD:           claude/guards/infrastructure.guard.md
+EXECUTED:        <ISO-8601>
+RULES_CHECKED:   ~65
+SECTIONS:        7
+PASS:            <count>
+FAIL:            <count>
+N/A:             <count>
+S0_FAILURES:     <list>
+S1_FAILURES:     <list>
+EVIDENCE:        <path>
+VERDICT:         PASS | FAIL | CONDITIONAL
 ```
 
-## PURPOSE
+## Failure Action
 
-Audit the infrastructure layer to ensure strict compliance with WBSM v3 adapter-only architecture. Infrastructure is exclusively for adapter implementations — repository implementations, external service adapters, and configuration management. It must contain ZERO business logic and ZERO domain leakage.
-
-This audit MUST detect:
-
-* Business logic in infrastructure
-* Domain model definitions in infrastructure
-* Domain leakage (aggregate behavior replicated in adapters)
-* Missing repository interface implementations
-* Non-adapter artifacts in infrastructure
-* Configuration management violations
-
----
-
-## SCOPE
-
-```
-infrastructure/              -> all infrastructure adapters
-infrastructure/persistence/  -> database adapters (Postgres, etc.)
-infrastructure/messaging/    -> messaging adapters (Kafka, etc.)
-infrastructure/external/     -> external service adapters (HTTP, gRPC, etc.)
-infrastructure/config/       -> configuration management
-infrastructure/caching/      -> cache adapters (Redis, etc.)
-```
-
-Excluded: `src/domain/`, `src/engines/`, `src/runtime/`, `src/systems/`, `src/platform/`
-
----
-
-## SEVERITY CLASSIFICATION
-
-| Severity | Description | Impact |
-|----------|-------------|--------|
-| CRITICAL | Business logic in infrastructure, domain model definition, domain leakage | Blocks deployment |
-| HIGH | Missing repository implementation, non-adapter artifact, missing interface | Must fix before merge |
-| MEDIUM | Configuration hardcoding, non-standard adapter pattern | Fix within sprint |
-| LOW | Missing logging in adapter, documentation gap | Fix at convenience |
-
----
-
-## GLOBAL RULE: PROJECTION LAYER AUTHORITY
-
-* `src/projections/` = DOMAIN PROJECTION LAYER (CQRS READ MODELS)
-* `src/runtime/projection/` = INTERNAL EXECUTION SUPPORT ONLY
-
-MANDATORY:
-
-* Domain projections:
-  * consume EVENTS only
-  * produce READ MODELS only
-  * exposed via platform APIs
-* Runtime projections:
-  * NOT exposed externally
-  * support execution only (routing, orchestration, indexing)
-
----
-
-## AUDIT DIMENSIONS
-
-### IDIM-01: Adapter-Only Enforcement
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-01.1 | No business rules or conditional domain logic in infrastructure code | CRITICAL |
-| CHECK-01.2 | No `if/else/switch` statements that make domain decisions | CRITICAL |
-| CHECK-01.3 | No domain calculations or computations in adapters | CRITICAL |
-| CHECK-01.4 | Infrastructure performs only translation, mapping, and I/O | HIGH |
-| CHECK-01.5 | No domain event creation in infrastructure code | CRITICAL |
-
-### IDIM-02: Repository Implementations
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-02.1 | Each domain repository interface has a corresponding infrastructure implementation | HIGH |
-| CHECK-02.2 | Repository implementations use domain interfaces from shared layer | HIGH |
-| CHECK-02.3 | Repository implementations handle persistence concerns only (SQL, ORM mapping) | HIGH |
-| CHECK-02.4 | Repository implementations do not add behavior beyond CRUD + query | CRITICAL |
-| CHECK-02.5 | Repository implementations properly map between domain entities and persistence models | HIGH |
-
-### IDIM-03: External Service Adapters
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-03.1 | External service adapters implement shared-layer interfaces | HIGH |
-| CHECK-03.2 | External service adapters handle network concerns (retry, timeout, circuit breaker) | MEDIUM |
-| CHECK-03.3 | External service adapters translate external DTOs to domain-compatible types | HIGH |
-| CHECK-03.4 | External service adapters do not expose external API details to domain | HIGH |
-| CHECK-03.5 | No domain logic triggered by external service responses | CRITICAL |
-
-### IDIM-04: Configuration Management
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-04.1 | Connection strings externalized (not hardcoded) | HIGH |
-| CHECK-04.2 | Sensitive credentials use secrets management (not plain text) | CRITICAL |
-| CHECK-04.3 | Configuration follows IOptions/IConfiguration pattern | MEDIUM |
-| CHECK-04.4 | Environment-specific overrides supported | MEDIUM |
-| CHECK-04.5 | No configuration values embedded in adapter logic | HIGH |
-
-### IDIM-05: No Domain Leakage
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-05.1 | No domain aggregate classes defined in infrastructure | CRITICAL |
-| CHECK-05.2 | No domain entity classes defined in infrastructure | CRITICAL |
-| CHECK-05.3 | No domain value object classes defined in infrastructure | CRITICAL |
-| CHECK-05.4 | No domain service classes defined in infrastructure | CRITICAL |
-| CHECK-05.5 | Persistence models (ORM entities) are separate from domain models | HIGH |
-| CHECK-05.6 | Mapping layer exists between persistence models and domain models | HIGH |
-
-### IDIM-06: Messaging Adapters
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-06.1 | Kafka producer/consumer implementations are in infrastructure only | HIGH |
-| CHECK-06.2 | Messaging adapters implement shared-layer interfaces | HIGH |
-| CHECK-06.3 | Message serialization/deserialization is adapter-scoped | HIGH |
-| CHECK-06.4 | No message transformation that alters domain semantics | CRITICAL |
-
-### IDIM-07: Caching Adapters
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-07.1 | Cache implementations are in infrastructure only | HIGH |
-| CHECK-07.2 | Cache adapters implement shared-layer interfaces | HIGH |
-| CHECK-07.3 | Cache invalidation strategy is infrastructure-scoped (not domain logic) | HIGH |
-| CHECK-07.4 | No domain state derived solely from cache (cache is optimization, not source of truth) | CRITICAL |
-
-### IDIM-08: Database Migration Management
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-08.1 | Database migrations are in infrastructure layer | HIGH |
-| CHECK-08.2 | Migrations are versioned and sequential | HIGH |
-| CHECK-08.3 | No migration contains business logic | CRITICAL |
-| CHECK-08.4 | Migration rollback strategy defined | MEDIUM |
-
-### IDIM-09: Projection Persistence Boundary
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-09.1 | Projection persistence handled via infrastructure adapters only | HIGH |
-| CHECK-09.2 | No domain logic embedded in projection storage adapters | CRITICAL |
-
-### IDIM-10: E2E Execution Integrity (Phase 1 — E2EDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-10.1 | Infrastructure adapters participate in Platform → Systems → Runtime → Engines → Domain path only as persistence/messaging endpoints | CRITICAL |
-| CHECK-10.2 | No infrastructure adapter bypasses runtime to call engines or domain directly | CRITICAL |
-| CHECK-10.3 | Infrastructure adapters are invoked only by runtime (not by systems, platform, or engines) | CRITICAL |
-| CHECK-10.4 | End-to-end execution produces persistence artifacts through infrastructure adapters | HIGH |
-| CHECK-10.5 | Infrastructure adapters support event persistence before publication | CRITICAL |
-
----
-
-## OUTPUT FORMAT
-
-```yaml
-audit: infrastructure
-status: PASS | FAIL
-score: {0-100}
-scope: "Infrastructure layer compliance"
-timestamp: {ISO-8601}
-violations:
-  - check: CHECK-XX.X
-    dimension: IDIM-XX
-    severity: CRITICAL | HIGH | MEDIUM | LOW
-    description: "{what was found}"
-    impacted_files:
-      - "{file path}"
-    remediation: "{how to fix}"
-    drift_classification: "infrastructure"
-approval: GRANTED | BLOCKED
-blocking_violations: {count of CRITICAL/HIGH}
-```
-
----
-
-## SCORING
-
-| Start Score | 100 |
-|-------------|-----|
-| CRITICAL violation | -10 per occurrence |
-| HIGH violation | -5 per occurrence |
-| MEDIUM violation | -2 per occurrence |
-| LOW violation | -1 per occurrence |
-| Floor | 0 |
-| Pass threshold | >= 80 |
-
----
-
-## NEW CHECKS INTEGRATED — 2026-04-07
-
-- **CHECK-INFRA-HEALTH-01** (S-HEALTH-01): Verify health-check placement per STR-HEALTH-01.
-- **CHECK-INFRA-OBS-01** (S-OBSERVABILITY-01): Verify observability middleware placement per STR-OBS-01.
-- **CHECK-INFRA-CLOCK-01** (S-CLOCK-01): Verify IClock present in shared kernel and consumed by all timestamp generators outside domain aggregates.
-- **CHECK-INFRA-TOPICS-01**: Bootstrap MUST apply event-store + outbox + chain migrations to event store DB (not just event-store migrations). Missing migration sets in initdb.d / bootstrap = S2.
-- **CHECK-INFRA-PLACEHOLDER-01**: Every in-memory repository in production composition is marked as placeholder AND has corresponding scripts/migrations/*.sql ready.
-
-## NEW CHECKS INTEGRATED — 2026-04-08 (Phase 1 gate blockers)
-
-- **CHECK-INFRA-HSID-INITDB-01** (S3): Assert the compose postgres `initdb.d` mount covers the HSID
-  migration at `infrastructure/data/postgres/hsid/migrations/001_hsid_sequences.sql`, either by
-  folding it into the event-store migrations directory or adding a second mount. Host crashing with
-  `HSID FATAL` on first run = FAIL. DRIFT-8.
-- **CHECK-DOCS-STARTUP-SAFETY-01** (S3): `docs/start-up.md` must not contain destructive global
-  docker commands (e.g. `docker rm -f $(docker ps -aq)`). Startup cleanup MUST be scoped via
-  `docker compose -f infrastructure/deployment/docker-compose.yml down`. DRIFT-7.
-- Source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blockers.md`.
-
-## NEW CHECKS INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
-
-- **CHECK-INFRA-BOOTSTRAP-MIGRATIONS-01** (S2): `bootstrap.sh` MUST apply, in order, against `whyce_eventstore`: (1) `infrastructure/data/postgres/event-store/migrations/*.sql`, (2) `hsid/migrations/*.sql`, (3) `outbox/migrations/*.sql`, (4) `chain/migrations/*.sql`. Today only event-store migrations are applied (the docker `initdb.d` mount covers only that directory and `migrate.sh` iterates only that directory). A clean clone + `bootstrap.sh` therefore produces an event-store database missing the outbox, chain anchor, and HSID sequence tables, and the runtime crashes with `HSID FATAL` on first command. Implementation options: (A preferred) extend the `initdb.d` mount to cover all four directories via additional bind mounts or staging dir; (B) generalize `migrate.sh` to iterate `event-store, hsid, outbox, chain` in that order and have `bootstrap.sh` invoke it as a phase between `[2/5]` and `[3/5]`. Idempotency must be preserved (existing migrations use `IF NOT EXISTS` / `ON CONFLICT`). Validation queries on a clean volume: `SELECT 1 FROM whyce.events LIMIT 1`, `SELECT 1 FROM whyce.outbox LIMIT 1`, `SELECT 1 FROM whyce.chain_anchor LIMIT 1`, `SELECT nextval('whyce.hsid_root_seq')`. `scripts/infrastructure-check.sh` MUST be extended to assert presence of all four. Once implemented, delete the manual workaround block in `docs/infrastructure/bootstrap-and-operations-playbook.md` §7.1. Source: `_archives/20260408-140605-infrastructure.md`.
-- **INFRA-M1 — Host startup migration runner** (S1): Host startup MUST verify the schema version of `whyce_eventstore` against the expected migration count, or run pending migrations in-process. Manual `docker exec psql` is NOT acceptable. The migration runner MUST be documented in `docs/start-up.md`. Originating evidence: outbox table at migration 003 while code expected 005 caused a 500 with `column "event_id" of relation "outbox" does not exist` on first command. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 10.
-- **CHECK-INFRA-OBSERVABILITY-STACK-01** (S2): `scripts/infrastructure-check.sh` probes Prometheus + Grafana endpoints, but neither container is in `infrastructure/deployment/docker-compose.yml`. Reconcile within ONE of: (a) add Prometheus + Grafana to compose, (b) remove the probes from `infrastructure-check.sh`, or (c) split into `infrastructure-check-core.sh` (mandatory) and `infrastructure-check-observability.sh` (optional). Audit FAILS until reconciled. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 7.
-- **CHECK-INFRA-CHAIN-DB-LOCATION-01** (S2): The chain table physically lives in `whyce_eventstore` (port 5432), not `whycechain` (port 5433) which is empty. The migration file `infrastructure/data/postgres/chain/migrations/001_whyce_chain.sql` suggests the chain DB is the intended home, but no migration runner has applied it there. `InfrastructureComposition.cs:33` falls back from `Postgres:ChainConnectionString` to the eventstore connection string, masking the topology mismatch. Decide and document: (a) chain lives in eventstore DB → delete the chain DB and its migration file, OR (b) chain DB is canonical → migration runner MUST apply 001 there before host startup. Decision MUST be captured in `docs/infrastructure/`. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 11.
-- **CHECK-VALIDATION-STAGE0-01** (S2, validation harness): `scripts/validation/run-e2e.sh` MUST invoke all `scripts/*-check.sh` (deterministic-id, dependency, infrastructure, hsid-infra, …) as STAGE 0 and ABORT if any fails before any live attempt. These cheap, executable checks would have caught CRITICAL config-key and dependency drift before live execution time. Reflected in `runtime.guard.md §Test & E2E Validation` G-E2E-011. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 8.
+Per CLAUDE.md $12 and $1c.

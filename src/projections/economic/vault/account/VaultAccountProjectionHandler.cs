@@ -14,6 +14,7 @@ namespace Whycespace.Projections.Economic.Vault.Account;
 /// </summary>
 public sealed class VaultAccountProjectionHandler :
     IEnvelopeProjectionHandler,
+    IProjectionHandler<VaultAccountCreatedEventSchema>,
     IProjectionHandler<VaultFundedEventSchema>,
     IProjectionHandler<CapitalAllocatedToSliceEventSchema>,
     IProjectionHandler<SpvProfitReceivedEventSchema>,
@@ -30,6 +31,7 @@ public sealed class VaultAccountProjectionHandler :
     {
         return envelope.Payload switch
         {
+            VaultAccountCreatedEventSchema e => Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "VaultAccountCreatedEvent", envelope, cancellationToken),
             VaultFundedEventSchema e => Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "VaultFundedEvent", envelope, cancellationToken),
             CapitalAllocatedToSliceEventSchema e => Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "CapitalAllocatedToSliceEvent", envelope, cancellationToken),
             SpvProfitReceivedEventSchema e => Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "SpvProfitReceivedEvent", envelope, cancellationToken),
@@ -39,6 +41,9 @@ public sealed class VaultAccountProjectionHandler :
                 $"VaultAccountProjectionHandler received unmatched event: {envelope.Payload.GetType().Name}.")
         };
     }
+
+    public async Task HandleAsync(VaultAccountCreatedEventSchema e, CancellationToken ct = default)
+        => await Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "VaultAccountCreatedEvent", null, ct);
 
     public async Task HandleAsync(VaultFundedEventSchema e, CancellationToken ct = default)
         => await Project(e.AggregateId, s => VaultAccountProjectionReducer.Apply(s, e), "VaultFundedEvent", null, ct);

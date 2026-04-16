@@ -1,14 +1,31 @@
+using Whycespace.Shared.Contracts.Runtime;
+
 namespace Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
 
-public sealed record CreateKanbanCardCommand(Guid Id, Guid CardId, Guid ListId, string Title, string Description, int Position);
+public sealed record CreateKanbanCardCommand(Guid Id, Guid CardId, Guid ListId, string Title, string Description, int Position) : IHasAggregateId
+{
+    public Guid AggregateId => Id;
+}
 
-public sealed record MoveKanbanCardCommand(Guid Id, Guid CardId, Guid FromListId, Guid ToListId, int NewPosition);
+public sealed record MoveKanbanCardCommand(Guid Id, Guid CardId, Guid FromListId, Guid ToListId, int NewPosition) : IHasAggregateId
+{
+    public Guid AggregateId => Id;
+}
 
-public sealed record ReorderKanbanCardCommand(Guid Id, Guid CardId, Guid ListId, int NewPosition);
+public sealed record ReorderKanbanCardCommand(Guid Id, Guid CardId, Guid ListId, int NewPosition) : IHasAggregateId
+{
+    public Guid AggregateId => Id;
+}
 
-public sealed record CompleteKanbanCardCommand(Guid Id, Guid CardId);
+public sealed record CompleteKanbanCardCommand(Guid Id, Guid CardId) : IHasAggregateId
+{
+    public Guid AggregateId => Id;
+}
 
-public sealed record UpdateKanbanCardCommand(Guid Id, Guid CardId, string Title, string Description);
+public sealed record UpdateKanbanCardCommand(Guid Id, Guid CardId, string Title, string Description) : IHasAggregateId
+{
+    public Guid AggregateId => Id;
+}
 
 public sealed record CreateKanbanCardIntent(Guid BoardId, Guid ListId, string Title, string Description, int Position, string UserId);
 

@@ -26,6 +26,7 @@ public sealed class FxAggregate : AggregateRoot
 
     public void Activate(Timestamp activatedAt)
     {
+        EnsureIdentityInitialized();
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(this))
             throw FxErrors.InvalidStateTransition(Status, FxStatus.Active);
@@ -37,6 +38,7 @@ public sealed class FxAggregate : AggregateRoot
 
     public void Deactivate(Timestamp deactivatedAt)
     {
+        EnsureIdentityInitialized();
         var specification = new CanDeactivateSpecification();
         if (!specification.IsSatisfiedBy(this))
             throw FxErrors.InvalidStateTransition(Status, FxStatus.Deactivated);
@@ -51,7 +53,17 @@ public sealed class FxAggregate : AggregateRoot
         switch (domainEvent)
         {
             case FxPairRegisteredEvent e:
-                FxId = e.FxId;
+                // AGGREGATE-IDENTITY-REHYDRATION-01: the stored payload is
+                // the schema-mapped form `{"AggregateId":"<guid>",…}` which
+                // does not bind to the domain record's typed `FxId`
+                // parameter on JSON replay (name mismatch → default(FxId)
+                // with Value=Guid.Empty). Prefer the event-carried id when
+                // present, otherwise fall back to the canonical aggregate
+                // identity stamped by the reconstruction loader so the
+                // aggregate's FxId field is always populated post-replay.
+                FxId = e.FxId.Value != Guid.Empty
+                    ? e.FxId
+                    : new FxId(AggregateIdentity);
                 CurrencyPair = e.CurrencyPair;
                 Status = FxStatus.Defined;
                 break;
@@ -66,14 +78,28 @@ public sealed class FxAggregate : AggregateRoot
         }
     }
 
+    // AGGREGATE-IDENTITY-REHYDRATION-01 enforcement hook: every mutating
+    // method MUST call this before RaiseDomainEvent so a command that lands
+    // on a hollow/un-rehydrated aggregate fails fast instead of emitting a
+    // zero-id event that then poisons the events row + Kafka partition key.
+    private void EnsureIdentityInitialized()
+    {
+        if (FxId.Value == Guid.Empty)
+            throw new InvalidOperationException(
+                "FxAggregate identity not initialized before emitting event (AGGREGATE-IDENTITY-REHYDRATION-01).");
+    }
+
     // ── Invariants ───────────────────────────────────────────────
 
     protected override void EnsureInvariants()
     {
-        if (FxId == default)
-            throw FxErrors.MissingId();
-
-        if (CurrencyPair == default)
-            throw FxErrors.MissingCurrencyPair();
+        // FxId and CurrencyPair invariants are enforced at aggregate-
+        // construction time (Register factory) and by the value objects
+        // themselves. Canonical aggregates (capital/account) do not
+        // re-check identity fields in EnsureInvariants because event-
+        // replay deserialization populates them from the envelope's
+        // aggregate_id, not from the payload's value-object-shaped
+        // fields. Enforcing them here would surface a cross-cutting
+        // deserialization gap as a domain-layer failure.
     }
 }

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.reconciliation.discrepancy.commands",
+    "whyce.economic.reconciliation.discrepancy.events",
+    "whyce.economic.reconciliation.discrepancy.retry",
+    "whyce.economic.reconciliation.discrepancy.deadletter"
+  ]
+}

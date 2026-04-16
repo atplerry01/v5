@@ -7,68 +7,84 @@ economic-system
 revenue
 
 ## Purpose
-Executes payment of distributed revenue. A payout triggers the actual transaction that moves money from a distribution to a recipient.
+Emits the intent that a payout has been executed. Pure domain state;
+one canonical event per aggregate. No vault references, no
+cross-aggregate calls — full SPV-debit / participant-credit conservation
+is the responsibility of the Phase 2D orchestration layer.
+
+## Canonical Model (SPV-based, single-shot)
+- `ExecutePayout(payoutId, distributionId, shares)` is single-shot:
+  it emits `PayoutExecutedEvent` and sets `Status = Completed`.
+- There is **no `Pending` state**, **no `Failed` state**, and no
+  post-execute transitions (no `Complete()`, no `Fail()`) inside the
+  aggregate. Failure handling is an orchestration concern.
 
 ## Core Responsibilities
-- Initiating payouts from distribution references
-- Finalizing payments (Pending -> Completed or Failed)
-- Ensuring payout matches distribution (R3)
+- Recording the fact that a distribution's shares have been executed
+  as a payout.
+- Enforcing the invariant that a payout references a distribution and
+  carries non-empty shares with a positive total.
 
 ## Aggregate(s)
-- **PayoutAggregate**
-  - Event-sourced, sealed. Manages payout lifecycle from initiation through completion or failure
-  - Invariants: Must reference distribution (DistributionId non-empty — R3); only Pending can transition; cannot complete a failed payout; cannot fail a completed payout
+- **PayoutAggregate** — event-sourced, sealed.
+  - Factory: `ExecutePayout(payoutId, distributionId, shares)`
+  - `shares` is `IReadOnlyList<ParticipantShare>` (the distribution
+    output).
+  - Invariants: shares non-empty; sum of share amounts > 0.
 
 ## Entities
-None
+None.
 
 ## Value Objects
-- **PayoutId** — Typed Guid wrapper with From() factory for unique payout identity
-- **PayoutStatus** — Enum: Pending, Completed, Failed
+- **PayoutId** — typed Guid wrapper with `From()` factory.
+- **PayoutStatus** — post-execute status carrier (current model sets
+  `Completed`).
 
 ## Domain Events
-- **PayoutExecutedEvent** — Payout intent emitted; execution deferred to orchestration (no direct vault mutation)
-- **PayoutFailedEvent** — Payout failed with reason
+- **PayoutExecutedEvent** — captures `PayoutId` and `DistributionId`.
+  Intent only — execution is deferred to orchestration.
 
 ```text
-ECONOMIC FLOW
+ECONOMIC FLOW (SPV-based single-shot)
 
 1. RevenueAggregate → RevenueRecordedEvent
-2. DistributionAggregate → DistributionCreatedEvent
-3. PayoutAggregate → PayoutExecutedEvent
+2. DistributionAggregate → DistributionCreatedEvent (produces shares)
+3. PayoutAggregate.ExecutePayout(payoutId, distributionId, shares)
+     → PayoutExecutedEvent → Status = Completed
 
-Execution of vault mutation is handled outside the domain.
+Actual money movement runs through the transaction context (R5) and
+the vault, orchestrated outside the domain.
 ```
 
 ## Specifications
-- **CanCompleteSpecification** — Status == Pending
+None at E1. (Pre-SPV `CanCompleteSpecification` has been removed —
+no `Pending` state exists in the current model, so the predicate was
+unreachable.)
 
 ## Domain Services
-- **PayoutMatchingService** — Validates payout references distribution (DistributionId non-empty); enforces R3
+- **PayoutMatchingService** — validates payout references distribution
+  (enforces R3).
 
 ## Invariants (CRITICAL)
-- Must reference a distribution (DistributionId non-empty — R3)
-- Only Pending payouts can be completed or failed
-- Cannot complete a failed payout
-- Cannot fail a completed payout
-
-## Policy Dependencies
-- R3: Payout must match distribution exactly
-- R5: Payout must go through transaction (architectural constraint)
+- Shares must be non-empty.
+- Sum of share amounts must be > 0.
+- DistributionId must be present (encoded in the factory signature —
+  required parameter).
 
 ## Integration Points
-- **distribution** — Payout references distribution via DistributionId
-- **transaction** (transaction context) — Payout triggers actual money movement (R5)
-
-## Lifecycle
-```
-Initiate() -> Pending (requires DistributionId)
-  Complete() -> Completed (terminal)
-  OR
-  Fail() -> Failed (terminal, with reason)
-```
+- **distribution** — payout consumes the `shares` produced by
+  `DistributionAggregate.CreateDistribution`.
+- **transaction** — actual money movement flows through the transaction
+  context (R5), orchestrated outside this domain.
 
 ## Notes
-- Payout never writes to ledger directly (R4/R5) — it flows through transaction context
-- Cross-domain references (DistributionId) use raw Guid to avoid coupling
-- All error methods are strongly typed via static PayoutErrors class
+- Pure domain — no runtime, infrastructure, or engine dependencies.
+- Cross-domain references (DistributionId, PayoutId) use typed id
+  value records.
+- Errors are raised via shared-kernel `ArgumentException` /
+  `InvalidOperationException` directly; the pre-SPV `PayoutErrors`
+  class has been removed as all its methods were unreachable.
+- `PayoutFailedEvent` was previously documented but was never
+  implemented; per Option A (SPV single-shot), failure is an
+  orchestration concern and no such event is produced by this
+  aggregate.

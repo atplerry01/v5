@@ -14,6 +14,7 @@ public static class RevenueProcessingWorkflowModule
     public static IServiceCollection AddRevenueProcessingWorkflow(this IServiceCollection services)
     {
         services.AddTransient<ValidateRevenueStep>();
+        services.AddTransient<RecordRevenueStep>();
         services.AddTransient<ApplyRevenueStep>();
         return services;
     }
@@ -23,6 +24,7 @@ public static class RevenueProcessingWorkflowModule
         workflow.Register(RevenueProcessingWorkflowNames.Process, new[]
         {
             typeof(ValidateRevenueStep),
+            typeof(RecordRevenueStep),
             typeof(ApplyRevenueStep)
         });
     }

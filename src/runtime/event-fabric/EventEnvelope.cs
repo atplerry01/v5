@@ -22,8 +22,26 @@ namespace Whycespace.Runtime.EventFabric;
 /// </summary>
 public sealed record EventEnvelope : IEventEnvelope
 {
+    private readonly Guid _aggregateId;
+
     public required Guid EventId { get; init; }
-    public required Guid AggregateId { get; init; }
+
+    // K-AGGREGATE-ID-HEADER-01 (regression fence). AggregateId flows into the
+    // Kafka message key and the `aggregate-id` header downstream; a zero GUID
+    // silently breaks R-K-11 / R-K-15 partition-order guarantees. Reject at
+    // envelope construction so the breach cannot propagate through the fabric.
+    public required Guid AggregateId
+    {
+        get => _aggregateId;
+        init
+        {
+            if (value == Guid.Empty)
+                throw new InvalidOperationException(
+                    "EventEnvelope requires non-empty AggregateId (K-AGGREGATE-ID-HEADER-01).");
+            _aggregateId = value;
+        }
+    }
+
     public required Guid CorrelationId { get; init; }
     public required Guid CausationId { get; init; }
     public required string EventType { get; init; }
@@ -33,6 +51,7 @@ public sealed record EventEnvelope : IEventEnvelope
     public required object Payload { get; init; }
     public required string ExecutionHash { get; init; }
     public required string PolicyHash { get; init; }
+    public string? PolicyVersion { get; init; }
     public required DateTimeOffset Timestamp { get; init; }
     public int SequenceNumber { get; init; }
 

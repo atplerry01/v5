@@ -53,6 +53,9 @@ builder.Services.LoadModules(builder.Configuration);
 // ConcurrencyConflictException -> HTTP 409 + RFC 7807 ProblemDetails.
 // This is the only seam where the H8b exception crosses the HTTP boundary.
 builder.Services.AddExceptionHandler<ConcurrencyConflictExceptionHandler>();
+// Maps DomainException -> HTTP 400 + RFC 7807. Domain invariant
+// violations are a caller-correctable condition, not a server fault.
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 // phase1.5-S5.2.1 / PC-2 (OPA-CONFIG-01): map transient OPA failures
 // (timeout, transport, non-2xx, breaker-open) to 503 + Retry-After.
 // Mirrors the ConcurrencyConflictExceptionHandler precedent — single
@@ -181,6 +184,10 @@ using (var scope = app.Services.CreateScope())
 
 // HTTP observability middleware (Prometheus) — before routing
 app.UseMiddleware<Whycespace.Runtime.Observability.HttpMetricsMiddleware>();
+// Closed-loop correlation: stamp X-Correlation-Id on every request +
+// echo on every response. Must run before MapControllers so the value is
+// available to ControllerBase.RequestCorrelationId().
+app.UseMiddleware<Whycespace.Platform.Api.Middleware.CorrelationIdMiddleware>();
 app.UseRouting();
 
 // phase1.5-S5.2.1 / PC-1 (INTAKE-CONFIG-01): runtime intake admission

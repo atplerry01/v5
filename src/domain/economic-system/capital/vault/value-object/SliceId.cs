@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Capital.Vault;
 
 public readonly record struct SliceId
@@ -6,9 +8,7 @@ public readonly record struct SliceId
 
     public SliceId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("SliceId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "SliceId cannot be empty.");
         Value = value;
     }
 

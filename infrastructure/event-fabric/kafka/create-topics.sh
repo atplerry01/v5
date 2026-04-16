@@ -66,6 +66,18 @@ TOPICS=(
   "whyce.economic.revenue.payout.retry"
   "whyce.economic.revenue.payout.deadletter"
 
+  # economic > revenue > contract (Phase 2E — Option 3 reconciliation)
+  "whyce.economic.revenue.contract.commands"
+  "whyce.economic.revenue.contract.events"
+  "whyce.economic.revenue.contract.retry"
+  "whyce.economic.revenue.contract.deadletter"
+
+  # economic > revenue > pricing (Phase 2E — Option 3 reconciliation)
+  "whyce.economic.revenue.pricing.commands"
+  "whyce.economic.revenue.pricing.events"
+  "whyce.economic.revenue.pricing.retry"
+  "whyce.economic.revenue.pricing.deadletter"
+
   # economic > vault > account (Phase 2E — ApplyRevenue, DebitSlice, CreditSlice)
   "whyce.economic.vault.account.commands"
   "whyce.economic.vault.account.events"
@@ -96,6 +108,18 @@ TOPICS=(
   "whyce.economic.ledger.entry.retry"
   "whyce.economic.ledger.entry.deadletter"
 
+  # economic > ledger > obligation (Phase 2 — Create / Fulfil / Cancel)
+  "whyce.economic.ledger.obligation.commands"
+  "whyce.economic.ledger.obligation.events"
+  "whyce.economic.ledger.obligation.retry"
+  "whyce.economic.ledger.obligation.deadletter"
+
+  # economic > ledger > treasury (Phase 2 — Create / AllocateFunds / ReleaseFunds)
+  "whyce.economic.ledger.treasury.commands"
+  "whyce.economic.ledger.treasury.events"
+  "whyce.economic.ledger.treasury.retry"
+  "whyce.economic.ledger.treasury.deadletter"
+
   # economic > transaction > settlement (Phase 2 — InitiateSettlement / CompleteSettlement / FailSettlement)
   "whyce.economic.transaction.settlement.commands"
   "whyce.economic.transaction.settlement.events"
@@ -107,6 +131,30 @@ TOPICS=(
   "whyce.economic.transaction.transaction.events"
   "whyce.economic.transaction.transaction.retry"
   "whyce.economic.transaction.transaction.deadletter"
+
+  # economic > transaction > charge (Phase 2 — Calculate / Apply)
+  "whyce.economic.transaction.charge.commands"
+  "whyce.economic.transaction.charge.events"
+  "whyce.economic.transaction.charge.retry"
+  "whyce.economic.transaction.charge.deadletter"
+
+  # economic > transaction > instruction (Phase 2 — Create / Execute / Cancel)
+  "whyce.economic.transaction.instruction.commands"
+  "whyce.economic.transaction.instruction.events"
+  "whyce.economic.transaction.instruction.retry"
+  "whyce.economic.transaction.instruction.deadletter"
+
+  # economic > transaction > limit (Phase 2 — Define / Check)
+  "whyce.economic.transaction.limit.commands"
+  "whyce.economic.transaction.limit.events"
+  "whyce.economic.transaction.limit.retry"
+  "whyce.economic.transaction.limit.deadletter"
+
+  # economic > transaction > wallet (Phase 2 — Create / RequestTransaction)
+  "whyce.economic.transaction.wallet.commands"
+  "whyce.economic.transaction.wallet.events"
+  "whyce.economic.transaction.wallet.retry"
+  "whyce.economic.transaction.wallet.deadletter"
 
   # economic > capital > account (Phase 2 capital wiring — Option C)
   "whyce.economic.capital.account.commands"
@@ -149,6 +197,94 @@ TOPICS=(
   "whyce.economic.capital.vault.events"
   "whyce.economic.capital.vault.retry"
   "whyce.economic.capital.vault.deadletter"
+
+  # economic > enforcement > rule
+  "whyce.economic.enforcement.rule.commands"
+  "whyce.economic.enforcement.rule.events"
+  "whyce.economic.enforcement.rule.retry"
+  "whyce.economic.enforcement.rule.deadletter"
+
+  # economic > enforcement > violation
+  "whyce.economic.enforcement.violation.commands"
+  "whyce.economic.enforcement.violation.events"
+  "whyce.economic.enforcement.violation.retry"
+  "whyce.economic.enforcement.violation.deadletter"
+
+  # economic > enforcement > escalation
+  "whyce.economic.enforcement.escalation.commands"
+  "whyce.economic.enforcement.escalation.events"
+  "whyce.economic.enforcement.escalation.retry"
+  "whyce.economic.enforcement.escalation.deadletter"
+
+  # economic > enforcement > lock
+  "whyce.economic.enforcement.lock.commands"
+  "whyce.economic.enforcement.lock.events"
+  "whyce.economic.enforcement.lock.retry"
+  "whyce.economic.enforcement.lock.deadletter"
+
+  # economic > enforcement > restriction
+  "whyce.economic.enforcement.restriction.commands"
+  "whyce.economic.enforcement.restriction.events"
+  "whyce.economic.enforcement.restriction.retry"
+  "whyce.economic.enforcement.restriction.deadletter"
+
+  # economic > enforcement > sanction
+  "whyce.economic.enforcement.sanction.commands"
+  "whyce.economic.enforcement.sanction.events"
+  "whyce.economic.enforcement.sanction.retry"
+  "whyce.economic.enforcement.sanction.deadletter"
+
+  # constitutional > policy > feedback (enforcement → policy bridge)
+  "whyce.constitutional.policy.feedback.events"
+  "whyce.constitutional.policy.feedback.deadletter"
+
+  # economic > exchange > fx
+  "whyce.economic.exchange.fx.commands"
+  "whyce.economic.exchange.fx.events"
+  "whyce.economic.exchange.fx.retry"
+  "whyce.economic.exchange.fx.deadletter"
+
+  # economic > exchange > rate
+  "whyce.economic.exchange.rate.commands"
+  "whyce.economic.exchange.rate.events"
+  "whyce.economic.exchange.rate.retry"
+  "whyce.economic.exchange.rate.deadletter"
+
+  # economic > reconciliation > process (Phase 2 reconciliation batch)
+  "whyce.economic.reconciliation.process.commands"
+  "whyce.economic.reconciliation.process.events"
+  "whyce.economic.reconciliation.process.retry"
+  "whyce.economic.reconciliation.process.deadletter"
+
+  # economic > reconciliation > discrepancy (Phase 2 reconciliation batch)
+  "whyce.economic.reconciliation.discrepancy.commands"
+  "whyce.economic.reconciliation.discrepancy.events"
+  "whyce.economic.reconciliation.discrepancy.retry"
+  "whyce.economic.reconciliation.discrepancy.deadletter"
+
+  # economic > routing > path (Phase 2 routing batch)
+  "whyce.economic.routing.path.commands"
+  "whyce.economic.routing.path.events"
+  "whyce.economic.routing.path.retry"
+  "whyce.economic.routing.path.deadletter"
+
+  # economic > routing > execution (Phase 2 routing batch)
+  "whyce.economic.routing.execution.commands"
+  "whyce.economic.routing.execution.events"
+  "whyce.economic.routing.execution.retry"
+  "whyce.economic.routing.execution.deadletter"
+
+  # economic > subject > subject (economic subject bridge)
+  "whyce.economic.subject.subject.commands"
+  "whyce.economic.subject.subject.events"
+  "whyce.economic.subject.subject.retry"
+  "whyce.economic.subject.subject.deadletter"
+
+  # economic > compliance > audit (S0 recovery — certification batch 2026-04-16)
+  "whyce.economic.compliance.audit.commands"
+  "whyce.economic.compliance.audit.events"
+  "whyce.economic.compliance.audit.retry"
+  "whyce.economic.compliance.audit.deadletter"
 )
 
 for TOPIC in "${TOPICS[@]}"; do

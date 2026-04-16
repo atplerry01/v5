@@ -1,11 +1,11 @@
 using Confluent.Kafka;
 using Npgsql;
 using NSubstitute;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Kernel.Domain;
 using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Integration.FailureRecovery;

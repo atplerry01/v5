@@ -102,13 +102,77 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         }
 
         var action = MapCommandTypeToAction(policyContext.CommandType, policyContext.Domain);
+        var policyPath = BuildOpaPackagePath(policyId);
+        var url = string.IsNullOrEmpty(policyPath)
+            ? $"{_opaEndpoint}/v1/data/whyce/policy"
+            : $"{_opaEndpoint}/v1/data/whyce/policy/{policyPath}";
+
+        // Per-role iteration. The rego policies gate on
+        // `input.subject.role == "<singular>"`, so a caller carrying multiple
+        // roles (`["admin","operator"]`) is evaluated once per role. The
+        // decision is ALLOW if ANY role satisfies the policy; otherwise the
+        // last denial is returned so the denial reason remains attributable.
+        //
+        // Order independence: the iteration order over the Roles array is
+        // deterministic and the short-circuit is ALLOW-on-first-match, so the
+        // final outcome is invariant under input ordering — any permutation
+        // of the same role set produces the same allow/deny decision.
+        var roles = policyContext.Roles is { Length: > 0 }
+            ? policyContext.Roles
+            : new[] { "anonymous" };
+
+        PolicyDecision? lastDenial = null;
+        foreach (var role in roles)
+        {
+            var decision = await EvaluateSingleAsync(
+                policyId, policyPath, url, action, role, policyContext);
+
+            if (decision.IsAllowed)
+                return decision;
+
+            lastDenial = decision;
+        }
+
+        return lastDenial!;
+    }
+
+    private async Task<PolicyDecision> EvaluateSingleAsync(
+        string policyId,
+        string policyPath,
+        string url,
+        string action,
+        string role,
+        PolicyContext policyContext)
+    {
+        // Build the `input.subject` object: the rego-expected singular `role`
+        // plus any typed attribute claims forwarded by
+        // ICallerIdentityAccessor (kyc_attestation_present, trust_score, …).
+        // Absent attributes are OMITTED rather than defaulted, so a missing
+        // claim cannot satisfy a rego `== true` / `>= floor` check — this
+        // preserves the deny-by-default contract.
+        var subject = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["role"] = role,
+        };
+        if (policyContext.SubjectAttributes is { Count: > 0 } attrs)
+        {
+            foreach (var kv in attrs)
+            {
+                // Never allow an attribute to overwrite the canonical `role`
+                // key; caller-supplied `role` in the attribute dictionary is
+                // silently ignored.
+                if (kv.Key == "role") continue;
+                subject[kv.Key] = kv.Value;
+            }
+        }
+
         var requestBody = new
         {
             input = new
             {
                 policy_id = policyId,
                 action,
-                subject = new { role = policyContext.Roles.FirstOrDefault() ?? "anonymous" },
+                subject,
                 resource = new
                 {
                     classification = policyContext.Classification,
@@ -122,14 +186,7 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         };
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-        var policyPath = policyId.Replace('.', '/');
-        var url = $"{_opaEndpoint}/v1/data/whyce/policy/{policyPath}";
 
-        // --- Timed call ---
-        // Per-call CTS strictly bounds the OPA round-trip. Stopwatch
-        // measures the actual wall duration; the histogram is recorded in
-        // every branch (success, failure, timeout) so saturation is
-        // observable end-to-end.
         var stopwatch = Stopwatch.StartNew();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_options.RequestTimeoutMs));
         try
@@ -269,6 +326,52 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         var seed = $"{policyId}:{context.CorrelationId}:{context.CommandType}:{allowed}";
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed));
         return Convert.ToHexStringLower(hash);
+    }
+
+    /// <summary>
+    /// Translates a canonical policy id (e.g. <c>whyce.economic.capital.account.open</c>)
+    /// into the OPA data-path segment that resolves to the matching rego
+    /// package — for the example above, <c>economic/capital/account</c>, which
+    /// the caller appends to <c>/v1/data/whyce/policy/</c> so OPA evaluates
+    /// <c>data.whyce.policy.economic.capital.account</c> (the package
+    /// containing <c>allow</c> rules keyed on <c>input.policy_id</c>).
+    ///
+    /// Logic:
+    ///   1. Strip the leading <c>whyce.</c> prefix once (and only the literal
+    ///      dotted prefix — the legacy fallback id <c>whyce-policy-default</c>
+    ///      keeps its hyphen and is preserved verbatim for backward compat).
+    ///   2. Drop the trailing action segment — the action remains available to
+    ///      rego via <c>input.policy_id</c>, not via the URL suffix.
+    ///   3. Replace remaining dots with slashes.
+    ///   4. Returns an empty string for ids that have no dotted structure
+    ///      after step 1; the caller treats empty as "query the base
+    ///      <c>whyce.policy</c> package".
+    /// </summary>
+    internal static string BuildOpaPackagePath(string policyId)
+    {
+        if (string.IsNullOrEmpty(policyId)) return string.Empty;
+
+        // Backward-compat: the legacy default sentinel is not a dotted policy
+        // id and must not be reshaped — preserve historical behaviour for any
+        // command that hasn't yet been bound via ICommandPolicyIdRegistry.
+        const string LegacyDefault = "whyce-policy-default";
+        if (policyId == LegacyDefault) return policyId;
+
+        // Only the canonical "whyce.<class>.<ctx>.<domain>.<action>" shape is
+        // reshaped. Any other dotted id is treated as opaque and passed through
+        // with the historical 1:1 dot-to-slash behaviour so this fix does not
+        // surprise any existing non-canonical wiring.
+        const string Prefix = "whyce.";
+        if (!policyId.StartsWith(Prefix, StringComparison.Ordinal))
+            return policyId.Replace('.', '/');
+
+        var trimmed = policyId[Prefix.Length..];
+
+        // Drop the trailing action token (everything after the last dot).
+        var lastDot = trimmed.LastIndexOf('.');
+        var packagePart = lastDot > 0 ? trimmed[..lastDot] : trimmed;
+
+        return packagePart.Replace('.', '/');
     }
 
     private static string MapCommandTypeToAction(string commandType, string domain)

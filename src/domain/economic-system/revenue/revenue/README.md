@@ -7,63 +7,78 @@ economic-system
 revenue
 
 ## Purpose
-Recognizes earned revenue based on contract and pricing. A revenue record represents the system acknowledgment that value has been earned per contract terms.
+Records the fact that an SPV has earned income. A revenue record is the
+system acknowledgement of an SPV-sourced cash event; normalization into
+the SPV's vault slice is handled by the orchestration layer, not here.
+
+## Canonical Model (SPV-based, single-shot)
+- Revenue originates from an SPV (`SpvId`), never from a contract.
+- `RecordRevenue(...)` is single-shot: it emits `RevenueRecordedEvent`
+  and sets `Status = Recorded`. The aggregate has **no post-record
+  lifecycle transitions** (no `MarkDistributed`, no `Recognize →
+  Distributed`).
 
 ## Core Responsibilities
-- Recognizing revenue from contracts
-- Tracking revenue lifecycle (Recognized -> Distributed)
-- Enforcing contract reference requirement (R1)
+- Recording SPV revenue facts immutably.
+- Carrying the canonical `SpvId`, amount, currency, and external
+  source reference (`SourceRef`) for downstream orchestration.
 
 ## Aggregate(s)
-- **RevenueAggregate**
-  - Event-sourced, sealed. Manages revenue recognition and distribution marking
-  - Invariants: Amount must be >= 0; must reference a contract (ContractId non-empty — R1); only Recognized revenue can be distributed; cannot distribute twice
+- **RevenueAggregate** — event-sourced, sealed.
+  - Factory: `RecordRevenue(revenueId, spvId, amount, currency, sourceRef)`
+  - Invariants: amount > 0 at recognition; invariant holds that a
+    `Recorded` aggregate cannot carry amount ≤ 0.
 
 ## Entities
-None
+None.
 
 ## Value Objects
-- **RevenueId** — Typed Guid wrapper with From() factory for unique revenue identity
-- **RevenueStatus** — Enum: Recognized, Distributed
+- **RevenueId** — typed Guid wrapper with `From()` factory.
+- **RevenueStatus** — post-record status carrier (current model sets
+  `Recorded`).
 
 ## Domain Events
-- **RevenueRecordedEvent** — SPV revenue recorded from external income (captures RevenueId, ContractId, Amount, Currency)
+- **RevenueRecordedEvent** — captures `RevenueId`, `SpvId`, `Amount`,
+  `Currency`, `SourceRef`.
 
 ```text
-ECONOMIC FLOW
+ECONOMIC FLOW (SPV-based single-shot)
 
-1. RevenueAggregate → RevenueRecordedEvent
+1. RevenueAggregate.RecordRevenue(spvId, amount, currency, sourceRef)
+     → RevenueRecordedEvent → Status = Recorded
 2. DistributionAggregate → DistributionCreatedEvent
 3. PayoutAggregate → PayoutExecutedEvent
 
-Execution of vault mutation is handled outside the domain.
+Vault mutation and cross-aggregate conservation are handled by the
+Phase 2D orchestration layer outside the domain.
 ```
 
 ## Specifications
-- **CanDistributeSpecification** — Status == Recognized
+None at E1. (Pre-SPV `CanDistributeSpecification` has been removed —
+no `Recognized` state exists in the current model, so the predicate
+was unreachable.)
 
 ## Domain Services
-- **RevenueTraceService** — Validates contract reference is non-empty; enforces R1 (revenue cannot exist without contract)
+- **RevenueTraceService** — revenue trace helper (no cross-aggregate
+  calls).
 
 ## Invariants (CRITICAL)
-- Must reference a contract (non-empty ContractId) — R1
-- Amount must be positive at recognition
-- Amount must be non-negative (invariant)
-- Only Recognized revenue can be distributed
-- Cannot distribute twice
-
-## Policy Dependencies
-- R1: Revenue cannot exist without a contract
+- SpvId must be non-empty (R1 — SPV origin).
+- Amount must be > 0 at recognition.
+- Amount must be > 0 as an invariant for `Recorded` aggregates.
 
 ## Integration Points
-- **contract** — Revenue recognition requires contract reference (R1)
-- **distribution** — Revenue marked as distributed triggers distribution domain
-
-## Lifecycle
-```
-Recognize() -> Recognized (requires ContractId)
-  MarkDistributed() -> Distributed (terminal)
-```
+- **SPV / vault** (orchestration layer) — the Phase 2D orchestrator
+  reads `RevenueRecordedEvent` and funds the SPV's Slice1 via
+  `VaultAccountAggregate.ApplyRevenue`. No direct call from this
+  aggregate.
+- **distribution** — the orchestration layer supplies the participant
+  allocations to `DistributionAggregate.CreateDistribution` using
+  ownership percentages from `CapitalAllocationAggregate`.
 
 ## Notes
-- All error methods are strongly typed via static RevenueErrors class
+- Pure domain — no runtime, infrastructure, or engine dependencies.
+- Errors are raised via shared-kernel `DomainException` /
+  `DomainInvariantViolationException` directly; the pre-SPV
+  `RevenueErrors` class has been removed as all its methods were
+  unreachable.

@@ -19,4 +19,5 @@ public sealed record PolicyContext(
     string[] Roles,
     string Classification,
     string Context,
-    string Domain);
+    string Domain,
+    IReadOnlyDictionary<string, object>? SubjectAttributes = null);

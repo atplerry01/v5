@@ -238,7 +238,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
                 cmd.Parameters.AddWithValue($"corrId{i}", envelope.CorrelationId);
                 cmd.Parameters.AddWithValue($"causeId{i}", envelope.CausationId);
                 cmd.Parameters.AddWithValue($"policyHash{i}", (object?)envelope.PolicyHash ?? DBNull.Value);
-                cmd.Parameters.AddWithValue($"policyVer{i}", DBNull.Value);
+                cmd.Parameters.AddWithValue($"policyVer{i}", (object?)envelope.PolicyVersion ?? DBNull.Value);
             }
 
             cmd.CommandText = sql.ToString();

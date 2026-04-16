@@ -488,6 +488,36 @@ Phase 1 gate source: `claude/new-rules/_archives/20260408-000000-phase1-gate-blo
 
 On the consumer failure path, a poisoned message MUST be successfully produced to its DLQ topic (and its DLQ produce acknowledged) BEFORE the source partition offset is committed. Committing the source offset prior to a confirmed DLQ write is a guard violation: a process death between the two acts permanently loses the message. The consumer wrapper MUST express this as: `await ProduceToDlqAsync(msg); await CommitSourceOffsetAsync(msg);` — never the reverse, never in parallel without an awaited DLQ ack. Static check: grep consumer wrappers for `Commit*` calls and assert each is dominated by an awaited DLQ produce on the failure branch. Source: `_archives/20260408-142631-validation.md` Finding 2.
 
+#### R-K-26 — K-AGGREGATE-ID-HEADER-01 (S1): Aggregate-id header and key MUST be non-empty
+**Source:** new-rules 2026-04-16 (exchange-context infra validation Finding 1)
+**Severity:** S1
+
+Sub-clause of R-K-11 (Partition Key Alignment), R-K-15 (Order Guarantee by Aggregate Id), R-K-19 (K-DETERMINISTIC-01), and R-K-24 (K-HEADER-CONTRACT-01). The outbox → Kafka publisher MUST copy `EventEnvelope.AggregateId` into BOTH (a) the `aggregate-id` Kafka header and (b) the Kafka message key. A zero GUID (`00000000-0000-0000-0000-000000000000`) in either field while the payload/event-store row carries a real aggregate id is a contract violation: the partition key collapses all traffic onto the all-zeros partition, silently breaking order-by-aggregate guarantees under load.
+
+Static + runtime check: (1) a startup / audit probe MUST consume at least one message per active topic and reject any with `aggregate-id` header or key equal to `Guid.Empty` while the payload `AggregateId` is non-empty; (2) pairs with runtime rule `RT-OUTBOX-AGGID-FROM-ENVELOPE-01` (producer-side enforcement inside `PostgresOutboxAdapter`).
+
+#### R-K-27 — INFRA-KAFKA-LISTENER-SYMMETRY-01 (S2): Listener alignment between compose + appsettings
+**Source:** new-rules 2026-04-16 (capital infra-validation Phase 5)
+**Severity:** S2
+
+When a docker-compose Kafka broker advertises distinct INTERNAL and EXTERNAL listeners (e.g. `INTERNAL://kafka:9092` for in-network clients, `EXTERNAL://localhost:29092` for host-machine clients), every committed configuration that hosts the .NET client OUTSIDE the docker network MUST point to the EXTERNAL listener — the one whose advertised hostname is resolvable from the host.
+
+After bootstrap connect, the broker returns metadata advertising the listener matching the bootstrap entry. A host-machine client that bootstraps via `localhost:9092` is told the broker is `kafka:9092` and immediately tries to re-resolve that hostname for partition leaders / GroupCoordinator — unresolvable from the host network. Symptom: producer/consumer paths silently break; outbox rows accumulate as `pending`; projection consumer logs `Failed to resolve 'kafka:9092'` repeatedly.
+
+Static check: parse every `appsettings*.json` under `src/platform/host/` for `Kafka:BootstrapServers` and confirm the `host:port` matches an EXTERNAL listener address declared in `infrastructure/deployment/docker-compose.yml`. Mismatch = S2 fail. Sub-clause of R-K-10 (no Kafka configuration in domain or engines); complements R-CFG-R2 (no hardcoded production endpoint defaults). Production environments typically wire `Kafka__BootstrapServers` from env vars and are unaffected; development/test configs that ship a literal bootstrap string are the primary scope.
+
+#### R-K-28 — INTEGRATION-BRIDGE-OUTBOX-01 (S2): Cross-topic bridges MUST route through an aggregate outbox OR be registered
+**Source:** new-rules 2026-04-15 (PolicyFeedbackEvent bridge drift)
+**Severity:** S2
+
+Cross-topic bridges that emit NEW event types (not command dispatches) MUST either:
+- (a) Route the emission through an owning aggregate whose events flow through the outbox (preferred — every Kafka write originates from an aggregate commit and inherits the canonical persist → anchor → outbox path), OR
+- (b) Be explicitly declared in an integration-bridge registry with a written rationale and an opt-out marker acknowledging reduced delivery guarantees compared to aggregate-sourced emissions.
+
+Direct `IProducer<string,string>` writes from `src/platform/host/adapters/**` that are NOT `KafkaOutboxPublisher` are a structural drift signal and MUST be surfaced by the infrastructure audit unless registered. The equivalent pattern used by `LedgerToCapitalIntegrationHandler` (dispatch domain commands via `ISystemIntentDispatcher`, which flow through the canonical persist → anchor → outbox path) is the reference implementation. Weakens R-K-06 (Outbox Pattern Mandatory), R-K-13 (Runtime Outbox Only), and R7 (Runtime Is Sole Publish Authority) when a bridge routes around the aggregate.
+
+Static check: grep `src/platform/host/adapters/**` for `IProducer<` injections and confirm every usage is either `KafkaOutboxPublisher` or listed in the integration-bridge registry. Unregistered direct producer usage = S2 fail.
+
 #### Kafka — Check Procedure
 **Source:** kafka.guard.md
 

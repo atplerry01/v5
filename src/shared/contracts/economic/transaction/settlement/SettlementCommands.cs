@@ -1,3 +1,5 @@
+using Whycespace.Shared.Contracts.Runtime;
+
 namespace Whycespace.Shared.Contracts.Economic.Transaction.Settlement;
 
 public sealed record InitiateSettlementCommand(
@@ -5,12 +7,21 @@ public sealed record InitiateSettlementCommand(
     decimal Amount,
     string Currency,
     string SourceReference,
-    string Provider);
+    string Provider) : IHasAggregateId
+{
+    public Guid AggregateId => SettlementId;
+}
 
 public sealed record CompleteSettlementCommand(
     Guid SettlementId,
-    string ExternalReferenceId);
+    string ExternalReferenceId) : IHasAggregateId
+{
+    public Guid AggregateId => SettlementId;
+}
 
 public sealed record FailSettlementCommand(
     Guid SettlementId,
-    string Reason);
+    string Reason) : IHasAggregateId
+{
+    public Guid AggregateId => SettlementId;
+}

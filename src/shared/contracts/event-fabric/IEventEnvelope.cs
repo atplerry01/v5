@@ -24,6 +24,7 @@ public interface IEventEnvelope
     object Payload { get; }
     string ExecutionHash { get; }
     string PolicyHash { get; }
+    string? PolicyVersion { get; }
     DateTimeOffset Timestamp { get; }
     int SequenceNumber { get; }
     string Classification { get; }

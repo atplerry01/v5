@@ -31,8 +31,10 @@ public sealed class WorkflowDispatcher : IWorkflowDispatcher
         var command = new WorkflowStartCommand(workflowId, workflowName, payload);
         var result = await _dispatcher.DispatchAsync(command, route);
 
-        return result.IsSuccess
+        return (result.IsSuccess
             ? WorkflowResult.Success(result.EmittedEvents, result.Output)
-            : WorkflowResult.Failure(result.Error ?? "Workflow execution failed.");
+            : WorkflowResult.Failure(result.Error ?? "Workflow execution failed."))
+            with
+            { CorrelationId = result.CorrelationId };
     }
 }

@@ -4,6 +4,14 @@ using Npgsql;
 
 namespace Whycespace.Projections.Shared;
 
+// P-JSONB-KEY-CASE-01 remediation: the projection JSONB state MUST be stored
+// with camelCase keys so the columns indexed via `state->>'baseCurrency'`
+// (and the controller's LoadReadModelsByPair query) actually match the
+// serialized keys. Source read-model records remain PascalCase in C#; the
+// naming policy performs the translation at serialize / deserialize time.
+// This is the SINGLE source of truth — every projection handler uses this
+// store, so keys are consistent across the read model surface.
+
 /// <summary>
 /// Generic Postgres projection store. Provides instrumented connection acquisition,
 /// JSONB state Load, and idempotent Upsert for any read-model type.
@@ -23,6 +31,15 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         PoolMeter.CreateCounter<long>("postgres.pool.acquisitions");
     private static readonly Counter<long> PoolAcquisitionFailures =
         PoolMeter.CreateCounter<long>("postgres.pool.acquisition_failures");
+
+    // P-JSONB-KEY-CASE-01: canonical camelCase serializer for the state column.
+    // Used for BOTH serialize (Upsert) and deserialize (Load) so round-trip is
+    // stable. LoadReadModelsByPair / JSONB indexes expect `state->>'baseCurrency'`.
+    private static readonly JsonSerializerOptions StateJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
 
     private readonly NpgsqlDataSource _dataSource;
     private readonly string _aggregateType;
@@ -52,9 +69,16 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         if (!await reader.ReadAsync(cancellationToken)) return null;
 
         var json = reader.GetString(0);
-        return JsonSerializer.Deserialize<TState>(json);
+        return JsonSerializer.Deserialize<TState>(json, StateJsonOptions);
     }
 
+    // P-IDEMPOTENCY-KEY-NOT-NULL-01 + P-VERSION-MONOTONE-01:
+    // - idempotency_key is derived from the event envelope's EventId (unique per
+    //   event) so duplicate delivery of the same event is a no-op on both the
+    //   aggregate_id conflict path AND the idempotency_key unique constraint.
+    // - current_version is incremented by 1 on every apply (SQL-side), not
+    //   sourced from the intra-batch SequenceNumber which is always 0 for
+    //   single-event commands.
     public async Task UpsertAsync(
         Guid aggregateId,
         TState state,
@@ -64,7 +88,7 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         Guid correlationId,
         CancellationToken cancellationToken)
     {
-        var stateJson = JsonSerializer.Serialize(state);
+        var stateJson = JsonSerializer.Serialize(state, StateJsonOptions);
 
         await using var conn = await OpenInstrumentedAsync();
         await using var cmd = new NpgsqlCommand(_upsertSql, conn);
@@ -75,6 +99,7 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         cmd.Parameters.AddWithValue("lastEventId", eventId);
         cmd.Parameters.AddWithValue("eventType", lastEventType);
         cmd.Parameters.AddWithValue("corrId", correlationId);
+        cmd.Parameters.AddWithValue("idempKey", eventId.ToString());
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }

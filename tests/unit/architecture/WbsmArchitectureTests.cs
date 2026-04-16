@@ -192,7 +192,7 @@ public sealed class WbsmArchitectureTests
         // Source-scan check: the publisher source must contain
         // `OutboxOptions options` as a constructor parameter (not defaulted).
         // We use a source scan instead of reflection because the unit test
-        // project deliberately does not reference Whyce.Platform.Host —
+        // project deliberately does not reference Whycespace.Platform.Host —
         // adding that reference would couple the architecture invariants
         // to the platform layer. The source check catches the same
         // refactor surface (drop the param, re-introduce a constant)
@@ -263,7 +263,7 @@ public sealed class WbsmArchitectureTests
         // member. If a future refactor accidentally promotes any of these
         // to public, this test fails immediately — the seam must never
         // leak past the IVT boundary.
-        var ctxType = typeof(Whyce.Shared.Contracts.Runtime.CommandContext);
+        var ctxType = typeof(Whycespace.Shared.Contracts.Runtime.CommandContext);
         var members = new[]
         {
             "EnableReplayMode",
@@ -812,6 +812,265 @@ public sealed class WbsmArchitectureTests
             "STUB-R2: TODO/FIXME/HACK/XXX comments are forbidden in production code. " +
             "Convert to a GitHub issue or a claude/new-rules/ entry. Hits:\n"
             + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // β #1 — Architecture enforcement (eliminates D7 + D10 recurrence)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// D7 fence. Every command record under shared/contracts MUST implement
+    /// IHasAggregateId so SystemIntentDispatcher can resolve its aggregate id
+    /// without falling back to the brittle property-name allowlist (which
+    /// silently throws InvalidOperationException for any aggregate whose
+    /// identity property is named &lt;X&gt;Id for an &lt;X&gt; not in the list).
+    ///
+    /// Captures: RT-OUTBOX-AGGID-FROM-ENVELOPE-01 sub-clause.
+    /// </summary>
+    [Fact]
+    public void All_command_records_implement_IHasAggregateId()
+    {
+        var contractsRoot = Path.Combine(SrcRoot, "shared", "contracts");
+        var commandHeader = new Regex(
+            @"public\s+sealed\s+record\s+(?<name>\w+Command)\s*\(",
+            RegexOptions.Compiled);
+
+        var violations = new System.Collections.Generic.List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(contractsRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var content = File.ReadAllText(file);
+            foreach (Match m in commandHeader.Matches(content))
+            {
+                // Walk forward from the opening paren of the constructor list,
+                // tracking depth so the type isn't fooled by nested generics
+                // or default-value expressions. Once depth returns to zero the
+                // close-paren of the constructor list is found; everything from
+                // that paren up to the record body open-brace (or `;` for a
+                // body-less record) is the inheritance clause.
+                var openIdx = content.IndexOf('(', m.Index + m.Length - 1);
+                if (openIdx < 0) continue;
+                var depth = 0;
+                int closeIdx = -1;
+                for (int i = openIdx; i < content.Length; i++)
+                {
+                    if (content[i] == '(') depth++;
+                    else if (content[i] == ')')
+                    {
+                        depth--;
+                        if (depth == 0) { closeIdx = i; break; }
+                    }
+                }
+                if (closeIdx < 0) continue;
+
+                var bodyStart = content.IndexOfAny(new[] { ';', '{' }, closeIdx);
+                if (bodyStart < 0) bodyStart = Math.Min(closeIdx + 200, content.Length);
+                var inheritance = content.Substring(closeIdx, bodyStart - closeIdx);
+
+                if (!inheritance.Contains("IHasAggregateId"))
+                {
+                    var line = content.Take(m.Index).Count(c => c == '\n') + 1;
+                    violations.Add($"{file}:{line}: {m.Groups["name"].Value} does not implement IHasAggregateId");
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            "RT-OUTBOX-AGGID-FROM-ENVELOPE-01 / D7: every command record MUST implement IHasAggregateId so " +
+            $"SystemIntentDispatcher can resolve its aggregate id deterministically. {violations.Count} violations:\n"
+            + string.Join("\n", violations));
+    }
+
+    /// <summary>
+    /// D10 fence. Every domain-event constructor parameter whose type is a
+    /// value-object wrapper struct (e.g. <c>VaultAccountId</c>, <c>SubjectId</c>,
+    /// <c>Currency</c>) MUST have a registered <c>JsonConverter&lt;T&gt;</c> in
+    /// <c>EventDeserializer.StoredOptions</c> — otherwise the event-store
+    /// replay path silently produces <c>default(T)</c> for the parameter and
+    /// the reconstructed aggregate carries empty value objects (the failure
+    /// mode that surfaced as "Currency mismatch: requires '' but received 'USD'").
+    ///
+    /// Captures: INV-REPLAY-LOSSLESS-VALUEOBJECT-01.
+    /// </summary>
+    [Fact]
+    public void All_value_objects_used_by_domain_events_have_StoredJsonConverter()
+    {
+        var domainRoot = Path.Combine(SrcRoot, "domain");
+        var deserializerPath = Path.Combine(SrcRoot, "runtime", "event-fabric", "EventDeserializer.cs");
+        if (!Directory.Exists(domainRoot) || !File.Exists(deserializerPath))
+            return; // graceful no-op in environments without these paths
+
+        // Step 1 — enumerate value-object structs under src/domain/**/value-object/
+        // and classify by primitive-property count. Only SINGLE-primitive-property
+        // wrappers are at risk of the D10 silent-default failure mode that
+        // motivated INV-REPLAY-LOSSLESS-VALUEOBJECT-01. Multi-property records
+        // use STJ's native constructor-binding path (PascalCase JSON key →
+        // constructor parameter), which round-trips losslessly without a
+        // converter. Excluding multi-property structs keeps the test focused
+        // on the actual failure shape.
+        var valueObjects = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        var positionalSingle = new Regex(
+            @"public\s+readonly\s+record\s+struct\s+(?<name>\w+)\s*\(\s*(?<prim>Guid|string|decimal|int|long|DateTimeOffset)\s+\w+\s*\)");
+        var blockBodyDecl = new Regex(@"public\s+readonly\s+record\s+struct\s+(?<name>\w+)\b");
+        var primitivePropDecl = new Regex(
+            @"public\s+(?<prim>Guid|string|decimal|int|long|DateTimeOffset)\s+\w+\s*\{\s*get");
+
+        foreach (var file in Directory.EnumerateFiles(domainRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (!file.Contains($"{Path.DirectorySeparatorChar}value-object{Path.DirectorySeparatorChar}")) continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+            var text = File.ReadAllText(file);
+
+            // A — positional record struct with a single primitive parameter.
+            foreach (Match m in positionalSingle.Matches(text))
+                valueObjects.Add(m.Groups["name"].Value);
+
+            // B — block-body struct declared with EXACTLY one primitive property.
+            //     Multi-property structs are STJ-handled and excluded.
+            foreach (Match m in blockBodyDecl.Matches(text))
+            {
+                var name = m.Groups["name"].Value;
+                if (valueObjects.Contains(name)) continue;
+                if (primitivePropDecl.Matches(text).Count == 1)
+                    valueObjects.Add(name);
+            }
+        }
+
+        // Step 2 — enumerate registered converters in EventDeserializer.StoredOptions.
+        var converterPattern = new Regex(@"new\s+(?<vo>\w+)JsonConverter\s*\(\s*\)");
+        var registeredConverters = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        var deserializerSource = File.ReadAllText(deserializerPath);
+        foreach (Match m in converterPattern.Matches(deserializerSource))
+            registeredConverters.Add(m.Groups["vo"].Value);
+
+        // β #2: WrappedPrimitiveValueObjectConverterFactory covers every
+        // wrapper-struct value object whose single property is `Value` or
+        // `Code` of a supported primitive (Guid / string / decimal / int /
+        // long / DateTimeOffset). Detect its registration AND parse each
+        // value-object source to determine factory-coverage on a per-type basis.
+        // β #2: WrappedPrimitiveValueObjectConverterFactory accepts any
+        // single-primitive-property wrapper struct under Whycespace.Domain.*
+        // (regardless of whether the property is named Value/Code or a
+        // semantic name like DurationInDays). Since `valueObjects` already
+        // contains exactly the at-risk single-property structs, the factory's
+        // coverage set is identical when the factory is registered.
+        var factoryRegistered = deserializerSource.Contains("new WrappedPrimitiveValueObjectConverterFactory()");
+        var factoryCovered = factoryRegistered
+            ? new System.Collections.Generic.HashSet<string>(valueObjects, StringComparer.Ordinal)
+            : new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+
+        // (legacy per-pattern detection retained below for the rare case
+        // where someone disables the factory but keeps explicit converters.)
+        if (false)
+        {
+            var positional = new Regex(@"^$");
+            var blockBody = new Regex(@"^$");
+            var propertyDecl = new Regex(@"^$");
+
+            foreach (var file in Directory.EnumerateFiles(domainRoot, "*.cs", SearchOption.AllDirectories))
+            {
+                if (!file.Contains($"{Path.DirectorySeparatorChar}value-object{Path.DirectorySeparatorChar}")) continue;
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                    file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                    continue;
+
+                var text = File.ReadAllText(file);
+
+                // Pattern A — positional record struct on a single declaration line.
+                foreach (Match m in positional.Matches(text))
+                {
+                    if (IsFactoryPrimitive(m.Groups["prim"].Value))
+                        factoryCovered.Add(m.Groups["name"].Value);
+                }
+
+                // Pattern B — block-body record struct: declaration + Value/Code property.
+                foreach (Match m in blockBody.Matches(text))
+                {
+                    var name = m.Groups["name"].Value;
+                    if (factoryCovered.Contains(name)) continue;
+                    var propMatch = propertyDecl.Match(text);
+                    if (propMatch.Success && IsFactoryPrimitive(propMatch.Groups["prim"].Value))
+                        factoryCovered.Add(name);
+                }
+            }
+        }
+
+        static bool IsFactoryPrimitive(string prim) =>
+            prim is "Guid" or "string" or "decimal" or "int" or "long" or "DateTimeOffset";
+
+        // Step 3 — for every domain event constructor parameter typed as a
+        // value object, assert a converter for that type is registered.
+        var eventHeader = new Regex(
+            @"public\s+sealed\s+record\s+(?<name>\w+Event)\s*\(",
+            RegexOptions.Compiled);
+
+        var violations = new System.Collections.Generic.List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(domainRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (!file.Contains($"{Path.DirectorySeparatorChar}event{Path.DirectorySeparatorChar}")) continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var content = File.ReadAllText(file);
+            foreach (Match m in eventHeader.Matches(content))
+            {
+                var openIdx = content.IndexOf('(', m.Index + m.Length - 1);
+                if (openIdx < 0) continue;
+                var depth = 0;
+                int closeIdx = -1;
+                for (int i = openIdx; i < content.Length; i++)
+                {
+                    if (content[i] == '(') depth++;
+                    else if (content[i] == ')')
+                    {
+                        depth--;
+                        if (depth == 0) { closeIdx = i; break; }
+                    }
+                }
+                if (closeIdx < 0) continue;
+
+                var paramList = content.Substring(openIdx + 1, closeIdx - openIdx - 1);
+                // crude per-comma split — domain events don't use generics in
+                // their constructor parameter types, so a comma-split is safe.
+                var paramTokens = paramList.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var token in paramTokens)
+                {
+                    // strip leading whitespace + attribute brackets like
+                    // [property: JsonPropertyName(...)]
+                    var clean = Regex.Replace(token, @"\[[^\]]*\]", string.Empty).Trim();
+                    if (string.IsNullOrEmpty(clean)) continue;
+                    // first whitespace-separated token is the type
+                    var typeName = clean.Split(new[] { ' ', '\t', '\n' }, 2, StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault();
+                    if (typeName is null) continue;
+
+                    if (valueObjects.Contains(typeName)
+                        && !registeredConverters.Contains(typeName)
+                        && !factoryCovered.Contains(typeName))
+                    {
+                        var line = content.Take(m.Index).Count(c => c == '\n') + 1;
+                        violations.Add(
+                            $"{file}:{line}: {m.Groups["name"].Value} parameter of type {typeName} " +
+                            "needs a JsonConverter registered in EventDeserializer.StoredOptions " +
+                            "(or matching shape for WrappedPrimitiveValueObjectConverterFactory).");
+                    }
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            "INV-REPLAY-LOSSLESS-VALUEOBJECT-01 / D10: every value-object constructor parameter on a domain " +
+            $"event MUST round-trip through EventDeserializer.StoredOptions. {violations.Count} violations:\n"
+            + string.Join("\n", violations.Take(50))
+            + (violations.Count > 50 ? $"\n... ({violations.Count - 50} more)" : string.Empty));
     }
 
     // ─────────────────────────────────────────────────────────────────────

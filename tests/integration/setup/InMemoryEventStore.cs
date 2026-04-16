@@ -1,5 +1,5 @@
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 namespace Whycespace.Tests.Integration.Setup;
 
@@ -30,6 +30,20 @@ public sealed class InMemoryEventStore : IEventStore
                 return Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
             return Task.FromResult<IReadOnlyList<object>>(list.Select(e => e.Payload).ToArray());
         }
+    }
+
+    /// <summary>
+    /// Test-only convenience overload: accepts raw event payloads and wraps them
+    /// in minimal envelopes (only AggregateId and Payload are populated; the
+    /// in-memory store ignores other envelope fields). Lets append-side tests
+    /// pass <c>new object[] { ev1, ev2 }</c> without constructing full envelopes.
+    /// </summary>
+    public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<object> events, int expectedVersion, CancellationToken cancellationToken = default)
+    {
+        var envelopes = new IEventEnvelope[events.Count];
+        for (var i = 0; i < events.Count; i++)
+            envelopes[i] = new RawTestEnvelope { AggregateId = aggregateId, Payload = events[i] };
+        return AppendEventsAsync(aggregateId, envelopes, expectedVersion, cancellationToken);
     }
 
     public Task AppendEventsAsync(Guid aggregateId, IReadOnlyList<IEventEnvelope> envelopes, int expectedVersion, CancellationToken cancellationToken = default)

@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
 using Xunit;
 
 namespace Whycespace.Tests.Unit.Runtime;

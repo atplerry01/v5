@@ -7,12 +7,16 @@ namespace Whycespace.Platform.Host.Composition.Economic.Vault.Account.Applicatio
 
 /// <summary>
 /// Vault Account application module — T2E command handler DI registrations
-/// and engine bindings for ApplyRevenue / DebitSlice / CreditSlice.
+/// and engine bindings for Create / Fund / Invest / ApplyRevenue /
+/// DebitSlice / CreditSlice.
 /// </summary>
 public static class VaultAccountApplicationModule
 {
     public static IServiceCollection AddVaultAccountApplication(this IServiceCollection services)
     {
+        services.AddTransient<CreateVaultAccountHandler>();
+        services.AddTransient<FundVaultHandler>();
+        services.AddTransient<InvestHandler>();
         services.AddTransient<ApplyRevenueHandler>();
         services.AddTransient<DebitSliceHandler>();
         services.AddTransient<CreditSliceHandler>();
@@ -21,6 +25,9 @@ public static class VaultAccountApplicationModule
 
     public static void RegisterEngines(IEngineRegistry engine)
     {
+        engine.Register<CreateVaultAccountCommand, CreateVaultAccountHandler>();
+        engine.Register<FundVaultCommand, FundVaultHandler>();
+        engine.Register<InvestCommand, InvestHandler>();
         engine.Register<ApplyRevenueCommand, ApplyRevenueHandler>();
         engine.Register<DebitSliceCommand, DebitSliceHandler>();
         engine.Register<CreditSliceCommand, CreditSliceHandler>();

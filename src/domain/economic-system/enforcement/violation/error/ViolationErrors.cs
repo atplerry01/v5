@@ -30,4 +30,7 @@ public static class ViolationErrors
 
     public static DomainInvariantViolationException OrphanViolation() =>
         new("Invariant violated: violation must reference both a rule and a source.");
+
+    public static DomainException InvalidSeverityActionCombination(ViolationSeverity severity, EnforcementAction action) =>
+        new($"Invalid enforcement combination: severity={severity} cannot recommend action={action}.");
 }

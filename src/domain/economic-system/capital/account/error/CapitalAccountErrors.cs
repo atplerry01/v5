@@ -23,6 +23,9 @@ public static class CapitalAccountErrors
     public static DomainException AccountIsClosed() =>
         new("Operation not permitted. Account is closed.");
 
+    public static DomainException AccountAlreadyOpened() =>
+        new("Account is already opened. Re-opening is not permitted.");
+
     public static DomainException CannotCloseWithOutstandingBalance() =>
         new("Cannot close account with an outstanding total balance.");
 

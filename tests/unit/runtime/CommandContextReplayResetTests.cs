@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Tests.Unit.Runtime;
 

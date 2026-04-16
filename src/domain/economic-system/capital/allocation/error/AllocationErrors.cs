@@ -24,4 +24,10 @@ public static class AllocationErrors
 
     public static DomainInvariantViolationException NegativeAmount() =>
         new("Allocation amount cannot be negative.");
+
+    public static DomainException InvalidSpvTargetId() =>
+        new("SPV targetId cannot be empty.");
+
+    public static DomainException InvalidOwnershipPercentage() =>
+        new("OwnershipPercentage must be greater than 0 and less than or equal to 100.");
 }

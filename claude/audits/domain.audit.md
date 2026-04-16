@@ -1,252 +1,232 @@
-# DOMAIN AUDIT — WBSM v3
+# Domain Audit (Canonical)
+
+**Validates:** [`claude/guards/domain.guard.md`](../../guards/domain.guard.md)
+**Type:** Pure validation layer — defines NO rules. All rules live in the guard.
+
+---
+
+## Purpose
+
+Verify that the domain layer (business truth protection) complies with all rules consolidated in the canonical domain guard: layer purity, classification/context/domain nesting, classification suffix conventions, DTO naming, behavioral invariants, structural rules, and domain-aligned bounded contexts (economic, governance, identity, observability, workflow).
+
+## Scope
+
+- `src/domain/**` — all bounded contexts at all activation levels (D0/D1/D2)
+- DTO definitions, aggregate roots, domain events, domain errors
+- Domain-aligned guard families (economic / governance / identity / observability / workflow)
+
+## Source guard
+
+This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../guards/domain.guard.md). Rule ID conventions (Domain numbered 1–24 + D-PURITY-/D-DET-/D-NO-SYSCLOCK, DS-R1..R8, CLASS-SFX-R1..R3, DTO-R1..R4, Behavioral numbered 1–16 + B-CLOCK-01/B-ID-01/B-CHAIN-01, Structural numbered 1–16 + STR-*-01, Economic ECON-*-01 + T1..T5/R1..R5/X1..X5/RC1..RC5/CR1..CR5/E1..E10 with D41..D79 + C26..C65, POLICY-*-01, ID-*-01, OBS-*-01, WF-*-01, GE-01..05) are owned by that guard.
+
+---
+
+## Validation Checklist
+
+### Section 1 — Domain Layer Purity
+
+- [ ] **Core Purity Rules 1–24** (domain.guard.md §Domain Layer Purity — unnumbered rules 1–24): zero external dependencies; no infrastructure imports; no engine/runtime imports; pure DDD primitives only; event-first (rule 23)
+- [ ] **D-PURITY-01** — purity extension
+- [ ] **D-DET-01** — determinism extension
+- [ ] **D-NO-SYSCLOCK** — no system clock in domain
+
+### Section 2 — Domain Structure (Classification / Context / Domain Nesting)
+
+- [ ] **DS-R1** — three-level nesting `{classification}/{context}/{domain}/`
+- [ ] **DS-R2** — classification layer present
+- [ ] **DS-R3** — context layer present
+- [ ] **DS-R4** — domain leaf present
+- [ ] **DS-R5** — no premature nesting
+- [ ] **DS-R6** — no cross-classification leakage
+- [ ] **DS-R7** — single-responsibility per domain
+- [ ] **DS-R8** — aggregate placement discipline
+
+### Section 3 — Classification Suffix Conventions
+
+- [ ] **CLASS-SFX-R1** — `-system` suffix on classification folders (S0; supersedes DS-R1/R2 S1 — audit treats as S0)
+- [ ] **CLASS-SFX-R2** — suffix consistency
+- [ ] **CLASS-SFX-R3** — no stray suffixes
+
+### Section 4 — DTO Naming
+
+- [ ] **DTO-R1** — role clarity
+- [ ] **DTO-R2** — naming consistency
+- [ ] **DTO-R3** — no domain duplication
+- [ ] **DTO-R4** — no ambiguous DTOs
+
+### Section 5 — Behavioral Rules
+
+- [ ] **Behavioral rules 1–16** (domain.guard.md §Behavioral Rule Set — unnumbered rules): aggregate behavior invariants; event emission from aggregate; no external calls from aggregate; deterministic behavior; rule 15 event-first
+- [ ] **B-CLOCK-01** — clock access only through abstraction
+- [ ] **B-ID-01** — ID access only through abstraction
+- [ ] **B-CHAIN-01** — chain access only through abstraction
+- [ ] **D-VO-TYPING-01** — aggregates/events use VO types for ids, not raw Guid/string
+- [ ] **D-ERR-TYPING-01** — domain MUST NOT throw framework exceptions (ArgumentException, InvalidOperationException, etc.); use Guard / `{Bc}Errors`
+- [ ] **DOM-LIFECYCLE-INIT-IDEMPOTENT-01** — lifecycle-init action (`Open*`/`Create*`/`Initialize*`) refuses re-emission on already-loaded aggregate (`Version >= 0`)
+- [ ] **REG-CONSISTENCY-01** — bidirectional consistency between `claude/registry/activation-registry.json` and `src/domain/{classification}/{context}/{domain}/` — no orphans either way
+
+### Section 6 — Structural Rules
+
+- [ ] **Structural rules 1–16** (domain.guard.md §Structural Rule Set — unnumbered rules): aggregate placement; event placement; error placement; factory placement
+- [ ] **STR-AUTH-01** — authorization structural constraint
+- [ ] **STR-HEALTH-01** — health structural constraint
+- [ ] **STR-OBS-01** — observability structural constraint
+- [ ] **STR-GUARD-REGISTRY-01** — guard registry structural constraint
+
+### Section 7 — Domain-Aligned: Economic — Core
+
+- [ ] **ECON-ES-01** — event sourcing is source of truth
+- [ ] **ECON-CQRS-01** — read/write separation
+- [ ] **ECON-LEDGER-01** — invariant enforcement
+
+### Section 8 — Domain-Aligned: Economic — Transaction Context
+
+- [ ] **T1** — transaction flow rule
+- [ ] **T2** — transaction flow rule
+- [ ] **T3** — transaction flow rule
+- [ ] **T4** — transaction flow rule
+- [ ] **T5** — transaction flow rule
+- [ ] **D41..D45** — transaction domain constraints
+- [ ] **C26..C30** — transaction violation codes
+
+### Section 9 — Domain-Aligned: Economic — Revenue Context
+
+- [ ] **R1** — revenue flow rule (scoped to revenue context; disambiguate from runtime/DG/dead-code R1)
+- [ ] **R2** — revenue flow rule
+- [ ] **R3** — revenue flow rule
+- [ ] **R4** — revenue flow rule
+- [ ] **R5** — revenue flow rule
+- [ ] **D46..D50** — revenue domain constraints
+- [ ] **C31..C35** — revenue violation codes
+
+### Section 10 — Domain-Aligned: Economic — Exposure Context
+
+- [ ] **X1** — exposure flow rule (scoped to exposure context; disambiguate from exchange X1..X5)
+- [ ] **X2** — exposure flow rule
+- [ ] **X3** — exposure flow rule
+- [ ] **X4** — exposure flow rule
+- [ ] **X5** — exposure flow rule
+- [ ] **D51..D55** — exposure domain constraints
+- [ ] **C36..C40** — exposure violation codes
+
+### Section 11 — Domain-Aligned: Economic — Reconciliation Context
+
+- [ ] **RC1** — reconciliation flow rule
+- [ ] **RC2** — reconciliation flow rule
+- [ ] **RC3** — reconciliation flow rule
+- [ ] **RC4** — reconciliation flow rule
+- [ ] **RC5** — reconciliation flow rule
+- [ ] **D56..D62** — reconciliation domain constraints
+- [ ] **C41..C47** — reconciliation violation codes
+
+### Section 12 — Domain-Aligned: Economic — Cross-Domain Reconciliation
+
+- [ ] **CR1** — cross-domain reconciliation rule
+- [ ] **CR2** — cross-domain reconciliation rule
+- [ ] **CR3** — cross-domain reconciliation rule
+- [ ] **CR4** — cross-domain reconciliation rule
+- [ ] **CR5** — cross-domain reconciliation rule
+- [ ] **D63..D65** — cross-domain reconciliation constraints
+- [ ] **C48..C50** — cross-domain reconciliation violation codes
+
+### Section 13 — Domain-Aligned: Economic — Enforcement & Compliance
+
+- [ ] **E1** — economic enforcement rule (scoped to economic context; disambiguate from engine E1..E16)
+- [ ] **E2** — economic enforcement rule
+- [ ] **E3** — economic enforcement rule
+- [ ] **E4** — economic enforcement rule
+- [ ] **E5** — economic enforcement rule
+- [ ] **E6** — economic enforcement rule
+- [ ] **E7** — economic enforcement rule
+- [ ] **E8** — economic enforcement rule
+- [ ] **E9** — economic enforcement rule
+- [ ] **E10** — economic enforcement rule
+- [ ] **D66..D74** — economic enforcement domain constraints
+- [ ] **C51..C60** — economic enforcement violation codes
+
+### Section 14 — Domain-Aligned: Economic — Cross-Domain Exchange
+
+- [ ] **X1** — exchange flow rule (scoped to exchange context — collision with exposure X1 is intentional)
+- [ ] **X2** — exchange flow rule
+- [ ] **X3** — exchange flow rule
+- [ ] **X4** — exchange flow rule
+- [ ] **X5** — exchange flow rule
+- [ ] **D75..D79** — exchange domain constraints
+- [ ] **C61..C65** — exchange violation codes
+
+### Section 15 — Domain-Aligned: Governance
+
+- [ ] **POLICY-ENFORCEMENT-01** — governance policy enforcement
+- [ ] **POLICY-CHAIN-01** — governance policy chain binding
+- [ ] **POLICY-DETERMINISM-01** — governance policy determinism
+
+### Section 16 — Domain-Aligned: Identity
+
+- [ ] **ID-POLICY-01** — identity policy
+- [ ] **ID-DETERMINISM-01** — identity determinism
+
+### Section 17 — Domain-Aligned: Observability
+
+- [ ] **OBS-TRACE-01** — observability trace
+- [ ] **OBS-REPLAY-01** — observability replay
+
+### Section 18 — Domain-Aligned: Workflow
+
+- [ ] **WF-PLACEMENT-01** — workflow placement (engines, not domain)
+- [ ] **WF-TYPE-01** — workflow type discipline
+- [ ] **WF-PIPELINE-01** — workflow pipeline shape
+
+*Note: WF-PLACEMENT-01 (workflows in engines) vs runtime dependency-graph R2 (engines cannot reference runtime) — compatible per guard; audit confirms compatibility at validation time.*
+
+### Section 19 — WBSM v3 Global Enforcement (shared)
+
+- [ ] **GE-01** — deterministic execution
+- [ ] **GE-02** — WHYCEPOLICY enforcement
+- [ ] **GE-03** — WHYCECHAIN anchoring
+- [ ] **GE-04** — event-first architecture
+- [ ] **GE-05** — CQRS enforcement
+
+### Section 20 — Activation Lifecycle
+
+- [ ] D0/D1/D2 activation levels match canonical registry
+- [ ] Scaffolded BCs remain scaffolded
+- [ ] D1 BCs have minimum DDD artifacts (aggregate/event/error)
+- [ ] D2 BCs have full DDD + engine wiring + runtime integration
+- [ ] No activation regressions; no premature D2 claims
+
+---
+
+## Check Procedure
+
+1. Load the domain guard rule set.
+2. Execute per-section `Check Procedure` blocks in the guard.
+3. Record verdicts with file:line evidence.
+4. For domain-aligned sections, scope checks to `src/domain/{classification}/{context}/{domain}` paths.
+5. For ID-collision families (R1..R5, E1..E10, X1..X5), disambiguate by bounded context per guard.
+
+## Pass / Fail Criteria
+
+- **PASS:** All rules `PASS` or `N/A`.
+- **FAIL:** Any S0/S1 failure.
+- **CONDITIONAL:** S2/S3 captured per $1c.
+
+## Output Format
 
 ```
-AUDIT ID:       DOMAIN-AUDIT-v2
-REVISION:       REV 4
-DATE:           2026-04-04
-AUTHOR:         Architecture Office
-STATUS:         ACTIVE
+AUDIT:           domain
+GUARD:           claude/guards/domain.guard.md
+EXECUTED:        <ISO-8601>
+RULES_CHECKED:   ~160
+SECTIONS:        20
+PASS:            <count>
+FAIL:            <count>
+N/A:             <count>
+S0_FAILURES:     <list>
+S1_FAILURES:     <list>
+EVIDENCE:        <path>
+VERDICT:         PASS | FAIL | CONDITIONAL
 ```
 
-## PURPOSE
+## Failure Action
 
-Audit the domain layer to ensure strict compliance with WBSM v3 domain topology, DDD conventions, and zero external dependency rules. The domain layer is the pure heart of the system — it must contain only aggregates, entities, value objects, events, errors, services, and specifications with absolutely no infrastructure or framework dependencies.
-
-This audit MUST detect:
-
-* CLASSIFICATION > CONTEXT > DOMAIN topology violations
-* Incomplete aggregate structures (missing DDD folders)
-* External dependencies in domain code
-* DDD naming convention violations
-* Mutable value objects
-* Non-past-tense event names
-* Activation level mismatches
-
----
-
-## SCOPE
-
-```
-src/domain/                    -> all domain bounded contexts
-src/domain/{classification}/   -> classification groupings
-src/domain/{class}/{context}/  -> context groupings
-src/domain/{class}/{ctx}/{bc}/ -> individual bounded contexts
-```
-
-Excluded: all other layers, `bin/`, `obj/`, `.git/`
-
----
-
-## SEVERITY CLASSIFICATION
-
-| Severity | Description | Impact |
-|----------|-------------|--------|
-| CRITICAL | External dependency in domain, flat topology, aggregate corruption, lifecycle/event integrity violation | Blocks deployment |
-| HIGH | Missing DDD folder, non-past-tense event, mutable value object | Must fix before merge |
-| MEDIUM | Naming convention violation, missing specification | Fix within sprint |
-| LOW | Missing .gitkeep in empty folder, cosmetic issue | Fix at convenience |
-
----
-
-## GLOBAL RULE: PROJECTION LAYER AUTHORITY
-
-* `src/projections/` = DOMAIN PROJECTION LAYER (CQRS READ MODELS)
-* `src/runtime/projection/` = INTERNAL EXECUTION SUPPORT ONLY
-
-MANDATORY:
-
-* Domain projections:
-  * consume EVENTS only
-  * produce READ MODELS only
-  * exposed via platform APIs
-* Runtime projections:
-  * NOT exposed externally
-  * support execution only (routing, orchestration, indexing)
-
----
-
-## AUDIT DIMENSIONS
-
-### DDIM-01: CLASSIFICATION > CONTEXT > DOMAIN Topology
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-01.1 | Every BC follows three-level nesting: `domain/{classification}/{context}/{domain}/` | CRITICAL |
-| CHECK-01.2 | No BC exists directly under `domain/` (flat structure) | CRITICAL |
-| CHECK-01.3 | No BC exists at two-level nesting `domain/{classification}/{bc}/` without context | CRITICAL |
-| CHECK-01.4 | Classification folders match canonical registry (e.g., clusters, economic, governance, identity, humancapital, document, etc.) | HIGH |
-| CHECK-01.5 | Context folders are semantically meaningful groupings within classification | MEDIUM |
-
-### DDIM-02: Aggregate Completeness
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-02.1 | Each BC has an `aggregate/` folder | CRITICAL |
-| CHECK-02.2 | Each BC has an `entity/` folder | HIGH |
-| CHECK-02.3 | Each BC has a `value-object/` folder | HIGH |
-| CHECK-02.4 | Each BC has an `event/` folder | CRITICAL |
-| CHECK-02.5 | Each BC has an `error/` folder | HIGH |
-| CHECK-02.6 | Each BC has a `service/` folder | HIGH |
-| CHECK-02.7 | Each BC has a `specification/` folder | HIGH |
-
-### DDIM-03: Zero External Dependencies
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-03.1 | No `using` statements referencing `System.Data`, `System.Net`, `System.IO` (infrastructure) | CRITICAL |
-| CHECK-03.2 | No NuGet package references in domain projects (except core .NET) | CRITICAL |
-| CHECK-03.3 | No references to `Microsoft.EntityFrameworkCore` or any ORM | CRITICAL |
-| CHECK-03.4 | No references to `Confluent.Kafka` or any messaging library | CRITICAL |
-| CHECK-03.5 | No references to `Microsoft.AspNetCore` or any web framework | CRITICAL |
-| CHECK-03.6 | No references to engines, runtime, systems, platform, or infrastructure namespaces | CRITICAL |
-
-### DDIM-04: DDD Naming Conventions
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-04.1 | Aggregate root class name matches the domain concept (e.g., `Cluster`, `Vault`, `Proposal`) | MEDIUM |
-| CHECK-04.2 | Entity class names describe subordinate domain concepts | MEDIUM |
-| CHECK-04.3 | Value object class names describe immutable domain attributes | MEDIUM |
-| CHECK-04.4 | Service class names end with `Service` | MEDIUM |
-| CHECK-04.5 | Specification class names end with `Spec` or `Specification` | MEDIUM |
-
-### DDIM-05: Domain Event Past-Tense Naming
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-05.1 | All domain event classes use past-tense naming (e.g., `ClusterCreatedEvent`, not `CreateClusterEvent`) | HIGH |
-| CHECK-05.2 | Event class names end with `Event` suffix | HIGH |
-| CHECK-05.3 | Event names describe what happened, not what should happen | HIGH |
-
-### DDIM-06: Value Object Immutability
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-06.1 | Value objects have no public setters | CRITICAL |
-| CHECK-06.2 | Value object properties are `init`-only or `readonly` | HIGH |
-| CHECK-06.3 | Value objects implement structural equality (not reference equality) | HIGH |
-| CHECK-06.4 | Value objects have no side-effecting methods | MEDIUM |
-
-### DDIM-07: Aggregate Invariant Protection
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-07.1 | Aggregate constructors enforce invariants (validation in constructor) | HIGH |
-| CHECK-07.2 | Aggregate state changes go through methods (not public setters) | CRITICAL |
-| CHECK-07.3 | Aggregates raise domain events for state changes | HIGH |
-| CHECK-07.4 | Aggregates do not expose mutable collections | HIGH |
-
-### DDIM-08: Activation Level Compliance (D0/D1/D2)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-08.1 | D0 BCs have folder structure + .gitkeep files only | LOW |
-| CHECK-08.2 | D1 BCs have at minimum: aggregate root, at least one event, at least one error | HIGH |
-| CHECK-08.3 | D2 BCs have full DDD artifacts: aggregate, entities, value objects, events, errors, services, specifications | HIGH |
-| CHECK-08.4 | No BC claims D2 activation without engine wiring and runtime integration | HIGH |
-| CHECK-08.5 | Activation level matches canonical registry declaration | CRITICAL |
-
-### DDIM-09: Shared Value Objects (_shared)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-09.1 | `_shared/value-object/` exists at classification level for cross-context value objects | MEDIUM |
-| CHECK-09.2 | Shared value objects are truly shared (referenced by multiple contexts) | MEDIUM |
-| CHECK-09.3 | Shared value objects follow same immutability rules as BC value objects | HIGH |
-
-### DDIM-10: Projection Isolation
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-10.1 | No projection logic exists in `src/domain/` | CRITICAL |
-| CHECK-10.2 | No dependency from domain to `src/projections/` | CRITICAL |
-
-### DDIM-11: Determinism Enforcement (Phase 1 — DETDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-11.1 | No `DateTime.UtcNow` or non-deterministic time usage in domain code | CRITICAL |
-| CHECK-11.2 | No `Guid.NewGuid()` outside deterministic helper in domain code | CRITICAL |
-| CHECK-11.3 | IDs generated via `DeterministicIdHelper` only | CRITICAL |
-| CHECK-11.4 | Event ordering deterministic per aggregate | HIGH |
-| CHECK-11.5 | Replay produces identical results from same event stream | HIGH |
-
-### DDIM-12: Event-First Architecture (Phase 1 — EFDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-12.1 | All state changes originate from domain events | CRITICAL |
-| CHECK-12.2 | No direct state mutation outside aggregates | CRITICAL |
-| CHECK-12.3 | Events are the sole record of state transitions in domain | CRITICAL |
-| CHECK-12.4 | Domain models produce events — never consume external state directly | CRITICAL |
-
-### DDIM-13: Lifecycle + Workflow Validation (Phase 1 — LWFDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-13.1 | At least one lifecycle process implemented (created → active → completed) | CRITICAL |
-| CHECK-13.2 | Lifecycle transitions enforce invariants via aggregate methods | CRITICAL |
-| CHECK-13.3 | Lifecycle state transitions produce corresponding domain events | CRITICAL |
-| CHECK-13.4 | Lifecycle states are modeled as value objects or enums in domain | HIGH |
-| CHECK-13.5 | Invalid lifecycle transitions are rejected by aggregate invariant guards | HIGH |
-
-### DDIM-14: Sandbox/Todo Mandatory (Phase 1 — SBDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-14.1 | Sandbox bounded context exists and contains executable domain artifacts | CRITICAL |
-| CHECK-14.2 | Todo bounded context exists and contains executable domain artifacts | CRITICAL |
-| CHECK-14.3 | Both demonstrate full vertical slice at domain layer (aggregate, events, errors, value objects) | CRITICAL |
-
-### DDIM-15: Lifecycle + Event Integrity (Phase 1 — LEIDIM-01)
-
-| Check | Description | Severity |
-|-------|-------------|----------|
-| CHECK-15.1 | Aggregates enforce lifecycle transitions via explicit methods (no arbitrary state jumps) | CRITICAL |
-| CHECK-15.2 | Invalid lifecycle transitions are blocked by aggregate invariant guards | CRITICAL |
-| CHECK-15.3 | All aggregate state changes emit corresponding domain events — no silent mutations | CRITICAL |
-| CHECK-15.4 | Emitted events are deterministic (no non-deterministic IDs, timestamps, or random values) and structurally complete (all required fields populated) | CRITICAL |
-
----
-
-## OUTPUT FORMAT
-
-```yaml
-audit: domain
-status: PASS | FAIL
-score: {0-100}
-scope: "Domain layer compliance"
-timestamp: {ISO-8601}
-violations:
-  - check: CHECK-XX.X
-    dimension: DDIM-XX
-    severity: CRITICAL | HIGH | MEDIUM | LOW
-    description: "{what was found}"
-    impacted_files:
-      - "{file path}"
-    remediation: "{how to fix}"
-    drift_classification: "domain"
-approval: GRANTED | BLOCKED
-blocking_violations: {count of CRITICAL/HIGH}
-```
-
----
-
-## SCORING
-
-| Start Score | 100 |
-|-------------|-----|
-| CRITICAL violation | -10 per occurrence |
-| HIGH violation | -5 per occurrence |
-| MEDIUM violation | -2 per occurrence |
-| LOW violation | -1 per occurrence |
-| Floor | 0 |
-| Pass threshold | >= 80 |
-
----
-
-## NEW CHECKS INTEGRATED — 2026-04-07
-
-- **CHECK-D-PURITY-01**: grep "Microsoft.Extensions.DependencyInjection" under src/domain/** => any hit = S1.
-- **CHECK-D-DET-01**: grep "Guid.NewGuid|DateTime.Now|DateTime.UtcNow|DateTimeOffset.UtcNow|new Random" under src/domain/** => any hit = S0.
-- **CHECK-D-NO-SYSCLOCK**: glob src/domain/**/SystemClock.cs => any hit = S2 (delete).
+Per CLAUDE.md $12 and $1c.

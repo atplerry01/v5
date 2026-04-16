@@ -1,3 +1,5 @@
+using Whycespace.Shared.Contracts.Runtime;
+
 namespace Whycespace.Shared.Contracts.Economic.Capital.Binding;
 
 public sealed record BindCapitalCommand(
@@ -5,14 +7,23 @@ public sealed record BindCapitalCommand(
     Guid AccountId,
     Guid OwnerId,
     int OwnershipType,
-    DateTimeOffset BoundAt);
+    DateTimeOffset BoundAt) : IHasAggregateId
+{
+    public Guid AggregateId => BindingId;
+}
 
 public sealed record TransferBindingOwnershipCommand(
     Guid BindingId,
     Guid NewOwnerId,
     int NewOwnershipType,
-    DateTimeOffset TransferredAt);
+    DateTimeOffset TransferredAt) : IHasAggregateId
+{
+    public Guid AggregateId => BindingId;
+}
 
 public sealed record ReleaseBindingCommand(
     Guid BindingId,
-    DateTimeOffset ReleasedAt);
+    DateTimeOffset ReleasedAt) : IHasAggregateId
+{
+    public Guid AggregateId => BindingId;
+}

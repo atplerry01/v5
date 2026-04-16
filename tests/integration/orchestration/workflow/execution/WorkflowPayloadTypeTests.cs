@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Whyce.Engines.T1M.Lifecycle;
-using Whyce.Runtime.EventFabric;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Engines.T1M.Core.Lifecycle;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 

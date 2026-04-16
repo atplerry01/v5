@@ -1,4 +1,0 @@
- aggregate_id | aggregate_type | current_version | state | last_event_id | last_event_type | correlation_id | idempotency_key | projected_at | created_at 
---------------+----------------+-----------------+-------+---------------+-----------------+----------------+-----------------+--------------+------------
-(0 rows)
-

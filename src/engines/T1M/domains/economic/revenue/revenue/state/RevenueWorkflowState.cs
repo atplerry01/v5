@@ -3,6 +3,7 @@ namespace Whycespace.Engines.T1M.Domains.Economic.Revenue.Revenue.State;
 public static class RevenueProcessingSteps
 {
     public const string Validate = "validate";
+    public const string RecordRevenue = "record_revenue";
     public const string ApplyRevenue = "apply_revenue";
 }
 

@@ -112,7 +112,8 @@ public static class RuntimeComposition
                 sp.GetRequiredService<WhycePolicyEngine>(),
                 sp.GetRequiredService<IPolicyEvaluator>(),
                 sp.GetRequiredService<IIdGenerator>(),
-                sp.GetRequiredService<IPolicyDecisionEventFactory>());
+                sp.GetRequiredService<IPolicyDecisionEventFactory>(),
+                sp.GetRequiredService<ICallerIdentityAccessor>());
 
             var idempotencyMiddleware = new IdempotencyMiddleware(
                 sp.GetRequiredService<IIdempotencyStore>());
@@ -125,7 +126,9 @@ public static class RuntimeComposition
                 .UsePolicy(policyMiddleware)
                 .UseAuthorizationGuard(new AuthorizationGuardMiddleware())
                 .UseIdempotency(idempotencyMiddleware)
-                .UseExecutionGuard(new ExecutionGuardMiddleware())
+                .UseExecutionGuard(new ExecutionGuardMiddleware(
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IViolationStateQuery>(),
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IEscalationStateQuery>()))
                 .Build();
         });
 
@@ -212,6 +215,13 @@ public static class RuntimeComposition
         // Command dispatcher (pure router) + system intent dispatcher
         services.AddSingleton<ICommandDispatcher, Whycespace.Runtime.Dispatcher.RuntimeCommandDispatcher>();
         services.AddSingleton<ISystemIntentDispatcher, Whycespace.Runtime.Dispatcher.SystemIntentDispatcher>();
+
+        // E5.1 — per-command policy id registry. Aggregates every
+        // CommandPolicyBinding registered by per-context modules into an
+        // immutable lookup; SystemIntentDispatcher consults it when stamping
+        // CommandContext.PolicyId so PolicyMiddleware evaluates the canonical
+        // policy for each command rather than a generic default.
+        services.AddSingleton<ICommandPolicyIdRegistry, Whycespace.Runtime.Policy.CommandPolicyIdRegistry>();
 
         return services;
     }

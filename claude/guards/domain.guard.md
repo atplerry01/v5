@@ -456,6 +456,38 @@ BEHAVIORAL_GUARD_VIOLATION:
 - **B-ID-01**: All correlation/causation/aggregate ID generation MUST go through `IIdGenerator`. `Guid.NewGuid()` is FORBIDDEN in `src/runtime/**`, `src/engines/**`, `src/domain/**`, AND `src/platform/host/adapters/**`.
 - **B-CHAIN-01**: `ChainAnchor.BlockId` MUST be a deterministic hash of (events, previousBlockId). Timestamps from `IClock` only. No `Guid.NewGuid()` for block ids.
 
+### Behavioral Extensions (2026-04-15 / 2026-04-16)
+
+- **D-VO-TYPING-01 — Strongly-Typed Identifier Discipline (S2 for Guid, S1 for string)**: Within any bounded context in `src/domain/**`, if a strongly-typed identifier value object (e.g. `AccountId`, `OwnerId`, `TargetId`, `AllocationId`) exists in that bounded context's `value-object/` folder OR in an adjacent bounded context within the same classification, then:
+  1. Aggregate properties that hold that identifier MUST use the VO type, not `Guid` or `string`.
+  2. Domain event record members that hold that identifier MUST use the VO type, not `Guid` or `string`.
+  3. Factory methods and aggregate behavior methods MUST accept the VO type, not `Guid` or `string`.
+  4. Service methods and specification constructors that accept that identifier MUST use the VO type.
+
+  **Exception:** Legitimate external/untyped correlation identifiers (e.g. HTTP correlation ids from outside the domain) MAY be represented as `Guid` or `string` at the domain boundary provided there is a documented comment justifying it. Entry-point factories that receive raw `Guid` from the runtime layer MUST wrap into the VO on the first line of the method.
+
+  **Scan:** grep for `public Guid \w+Id`, `Guid \w+Id[,)]`, `string \w+Id[,)]` across `src/domain/**`, cross-reference against sibling `value-object/*.cs` files. **Rationale:** Primitive-obsession for identifiers breaks the DDD contract that value objects encode invariants (non-empty, format, etc.); also makes event payloads ambiguous during replay and projection — two different ids of the same primitive type can be silently swapped. Strengthens rules 5, 14, 23.
+
+- **D-ERR-TYPING-01 — Framework Exception Types Forbidden in Domain (S1)**: Files under `src/domain/**` MUST NOT directly throw or construct any of the following BCL exception types: `System.ArgumentException`, `System.ArgumentNullException`, `System.ArgumentOutOfRangeException`, `System.InvalidOperationException`, `System.NotSupportedException`, `System.NotImplementedException`, `System.Exception`. Instead, domain code MUST:
+  1. Use the shared-kernel `Guard.Against(...)` helper, which raises a `DomainException`.
+  2. Use a context-specific `{Bc}Errors` static factory (e.g. `CapitalAccountErrors.InvalidAmount()`) that returns a `DomainException` / `DomainInvariantViolationException`.
+
+  **Scan:** grep `src/domain/**` for `throw new (ArgumentException|ArgumentNullException|ArgumentOutOfRangeException|InvalidOperationException|NotSupportedException|NotImplementedException|Exception)\b`. **Rationale:** Domain exceptions carry business meaning. Framework exceptions bleed technical/infrastructural semantics across the layer boundary and break behavioral rule 12 (Exception Boundary Enforcement). Clarifies the intent of Core Purity rule 7.
+
+- **DOM-LIFECYCLE-INIT-IDEMPOTENT-01 — Lifecycle-Init Idempotency (S2)**: Every aggregate's lifecycle-init action (`Open*`, `Create*`, `Initialize*`, factory-style first event) MUST refuse to emit a second initialization event on an already-loaded aggregate. Canonical guard:
+
+  ```csharp
+  public void OpenOrCreate(...)
+  {
+      if (Version >= 0) throw <Aggregate>Errors.AlreadyInitialized();
+      RaiseDomainEvent(new <Aggregate>InitializedEvent(...));
+  }
+  ```
+
+  A specification class encoding the check (e.g., `AlreadyOpenSpecification`, `AlreadyCreatedSpecification`) is the canonical form and goes alongside other specs under `<aggregate>/specification/`. `AggregateRoot.Version` starts at `-1` and increments on `LoadFromHistory`; `Version >= 0` is an authoritative "already loaded" discriminator that does not require domain-specific state shape.
+
+  **Scan:** enumerate aggregates under `src/domain/**/aggregate/` and verify each method that raises a "first event" (event-type matches `*Opened|*Created|*Initialized`) checks `Version >= 0` (or equivalent). **Rationale:** Without this guard, re-issuing the same lifecycle-init command produces duplicate seed events in the write-side stream even when projection-layer idempotency masks the symptom. Complements INV-001 (Command Outcome Totality) and INV-303 (Replay-Safe). Paired with the constitutional `INV-IDEMPOTENT-LIFECYCLE-INIT-01` (engine-handler shape for static-factory aggregates).
+
 ---
 
 ## Structural Rules

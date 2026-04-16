@@ -96,8 +96,3 @@ public sealed class DistributionAggregate : AggregateRoot
                 $"Invariant violated: ParticipantShare percentages must sum to 100 (was {percentageSum}).");
     }
 }
-
-public enum DistributionStatus
-{
-    Created
-}

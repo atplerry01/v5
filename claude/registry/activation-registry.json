@@ -238,6 +238,7 @@
     {"system":"economic-system","context":"capital","domain":"vault","path":"economic-system/capital/vault","level":"D2"},
     {"system":"economic-system","context":"enforcement","domain":"enforcement","path":"economic-system/enforcement/enforcement","level":"D0"},
     {"system":"economic-system","context":"exchange","domain":"fx","path":"economic-system/exchange/fx","level":"D0"},
+    {"system":"economic-system","context":"exchange","domain":"rate","path":"economic-system/exchange/rate","level":"D0"},
     {"system":"economic-system","context":"ledger","domain":"ledger","path":"economic-system/ledger/ledger","level":"D2"},
     {"system":"economic-system","context":"ledger","domain":"obligation","path":"economic-system/ledger/obligation","level":"D2"},
     {"system":"economic-system","context":"ledger","domain":"settlement","path":"economic-system/ledger/settlement","level":"D2"},

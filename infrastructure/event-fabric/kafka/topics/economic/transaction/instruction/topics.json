@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.transaction.instruction.commands",
+    "whyce.economic.transaction.instruction.events",
+    "whyce.economic.transaction.instruction.retry",
+    "whyce.economic.transaction.instruction.deadletter"
+  ]
+}

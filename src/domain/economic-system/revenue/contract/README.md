@@ -54,8 +54,12 @@ Defines binding agreements that determine how revenue is generated and shared. A
 - Term validation (end > start)
 
 ## Integration Points
-- **pricing** — Pricing references contract for value determination
-- **revenue** — Revenue recognition requires contract reference (R1)
+- **pricing** — Pricing references contract for value determination.
+- **revenue** — Revenue originates from an SPV in the canonical
+  (SPV-based, single-shot) model; contracts define the share rules and
+  party bindings consumed by downstream orchestration (distribution
+  allocations), but a revenue record does NOT carry a ContractId as
+  its origin.
 
 ## Lifecycle
 ```

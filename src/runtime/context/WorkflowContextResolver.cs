@@ -30,7 +30,7 @@ public sealed class WorkflowContextResolver
         {
             return new WorkflowContext
             {
-                WorkflowId = Guid.TryParse(resumeCommand.WorkflowId, out var id) ? id : Guid.Empty,
+                WorkflowId = resumeCommand.WorkflowId,
                 WorkflowName = string.Empty,
                 CorrelationId = context.CorrelationId,
                 IsResume = true

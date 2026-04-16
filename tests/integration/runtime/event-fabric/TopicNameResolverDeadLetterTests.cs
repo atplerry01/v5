@@ -1,4 +1,4 @@
-using Whyce.Runtime.EventFabric;
+using Whycespace.Runtime.EventFabric;
 
 namespace Whycespace.Tests.Integration.Runtime.EventFabric;
 

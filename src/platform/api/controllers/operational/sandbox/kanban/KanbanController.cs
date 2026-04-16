@@ -165,7 +165,7 @@ public sealed class KanbanController : ControllerBase
         var result = await _workflowDispatcher.StartWorkflowAsync(
             CardApprovalWorkflowNames.Approve, intent, KanbanRoute);
         return result.IsSuccess
-            ? Ok(ApiResponse.Ok(new CommandAck("card_approval_started"), _clock.UtcNow))
+            ? Ok(ApiResponse.Ok(new CommandAck("card_approval_started"), result.CorrelationId, _clock.UtcNow))
             : BadRequest(ApiResponse.Fail(
                 "operational.sandbox.kanban.card_approval_failed",
                 result.Error ?? "Unknown error",
@@ -197,7 +197,7 @@ public sealed class KanbanController : ControllerBase
         var stateJson = reader.GetString(0);
         var state = JsonSerializer.Deserialize<KanbanBoardReadModel>(stateJson,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        return Ok(ApiResponse.Ok(state!, _clock.UtcNow));
+        return Ok(ApiResponse.Ok(state!, this.RequestCorrelationId(), _clock.UtcNow));
     }
 }
 

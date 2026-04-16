@@ -11,6 +11,7 @@ namespace Whycespace.Projections.Economic.Ledger.Ledger;
 
 public sealed class LedgerUpdatedProjectionHandler :
     IEnvelopeProjectionHandler,
+    IProjectionHandler<LedgerOpenedEventSchema>,
     IProjectionHandler<LedgerUpdatedEventSchema>,
     IProjectionHandler<JournalEntryRecordedEventSchema>
 {
@@ -24,6 +25,8 @@ public sealed class LedgerUpdatedProjectionHandler :
     {
         return envelope.Payload switch
         {
+            LedgerOpenedEventSchema opened =>
+                ProjectOpened(opened, envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
             LedgerUpdatedEventSchema ledger =>
                 ProjectLedger(ledger, envelope.EventId, envelope.SequenceNumber, envelope.CorrelationId, cancellationToken),
             JournalEntryRecordedEventSchema entry =>
@@ -33,11 +36,28 @@ public sealed class LedgerUpdatedProjectionHandler :
         };
     }
 
+    public async Task HandleAsync(LedgerOpenedEventSchema e, CancellationToken ct = default)
+        => await ProjectOpened(e, Guid.Empty, 0, Guid.Empty, ct);
+
     public async Task HandleAsync(LedgerUpdatedEventSchema e, CancellationToken ct = default)
         => await ProjectLedger(e, Guid.Empty, 0, Guid.Empty, ct);
 
     public async Task HandleAsync(JournalEntryRecordedEventSchema e, CancellationToken ct = default)
         => await ProjectEntry(e, Guid.Empty, 0, Guid.Empty, ct);
+
+    private async Task ProjectOpened(
+        LedgerOpenedEventSchema e,
+        Guid eventId,
+        long eventVersion,
+        Guid correlationId,
+        CancellationToken ct)
+    {
+        var state = await _store.LoadAsync(e.AggregateId, ct) ??
+                    new LedgerReadModel { LedgerId = e.AggregateId };
+        state = LedgerProjectionReducer.Apply(state, e);
+        await _store.UpsertAsync(
+            e.AggregateId, state, "LedgerOpenedEvent", eventId, eventVersion, correlationId, ct);
+    }
 
     private async Task ProjectLedger(
         LedgerUpdatedEventSchema e,

@@ -138,7 +138,7 @@ Closure Note:
 - D1 closed by removing host → domain (Step C: PostgresOutboxAdapter typed unwrap replaced with reflection; <ProjectReference> to Whycespace.Domain.csproj removed from Whycespace.Host.csproj).
 - D2 closed and JUSTIFIED (host → engines is composition-root DI under DG-R5-EXCEPT-01).
 - D3 closed and JUSTIFIED (host → runtime/systems/projections is composition-root DI under DG-R5-EXCEPT-01).
-- D4 closed through documentation and audit alignment (Step D: dependency-graph.guard.md DG-R5-EXCEPT-01 narrowed, DG-R5-HOST-DOMAIN-FORBIDDEN added; dependency-graph.audit.md baseline rewritten; README §5.1.1 updated).
+- D4 closed through documentation and audit alignment (Step D: dependency-graph.guard.md DG-R5-EXCEPT-01 narrowed, DG-R5-HOST-DOMAIN-FORBIDDEN added; dependency-graph.audit.output.md baseline rewritten; README §5.1.1 updated).
 - H1 closed: running Whycespace.Host (PID 32648) terminated; `dotnet build src/platform/host/Whycespace.Host.csproj` succeeded with 0 warnings, 0 errors, transitively building the full 8-project dependency closure.
 - H3 closed: scripts/dependency-check.sh C4 rule narrowed with a single explicit whitelist clause for canonical domain `**/adapter/**` paths; script now exits 0 with 0 violations.
 
@@ -178,7 +178,7 @@ Closure Note:
 - Step C-G governance hardening: `scripts/dependency-check.sh` and the `DG-R5-HOST-DOMAIN-FORBIDDEN` / `R-DOM-01` predicates strengthened to detect `using`, fully-qualified, and namespace-alias forms (comment lines excluded). `src/runtime/event-fabric/domain-schemas/**` documented as the only canonical runtime location permitted to hold typed domain references. Folklore-vs-canon contradiction captured in `claude/new-rules/20260408-180000-guards.md`.
 
 Final Evidence:
-- Final audit: [claude/audits/boundary-purity.audit.md](claude/audits/boundary-purity.audit.md) — PASS.
+- Final audit: [claude/audits/boundary-purity.audit.output.md](claude/audits/boundary-purity.audit.output.md) — PASS.
 - Build: GREEN (0 warnings, 0 errors, all 8 projects).
 - `bash scripts/dependency-check.sh` → `Violations: 0`, `Status: PASS` (strengthened predicate active).
 - `grep -RIn "Whycespace\.Domain\." src/platform/host/` → only the canonical intent-comment in `composition/runtime/RuntimeComposition.cs:80`.
@@ -209,14 +209,14 @@ Status:
 Closure Note:
 - §5.1.3 established CURRENT TRUTH / HISTORICAL BASELINE / ARCHIVAL RECORD as the canonical discipline model for implementation-adjacent documentation.
 - CLAUDE.md $1a/$1b corrected from stale enumerations (12 guards, 11 audits) to discovery directives covering the actual `claude/guards/**` (30 files including the `domain-aligned/` subtree) and `claude/audits/**` (21 active definitions). The `claude/` directory description was rewritten to match `ls claude/` and to align with $2 (canonical prompt store is `project-prompts/`, not `prompts/`).
-- `dependency-graph.guard.md` self-supersession closed in three coordinated edits: R5 body now cross-references DG-R5-EXCEPT-01; CODE-LEVEL CHECKS name `scripts/dependency-check.sh` as authoritative and split `platform/api` from `platform/host`; LOCK CONDITIONS reference R1–R7 plus the DG-* additions. `dependency-graph.audit.md` C2 + INPUTS aligned with the script.
+- `dependency-graph.guard.md` self-supersession closed in three coordinated edits: R5 body now cross-references DG-R5-EXCEPT-01; CODE-LEVEL CHECKS name `scripts/dependency-check.sh` as authoritative and split `platform/api` from `platform/host`; LOCK CONDITIONS reference R1–R7 plus the DG-* additions. `dependency-graph.audit.output.md` C2 + INPUTS aligned with the script.
 - 13 stale `Phase B2a/B2b` source-comment markers across 9 files in `src/platform/host/**` and `src/runtime/event-fabric/**` cleaned up.
 - Three `claude/new-rules/20260408-103326-*.md` captures (`activation`, `determinism`, `engines`) gained explicit `STATUS: PROPOSED` blocks with verification evidence.
 - Stale/unclassified artifacts removed: `claude/audits.zip` (133 KB, 2026-04-07 export, superseded by live tree) and `claude/project-prompts/phase2/` (empty placeholder).
 - Two non-blocking S3 review items explicitly deferred outside the PASS gate: `docs/validation/e2e-validation-report.md` scaffold classification and three prose-form new-rules captures with implicit STATUS lines.
 
 Final Evidence:
-- Final audit: [claude/audits/canonical-alignment.audit.md](claude/audits/canonical-alignment.audit.md) — PASS.
+- Final audit: [claude/audits/canonical-alignment.audit.output.md](claude/audits/canonical-alignment.audit.output.md) — PASS.
 - Build: GREEN (0 warnings, 0 errors, all 8 projects).
 - `bash scripts/dependency-check.sh` → `Violations: 0`, `Status: PASS` (strengthened predicate from §5.1.2 Step C-G remains active; documentation now accurately describes what it enforces).
 - Folklore sweep: `grep -RIn "Phase B[0-9]" src/ --include="*.cs"` → 0 matches.
@@ -313,7 +313,7 @@ still single-permit). These do not block §5.2.1 acceptance because
 the opening pack's acceptance criteria require *bounded and
 observable*, not *restructured*, for every in-scope surface.
 
-Final audit: claude/audits/admission-control-backpressure.audit.md
+Final audit: claude/audits/admission-control-backpressure.audit.output.md
 Closure prompt: claude/project-prompts/20260408-220000-phase-1-5-5-2-1-pass-closure.md
 
 ## 5.2.2 Concurrency Control and Resource Bounds
@@ -432,7 +432,7 @@ extending the `IEventStore` interface contract); **multi-instance
 parallelism**. None of these match an opening-pack §2.9 acceptance
 criterion that would block §5.2.2 PASS.
 
-Final audit: claude/audits/concurrency-control-resource-bounds.audit.md
+Final audit: claude/audits/concurrency-control-resource-bounds.audit.output.md
 Closure prompt: claude/project-prompts/20260408-235900-phase-1-5-5-2-2-pass-closure.md
 
 ## 5.2.3 Timeout, Cancellation, and Circuit Protection
@@ -563,7 +563,7 @@ producer timeout work; native client counter bridging. None of
 these match an opening-pack §2.9 acceptance criterion that would
 block §5.2.3 PASS.
 
-Final audit: claude/audits/timeout-cancellation-circuit-protection.audit.md
+Final audit: claude/audits/timeout-cancellation-circuit-protection.audit.output.md
 Closure prompt: claude/project-prompts/20260408-235960-phase-1-5-5-2-3-pass-closure.md
 
 ## 5.2.4 Health, Readiness, and Degraded Modes
@@ -1107,9 +1107,9 @@ Status:
 | 5.1.1 | Dependency Graph Remediation | Close architectural drift | PASS (2026-04-08) | Audit + Build | YES |
 | 5.1.2 | Boundary Purity Validation | Enforce layer purity | PASS (2026-04-08) | Audit + Build + Strengthened dep-check | YES |
 | 5.1.3 | Canonical Documentation Alignment | Match code to canon | PASS (2026-04-08) | Alignment Audit + Build + dep-check + Folklore Sweep | YES |
-| 5.2.1 | Admission Control and Backpressure | Safe overload handling | PASS (2026-04-08) | Step A inventory · Step B probes · PC-1..PC-7 patches · admission-control-backpressure.audit.md | YES |
-| 5.2.2 | Concurrency Control and Resource Bounds | Stable concurrent execution | PASS (2026-04-08) | Step A inventory · Step B probes · KC-1..KC-8 + KW-1 patches · concurrency-control-resource-bounds.audit.md | YES |
-| 5.2.3 | Timeout, Cancellation, and Circuit Protection | Prevent hanging and collapse | PASS (2026-04-08) | Step A inventory · Step B T-Narrow probes · TC-1..TC-9 patches · timeout-cancellation-circuit-protection.audit.md | YES |
+| 5.2.1 | Admission Control and Backpressure | Safe overload handling | PASS (2026-04-08) | Step A inventory · Step B probes · PC-1..PC-7 patches · admission-control-backpressure.audit.output.md | YES |
+| 5.2.2 | Concurrency Control and Resource Bounds | Stable concurrent execution | PASS (2026-04-08) | Step A inventory · Step B probes · KC-1..KC-8 + KW-1 patches · concurrency-control-resource-bounds.audit.output.md | YES |
+| 5.2.3 | Timeout, Cancellation, and Circuit Protection | Prevent hanging and collapse | PASS (2026-04-08) | Step A inventory · Step B T-Narrow probes · TC-1..TC-9 patches · timeout-cancellation-circuit-protection.audit.output.md | YES |
 | 5.2.4 | Health, Readiness, and Degraded Modes | Accurate operational health | NOT STARTED | Runtime Proof | YES |
 | 5.2.5 | Multi-Instance Runtime Safety | Horizontal safety proof | NOT STARTED | Multi-Instance Proof | YES |
 | 5.3.1 | Baseline Performance Profiling | Measure reality | NOT STARTED | Load Report | YES |

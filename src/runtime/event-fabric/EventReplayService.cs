@@ -57,6 +57,7 @@ public sealed class EventReplayService
                 Payload = domainEvent,
                 ExecutionHash = "replay",
                 PolicyHash = "replay",
+                PolicyVersion = "replay",
                 Timestamp = DateTimeOffset.MinValue,
                 SequenceNumber = i
             });

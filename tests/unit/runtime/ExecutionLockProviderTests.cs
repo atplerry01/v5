@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Runtime;
 using Xunit;
 
 namespace Whycespace.Tests.Unit.Runtime;

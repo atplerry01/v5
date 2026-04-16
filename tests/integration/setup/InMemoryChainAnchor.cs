@@ -1,5 +1,5 @@
-using Whyce.Shared.Contracts.Infrastructure.Chain;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Tests.Integration.Setup;
 

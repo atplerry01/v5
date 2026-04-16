@@ -32,7 +32,8 @@ public static class KafkaInfrastructureModule
                 sp.GetRequiredService<EventStoreDataSource>(),
                 sp.GetRequiredService<IOutboxDepthSnapshot>(),
                 sp.GetRequiredService<OutboxOptionsRecord>(),
-                sp.GetRequiredService<IClock>()));
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<EventSchemaRegistry>()));
 
         // --- Kafka producer (for outbox relay) ---
         // phase1-gate-H7-H9-safe:

@@ -17,6 +17,9 @@ public sealed class CapitalAccountAggregate : AggregateRoot
 
     public void Open(AccountId accountId, OwnerId ownerId, Currency currency, Timestamp createdAt)
     {
+        if (new AlreadyOpenSpecification().IsSatisfiedBy(this))
+            throw CapitalAccountErrors.AccountAlreadyOpened();
+
         RaiseDomainEvent(new CapitalAccountOpenedEvent(accountId, ownerId, currency, createdAt));
     }
 

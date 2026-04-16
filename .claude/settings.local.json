@@ -7,7 +7,10 @@
       "Bash(mkdir -p infrastructure/postgres/migrations infrastructure/kafka/topics/economic/ledger/transaction infrastructure/redis/config infrastructure/opa/policies infrastructure/minio/buckets)",
       "Bash(find /c/projects/dev/v5 -type f -name \"*.cs\" -exec grep -l \"EnsureInvariant\\\\|Invariant\\(\\)\" {} \\\\;)",
       "Bash(bash /tmp/bc_list.sh)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(kill -0 1450)",
+      "Bash(curl -sSf http://localhost:5000/health)",
+      "Bash(curl -sS http://localhost:5000/health)"
     ]
   }
 }

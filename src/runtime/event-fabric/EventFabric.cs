@@ -117,6 +117,7 @@ public sealed class EventFabric : IEventFabric
                 Payload = _schemaRegistry.MapPayload(eventTypeName, domainEvent),
                 ExecutionHash = executionHash,
                 PolicyHash = policyHash,
+                PolicyVersion = context.PolicyVersion,
                 Timestamp = _clock.UtcNow,
                 SequenceNumber = i,
                 Classification = classification,
@@ -150,6 +151,10 @@ public sealed class EventFabric : IEventFabric
         // phase1.5-S5.2.3 / TC-5: forward CT into the outbox enqueue
         // so PostgresOutboxAdapter Execute*Async calls honor
         // cancellation.
-        await _outboxService.EnqueueAsync(context.CorrelationId, domainEvents, topic, cancellationToken);
+        // D9 / K-AGGREGATE-ID-HEADER-01: pass the envelope's authoritative
+        // aggregateId rather than letting the outbox reflect it from the
+        // payload. Eliminates Guid.Empty propagation when an event's identity
+        // property name is not in the adapter's allowlist (e.g. RevenueId).
+        await _outboxService.EnqueueAsync(context.CorrelationId, aggregateId, domainEvents, topic, cancellationToken);
     }
 }

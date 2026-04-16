@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
-using Whyce.Platform.Api.Middleware;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Platform.Api.Middleware;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 namespace Whycespace.Tests.Integration.Api;
 

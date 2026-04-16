@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.routing.path.commands",
+    "whyce.economic.routing.path.events",
+    "whyce.economic.routing.path.retry",
+    "whyce.economic.routing.path.deadletter"
+  ]
+}

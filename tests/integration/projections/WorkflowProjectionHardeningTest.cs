@@ -1,8 +1,8 @@
-using Whyce.Platform.Host.Adapters;
-using Whyce.Projections.Orchestration.Workflow;
-using Whyce.Shared.Contracts.EventFabric;
-using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
-using Whyce.Shared.Contracts.Projections.Orchestration.Workflow;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Projections.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.EventFabric;
+using Whycespace.Shared.Contracts.Events.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Projections.Orchestration.Workflow;
 
 namespace Whycespace.Tests.Integration.Projections;
 
@@ -224,6 +224,7 @@ public sealed class WorkflowProjectionHardeningTest
         public Guid EventId { get; init; }
         public Guid AggregateId { get; init; }
         public Guid CorrelationId { get; init; } = Guid.Empty;
+        public Guid CausationId { get; init; } = Guid.Empty;
         public string EventType { get; init; } = string.Empty;
         public string EventName { get; init; } = string.Empty;
         public string EventVersion { get; init; } = string.Empty;
@@ -231,6 +232,7 @@ public sealed class WorkflowProjectionHardeningTest
         public object Payload { get; init; } = new();
         public string ExecutionHash { get; init; } = string.Empty;
         public string PolicyHash { get; init; } = string.Empty;
+        public string? PolicyVersion { get; init; }
         public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UnixEpoch;
         public int SequenceNumber { get; init; }
         public string Classification { get; init; } = string.Empty;

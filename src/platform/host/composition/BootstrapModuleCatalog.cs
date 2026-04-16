@@ -1,4 +1,8 @@
 using Whycespace.Platform.Host.Composition.Constitutional.Policy;
+using Whycespace.Platform.Host.Composition.Content.Interaction.Messaging;
+using Whycespace.Platform.Host.Composition.Content.Learning.Course;
+using Whycespace.Platform.Host.Composition.Content.Media.Asset;
+using Whycespace.Platform.Host.Composition.Economic;
 using Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban;
 using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo;
 using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
@@ -19,6 +23,10 @@ public static class BootstrapModuleCatalog
         new ConstitutionalPolicyBootstrap(),
         new TodoCompositionRoot(),
         new KanbanCompositionRoot(),
+        new MediaAssetCompositionRoot(),
+        new MessagingCompositionRoot(),
+        new CourseCompositionRoot(),
+        new EconomicCompositionRoot(),
         new WorkflowExecutionBootstrap()
     ];
 }

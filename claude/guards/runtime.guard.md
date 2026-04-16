@@ -10,18 +10,24 @@ All files under `src/runtime/`, `src/engines/`, `src/projections/`, `src/platfor
 
 ## Source consolidation
 
-This guard merges the following sources:
+This guard merges the following sources (aligned to GUARD-LAYER-MODEL-01 4-layer model, LOCKED 2026-04-14):
 1. `runtime.guard.md` (prior version — preserved verbatim: rules 1–15 + GE-01..05 + all NEW-RULES integrations)
 2. `runtime-order.guard.md` (merged into Runtime Order & Lifecycle section)
 3. `phase1.5-runtime.guard.md` (merged into Phase 1.5 Runtime Rules section)
 4. `engine.guard.md` (merged into Engine Purity section)
-5. `composition-loader.guard.md` (merged into Composition & Loading section)
-6. `program-composition.guard.md` (merged into Composition & Loading section)
-7. `projection.guard.md` (merged into Projections section)
-8. `replay-determinism.guard.md` (merged into Replay Determinism section)
-9. `determinism.guard.md` (merged into Determinism Core section)
-10. `deterministic-id.guard.md` (merged into Deterministic IDs section)
-11. `hash-determinism.guard.md` (merged into Hash Determinism section)
+5. `projection.guard.md` (merged into Projections section)
+6. `prompt-container.guard.md` (merged into Prompt Container section)
+7. `dependency-graph.guard.md` (merged into Dependency Graph & Layer Boundaries section)
+8. `contracts-boundary.guard.md` (merged into Contracts Boundary section)
+9. `clean-code.guard.md` (merged into Code Quality Enforcement > Clean Code subsection)
+10. `no-dead-code.guard.md` (merged into Code Quality Enforcement > Dead Code Elimination subsection)
+11. `stub-detection.guard.md` (merged into Code Quality Enforcement > Stub Detection subsection)
+12. `tests.guard.md` (merged into Test & E2E Validation > Test Architecture subsection)
+13. `e2e-validation.guard.md` (merged into Test & E2E Validation > E2E Validation subsection)
+
+**Relocated to other canonical guards per GUARD-LAYER-MODEL-01:**
+- `determinism.guard.md`, `deterministic-id.guard.md`, `hash-determinism.guard.md`, `replay-determinism.guard.md` → `constitutional.guard.md` (constitutional determinism primitives).
+- `composition-loader.guard.md`, `program-composition.guard.md` → `infrastructure.guard.md` (host-process assembly).
 
 **Dedups performed:**
 - `GE-01` (deterministic execution) appeared in runtime.guard.md, engine.guard.md, projection.guard.md — consolidated to a single canonical block under "WBSM v3 Global Enforcement". All three source contexts preserved by cross-reference.
@@ -232,6 +238,54 @@ The `correlation_id` written to `whyce_chain` MUST equal the `correlationId` ret
 **Source:** runtime.guard.md NEW RULES 2026-04-08 (Phase 1 gate blockers)
 **Severity:** S2
 
+#### RT-API-CORRELATION-ECHO-01 / R-CHAIN-CORRELATION-SURFACE-01 — API Envelope Correlation ID (S2)
+Every API response envelope returned to a client MUST carry the runtime-stamped correlation id in `meta.correlationId`. Source priority:
+1. **Command paths** (POST/PUT/DELETE that flow through `ISystemIntentDispatcher`): use `result.CorrelationId` from the returned `CommandResult` — the same value persisted to `events.correlation_id`, `whyce_chain.correlation_id`, and the Kafka `correlation-id` header.
+2. **Read paths** (GET that bypass the runtime): use the inbound `X-Correlation-Id` request header if present and parseable as a Guid; otherwise `Guid.Empty` is acceptable as a read-path sentinel.
+3. A zero `Guid.Empty` value on a **successful command response** is a surface-layer violation of `R-CHAIN-CORRELATION-01` — persistence/Kafka carry the real value while the API surface serves zero.
+
+Sub-rule: the `ApiResponse.Ok(T data, DateTimeOffset timestamp)` two-arg overload at `src/shared/contracts/common/ApiResponse.cs` is a structural footgun — it silently drops correlation. Every callsite that uses it in a command-path controller is a latent bug. Static check: grep `src/platform/api/controllers/**/*.cs` for `ApiResponse\.Ok\([^,]+,\s*[A-Z]\w+\.UtcNow\)` and flag every hit in a command controller; allow only when an explicit comment justifies the dropped correlation. Complements INV-501 (Mandatory Telemetry Emission).
+**Source:** new-rules 2026-04-16 (validation-infra D10; audit finding 5).
+**Severity:** S2
+
+#### R-RT-CMD-AGGID-01 — Commands MUST Implement IHasAggregateId Explicitly (S1)
+Every command type routed through `ISystemIntentDispatcher` MUST implement `IHasAggregateId`. The reflective property-name fallback in `SystemIntentDispatcher.ResolveAggregateId` is DEPRECATED and MUST be removed once all existing commands are migrated — relying on it couples the dispatcher to a fixed set of identifier-naming conventions and makes every new domain one forgotten-property-rename away from an HTTP 500 at first dispatch.
+
+Migration path (non-breaking): (1) add `IHasAggregateId` implementation to every `*Command` record; (2) add an architecture test under `tests/unit/architecture/` asserting every type assignable from a known `ICommand` marker (or matching `*Command` under `src/shared/contracts/**`) implements `IHasAggregateId`; (3) once CI is green, delete the `AggregateIdPropertyCandidates` fallback from `SystemIntentDispatcher`. Static check: grep `src/shared/contracts/**` for `record.*Command(` and confirm the declaration includes `: IHasAggregateId` or that the base marker interface does.
+**Source:** new-rules 2026-04-16 (Stage L compliance/audit certification).
+**Severity:** S1
+
+#### RT-OUTBOX-AGGID-FROM-ENVELOPE-01 — Outbox AggregateId Sourced From Envelope (S0)
+The outbox row's `aggregate_id` column and every Kafka header / message key derived from it MUST be sourced from `IEventEnvelope.AggregateId`. Concretely:
+- The `IOutbox.EnqueueAsync` contract MUST accept `aggregateId` as an explicit parameter alongside `correlationId`. Callers (only `EventFabric.OutboxService`) MUST pass the envelope's authoritative value.
+- Reflection-by-property-name (the legacy `ExtractAggregateId` / `IdentityPropertyNames` allowlist pattern) is FORBIDDEN in any outbox implementation.
+- The outbox adapter MUST throw `InvalidOperationException` (not silently emit `Guid.Empty`) when `aggregateId == Guid.Empty && events.Count > 0`. Pairs with the `K-AGGREGATE-ID-HEADER-01` fence on `EventEnvelope` (producer-side mirror).
+- Static check: grep `src/platform/host/adapters/**` for `IdentityPropertyNames`, `ExtractAggregateId`, or reflective `GetProperty("...Id")` patterns inside `IOutbox` implementations — any hit is an S0 fail.
+
+**Rationale:** payload types are domain-owned; the runtime must not depend on a per-type identity-property convention. Every new aggregate whose payload identity property is `<X>Id` for an `<X>` not in a hard-coded allowlist silently corrupts its own Kafka partition routing and consumer reconstruction. Complements infrastructure R-K-11 (partition key alignment) and R-K-15 (order guarantee by aggregate id).
+**Source:** new-rules 2026-04-16 (revenue-domain validation D9).
+**Severity:** S0
+
+#### RT-BACKGROUND-IDENTITY-EXPLICIT-01 — Background Workers Declare System Identity (S1)
+Any code path that invokes `ISystemIntentDispatcher.DispatchAsync` (or any contract that internally invokes `ICallerIdentityAccessor.GetActorId/GetTenantId/GetRoles`) OUTSIDE an HTTP request scope MUST establish an explicit, declared system identity before dispatching. Concretely:
+- A `SystemIdentityScope` (or equivalent) seam MUST exist alongside the HTTP-bound `ICallerIdentityAccessor`. The scope MUST:
+  - Be opt-in per call site (no global default — HTTP requests stay fail-closed per WP-1).
+  - Be `AsyncLocal`-bound so it cannot leak across unrelated background tasks.
+  - Carry a non-empty actor identifier prefixed `system/<purpose>` (e.g. `system/workflow-trigger`, `system/integration-bridge`). Empty-string actors are forbidden.
+- The HTTP-bound `ICallerIdentityAccessor` implementation MUST consult the scope FIRST and only fall through to HTTP context when no scope is active. The HTTP fall-through's deny-by-default behaviour MUST remain unchanged.
+- Every `BackgroundService` / `IHostedService` / Kafka consumer worker that dispatches commands MUST wrap its dispatch in the scope:
+  ```csharp
+  using (SystemIdentityScope.Begin("system/<worker-name>", "system", "system"))
+  {
+      await _dispatcher.DispatchAsync(command, route, ct);
+  }
+  ```
+- Direct invocation of `IHttpContextAccessor.HttpContext` from a background worker is FORBIDDEN — the dependency must flow through `ICallerIdentityAccessor` so the scope mechanism applies uniformly.
+
+Static check: enumerate every `BackgroundService` / `IHostedService` under `src/platform/host/adapters/**`; for each, confirm any runtime-entry-point invocation is dominated by a `using (SystemIdentityScope.Begin(...))` on the call path. Bare dispatch without scope = S1 fail. Complements constitutional WP-1 (HTTP fail-closed) and INV-202 (No Anonymous Execution).
+**Source:** new-rules 2026-04-16 (revenue-domain validation D11).
+**Severity:** S1
+
 #### RO-LOCKED-ORDER — Canonical Execution Stage List
 Lock the WBSM v3 canonical execution order at the source level. Any change that reorders, removes, or makes optional any of the 11 ordered stages (8 middlewares + 3 fabric stages) is a critical violation.
 
@@ -307,7 +361,7 @@ The canonical execution order is the **11-stage** order (8 middlewares + 3 fabri
 
 ### Section: Phase 1.5 Runtime Rules
 
-**STATUS: CANONICAL** — LOCKED 2026-04-09 per `phase1.5-final.audit.md` §7.
+**STATUS: CANONICAL** — LOCKED 2026-04-09 per `claude/audits/phase1.5/phase1.5-final.audit.output.md` §7.
 
 This section locks the architectural and runtime invariants established by Phase 1.5 §5.2.4 (Health, Readiness, Degraded Modes) and §5.2.5 MI-1 (Distributed Execution Safety Baseline).
 
@@ -440,86 +494,6 @@ catch (ConcurrencyConflictException) when (outcome == "ok")
 2. Reference the specific R-RT-* rule being amended.
 3. Include a regression-coverage test that locks the new behavior.
 4. Update this file in the same patch as the amendment.
-
----
-
-### Section: Composition & Loading
-
-#### G-COMPLOAD-01 — Registry Membership
-FAIL IF any class implementing `ICompositionModule` is not listed in `src/platform/host/composition/registry/CompositionRegistry.cs`.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-02 — Explicit Order
-FAIL IF any `ICompositionModule` implementation does not define a unique, non-negative integer `Order`. Duplicate or missing `Order` values are S1.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-03 — Locked Execution Sequence
-FAIL IF the registry order deviates from:
-`Core(0) → Runtime(1) → Infrastructure(2) → Projections(3) → Observability(4)`.
-Adding a new module requires extending this sequence and updating this guard.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-04 — Loader-Only Composition
-FAIL IF `Program.cs` re-introduces direct `Add*Composition(...)` calls instead of `builder.Services.LoadModules(builder.Configuration)`.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-05 — BootstrapModuleCatalog Preserved
-FAIL IF the `BootstrapModuleCatalog.All` registration loop is removed from `Program.cs` or migrated into the composition loader. Domain bootstrap MUST remain a separate, explicit pass.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-06 — No Reflection Discovery
-FAIL IF the loader, registry, or any composition module discovers types via reflection (`Assembly.GetTypes`, `Activator.CreateInstance`, attribute scans, etc.). Module enumeration is explicit list literals only.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-COMPLOAD-07 — Modules Are Orchestration-Only
-FAIL IF any `ICompositionModule.Register` body contains anything beyond a single delegating call to its category `Add*Composition` extension. No `new`, no `services.AddSingleton<...>` calls inside modules themselves.
-**Source:** composition-loader.guard.md
-**Severity:** S1
-
-#### G-PROGCOMP-01 — Composition Only
-FAIL IF `Program.cs` contains any of:
-- `builder.Services.AddSingleton<` / `AddTransient<` / `AddScoped<`
-- `builder.Services.AddHostedService(`
-- Direct `new` of any infrastructure adapter or middleware
-- `Configuration.GetValue<` / `Configuration["..."]` reads
-
-ALLOWED:
-- `WebApplication.CreateBuilder` and `builder.Build()`
-- Calls to `Add*Composition(...)` extension methods
-- Calls to `LoadModules(...)` from `CompositionModuleLoader` (deterministic registry walk)
-- Calls to bootstrap module `RegisterServices` from `BootstrapModuleCatalog`
-- HTTP pipeline configuration (`app.Use*`, `app.Map*`)
-- `app.Run()`
-
-**Source:** program-composition.guard.md
-**Severity:** S1
-
-#### G-PROGCOMP-02 — Size Cap
-`Program.cs` MUST NOT exceed 100 non-empty lines. Re-extract before crossing this threshold.
-**Source:** program-composition.guard.md
-**Severity:** S2
-
-#### G-PROGCOMP-03 — Classification-Aligned Domain Wiring
-Domain registration MUST flow through `IDomainBootstrapModule` instances listed in `BootstrapModuleCatalog`. No domain type may be referenced directly from `Program.cs` or from any non-domain composition module.
-**Source:** program-composition.guard.md
-**Severity:** S1
-
-#### G-PROGCOMP-04 — No Inline Middleware Definition
-`Program.cs` MUST NOT define new middleware classes inline or via lambdas that contain business logic. Middleware composition belongs in `composition/runtime/RuntimeComposition.cs`.
-**Source:** program-composition.guard.md
-**Severity:** S1
-
-#### G-PROGCOMP-05 — Locked Pipeline Order
-The HTTP pipeline order in `Program.cs` MUST remain:
-`HttpMetricsMiddleware → UseRouting → UseSwagger → UseSwaggerUI → MapControllers → MapMetrics → Run`. The locked runtime middleware order inside `RuntimeComposition` is enforced by this guard's Runtime Order & Lifecycle section.
-**Source:** program-composition.guard.md
-**Severity:** S1
 
 ---
 
@@ -774,6 +748,26 @@ All projection handlers MUST include in their event processing context:
 
 **Source:** projection.guard.md rule 13
 
+#### P-IDEMPOTENCY-KEY-NOT-NULL-01 — Idempotency Key Populated On Upsert (S2)
+Projection handlers under `src/projections/**` MUST populate `idempotency_key` on every upsert, derived from `{event_id}` or `{aggregate_id}:{version}`. A projection row with `idempotency_key IS NULL` defeats the UNIQUE constraint that enforces duplicate-suppression, silently violating P5. Audit probe: `SELECT count(*) FROM <projection>_read_model WHERE idempotency_key IS NULL` MUST equal `0` on every environment after at least one event has flowed.
+**Source:** infra-validation audit 2026-04-16 — Finding 2. Extends P5 / P13.
+**Severity:** S2
+
+#### P-VERSION-MONOTONE-01 — Projection current_version Monotone (S2)
+Projection upserts MUST set `current_version = eventEnvelope.Version` (the aggregate stream version of the applied event). Rows where `current_version = 0 AND last_event_id IS NOT NULL` are evidence that out-of-order protection is absent in practice. An out-of-order event whose `Version <= current_version` MUST be skipped or requeued. Audit probe: `SELECT count(*) FROM <projection>_read_model WHERE current_version = 0 AND last_event_id IS NOT NULL` MUST equal `0`.
+**Source:** infra-validation audit 2026-04-16 — Finding 6. Extends P12.
+**Severity:** S2
+
+#### P-JSONB-KEY-CASE-01 — JSONB Key Casing Consistency (S2)
+Projection state JSONB MUST use a single documented casing convention per read model — typically `camelCase` to match controller DTOs. Reducers writing one casing (e.g. `PascalCase`) into `state` while indexes or query extractors use the other casing (`state->>'camelCase'`) is a contract violation: GET-by-key endpoints return empty for valid queries while the rows are present. Audit probe: for every projection table, for every index that extracts a state key, assert the key is present under that exact casing in at least one stored row.
+**Source:** infra-validation audit 2026-04-16 — Finding 4. Extends P7 / P9 and DTO-R naming consistency.
+**Severity:** S2
+
+#### P-EVENT-TIMESTAMP-STAMP-01 — Projection Reducers Must Stamp Temporal Fields (S2)
+Projection reducers that map a "registered at" / "created at" / "effective at" temporal field from a domain event MUST stamp that field from `EventEnvelope.Timestamp` (or, during replay, from the persisted envelope metadata — respecting `REPLAY-SENTINEL-PROTECTED-01` for sentinel cases). A read-model row carrying `default(DateTimeOffset)` (`0001-01-01T00:00:00+00:00`) for such a field when the envelope has a real timestamp is a reducer-integrity defect. Static check: enumerate reducer handler methods; for each temporal read-model column, confirm the assignment reads `envelope.Timestamp` or a payload field populated from it.
+**Source:** infra-validation audit 2026-04-16 — Finding 3.
+**Severity:** S2
+
 #### PART B — RUNTIME PROJECTION RULES (`src/runtime/projection/`)
 
 #### P14 — RUNTIME PROJECTIONS ARE EXECUTION SUPPORT ONLY
@@ -919,320 +913,1259 @@ Projection handlers MUST NOT mutate state returned from a projection store in pl
 
 ---
 
-### Section: Determinism Core
 
-This section consolidates WBSM v3 determinism rules covering `src/domain/**`, `src/engines/**`, `src/runtime/**`, `src/systems/**`, and `src/platform/host/adapters/**` (the platform adapter surface). Adapters are the persistence and event-fabric boundary; non-determinism here breaks event-sourcing replay guarantees, idempotency, deduplication, and chain anchoring even when domain/engine/runtime code is perfectly deterministic.
+### Section: Prompt Container
 
-#### DET-BLOCKLIST — Block List
-Within all in-scope paths, the following are FORBIDDEN:
+Source: prompt-container.guard.md (absorbed verbatim 2026-04-14 per GUARD-LAYER-MODEL-01).
 
-- `Guid.NewGuid()`
-- `Guid.NewGuid().ToString(...)`
-- `DateTime.Now`
-- `DateTime.UtcNow`
-- `DateTimeOffset.Now`
-- `DateTimeOffset.UtcNow`
-- `Random` instantiation, `Random.Shared`, `RandomNumberGenerator.GetBytes(...)` for non-cryptographic identity/sequence generation
-- `Environment.TickCount`, `Environment.TickCount64`
-- `Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()` used as an identity, event-stamp, or hash-input source
 
-**Source:** determinism.guard.md
+##### Purpose
 
-#### DET-REQUIRED-REPLACEMENTS — Required Replacements
-- For identity: `IIdGenerator.Generate(seed)` from `src/shared/kernel/domain/IIdGenerator.cs`. The seed MUST be derived deterministically from the operation's coordinates — for example `$"{aggregateId}:{version}"` for an event store row id, or `$"{commandId}:{handlerName}"` for a command-derived child id. Random or wall-clock seeds defeat the purpose.
-- For time: `IClock.UtcNow` from `src/shared/kernel/domain/IClock.cs`.
+Enforce canonical prompt formatting across all AI-assisted prompts used in the WBSM v3 system. Every prompt must use the markdown container format, declare mandatory sections, avoid broken fencing, support batch execution, and be registered in the prompt registry.
 
-Both seams are DI-registered as singletons in `src/platform/host/Program.cs` (`SystemClock` → `IClock`, `DeterministicIdGenerator` → `IIdGenerator`). There is no excuse for a constructor to be missing them.
-**Source:** determinism.guard.md
+##### Scope
 
-#### DET-EXCEPTIONS — Permitted Exception Surfaces
-Exactly two surfaces are permitted to read the system clock or generate a non-derived id, and they form the boundary between deterministic application code and the underlying OS:
+All prompt files (`.prompt.md`, `.prompt.json`, or prompt templates) across the repository, including `claude/` directory prompts, CI prompts, and any prompt used for code generation, auditing, or governance. Evaluated at CI and prompt review.
 
-1. **The `IClock` implementation itself.** `SystemClock.UtcNow` in `src/platform/host/Program.cs` is the single permitted reader of `DateTimeOffset.UtcNow`. No other class.
-2. **The `IIdGenerator` implementation itself.** Currently `DeterministicIdGenerator` in `src/platform/host/Program.cs`, which derives ids via `SHA256(seed)` and never reads the system clock or RNG. If a future implementation needs randomness, it must be confined to this single class.
-3. **Stopwatch for observability instrumentation.** `Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()` are PERMITTED solely for observability instrumentation (latency histograms, counters, traces). The resulting value MUST NOT flow into `ExecutionHash`, deterministic IDs, sequence seeds, chain block IDs, or any persisted event payload. Lint: any data flow from `Stopwatch` to a hash/id constructor is a DET violation.
+##### Rules
 
-SQL `NOW()` / `CURRENT_TIMESTAMP` inside SQL statements is permitted **only** for storage-layer operational timestamps (`created_at`, `projected_at`, `published_at`, `next_retry_at`) in infrastructure adapter SQL, provided:
-- The timestamp is never consumed by domain logic, event replay, chain integrity, or deterministic ID generation
-- Business-significant time is always supplied from the `IClock` seam via parameterized values
-- The usage is confined to the platform/host adapter layer (never in domain or engine SQL)
+1. **MARKDOWN CONTAINER FORMAT** — All prompts must use the standard markdown container structure. Each prompt is a self-contained markdown document with clearly delineated sections using level-2 headings (`##`). No free-form text prompts. No inline prompt strings embedded in code. Every prompt is a file.
 
-If any new SQL timestamp is introduced that could affect replay correctness or business logic, it must use a parameterized timestamp from `IClock` instead of `NOW()`.
-A SQL-clock value that flows back into an aggregate, projection key, event hash, or chain anchor is a violation.
-**Source:** determinism.guard.md
+2. **MANDATORY SECTIONS** — Every prompt must declare these five sections:
+   - `## Role` — Defines the AI's persona, expertise, and constraints for this prompt.
+   - `## Objective` — States the specific goal of the prompt in one to three sentences.
+   - `## Rules` — Numbered list of behavioral rules the AI must follow during execution.
+   - `## Output` — Defines the expected output format, structure, and delivery method.
+   - `## Failure` — Defines what constitutes failure, how to detect it, and what to do on failure.
+   Missing any section makes the prompt non-compliant.
 
-#### DET-ADAPTER-01 — Adapter Block List Extended
-Block list extended to src/platform/host/adapters/**. Forbidden: Guid.NewGuid(), DateTime.Now, DateTime.UtcNow, DateTimeOffset.Now, DateTimeOffset.UtcNow. Use IIdGenerator.Generate(seed) with deterministic seed derived from aggregate id/version/stream coordinate, and IClock.UtcNow.
-**Source:** determinism.guard.md NEW RULES 2026-04-07
+3. **NO BROKEN NESTED CODE FENCING** — Prompts that contain code examples must use proper fencing. Triple backticks inside a prompt must not break the outer markdown structure. Use different fence lengths (````` vs ```) or indent-based code blocks when nesting. A prompt with broken fencing is unparseable and therefore invalid.
 
-#### DET-EXCEPTION-01 — IClock Single Reader
-The IClock implementation (SystemClock) is the ONLY permitted reader of DateTimeOffset.UtcNow. SQL NOW() / CURRENT_TIMESTAMP is permitted ONLY for audit columns the application does NOT read back into deterministic logic.
-**Source:** determinism.guard.md NEW RULES 2026-04-07
+4. **PROMPTS ARE BATCH-SAFE** — Every prompt must be executable in batch mode (non-interactive). Prompts must not require mid-execution user input, confirmations, or interactive decisions. All parameters must be declared upfront in a `## Parameters` section (optional but required if the prompt takes input). Batch-safe means: given inputs, the prompt runs to completion autonomously.
 
-#### DET-SEED-01 — Derived Seed for Adapter Rows
-PostgresEventStoreAdapter row id MUST derive from "{aggregateId}:{version}" via IIdGenerator. Kafka projection envelopes MUST stamp Timestamp from IClock.UtcNow, not consume-moment wall clock.
-**Source:** determinism.guard.md NEW RULES 2026-04-07
+5. **PROMPTS REGISTERED IN PROMPT REGISTRY** — Every prompt file must have an entry in `prompt.registry.json` (or equivalent registry file). The registry entry includes: prompt ID, file path, category, version, and last-validated date. Unregistered prompts are not executable by CI or automated systems.
 
-#### DET-DUAL-SEAM-01 — Two Deterministic Identity Seams
-The "single permitted ID seam" wording is reconciled. TWO deterministic identity seams are now canonical with non-overlapping responsibilities:
-(1) `IIdGenerator.Generate(seed)` — returns `Guid`, used for internal adapter/row/hash IDs, sole implementation `DeterministicIdGenerator` (SHA256 of seed → Guid).
-(2) `IDeterministicIdEngine.Generate(...)` — returns compact string `PPP-LLLL-TTT-TOPOLOGY-SEQ` for external-facing correlation IDs, sole implementation `Whyce.Engines.T0U.Determinism.DeterministicIdEngine`. Both must remain free of `Guid.NewGuid`, `DateTime*.UtcNow`, `Random`, `Environment.Tick*`.
-**Source:** determinism.guard.md NEW RULES 2026-04-07 (HSID v2.1 parallel seam)
-**Severity:** S1
+6. **PROMPT VERSIONING** — Each prompt must declare its version in a YAML frontmatter block or metadata section. Version follows semver: `major.minor.patch`. Breaking changes to prompt structure increment major. Output format changes increment minor. Clarifications increment patch.
 
-#### DET-HSID-CALLSITE-01 — HSID Call-site Restriction
-`IDeterministicIdEngine.Generate(...)` MUST NOT be called outside `src/runtime/control-plane/` and `src/engines/T0U/determinism/`.
-**Source:** determinism.guard.md NEW RULES 2026-04-07 (HSID v2.1 parallel seam)
-**Severity:** S1
+7. **PROMPT CATEGORIZATION** — Prompts must be categorized:
+   - **audit**: Prompts that validate code or architecture.
+   - **generate**: Prompts that produce code, configs, or artifacts.
+   - **review**: Prompts that evaluate PRs, diffs, or changes.
+   - **enforce**: Prompts that check compliance against guards.
+   - **report**: Prompts that produce summary or status reports.
+   The category must be declared in the prompt metadata and registry entry.
 
-#### DET-SEED-DERIVATION-01 — Seed Composition
-When invoking `IIdGenerator.Generate(seed)` (or any seam producing a deterministic identifier from a seed string), the seed MUST be composed exclusively of stable command coordinates (aggregate id, command type name, aggregate version, correlation/causation id, deterministic discriminators). FORBIDDEN seed components: `IClock.UtcNow`/`DateTime.*`/`Stopwatch.*`/`Ticks`, `Guid.NewGuid()`/`Random.*`/`RandomNumberGenerator.*`, process/thread/machine identifiers, env vars, or hashes thereof. Static check: search `IIdGenerator.Generate(` and flag any seed-string interpolation containing `Clock|Now|Ticks|Guid|Random`. Architecture-test enforcement under `tests/unit/architecture/WbsmArchitectureTests`. Rationale: non-deterministic seeds defeat the entire deterministic-id mechanism and silently break replay, projection idempotency, and chain integrity.
-**Source:** determinism.guard.md NEW RULES 2026-04-10
-**Severity:** S1
+8. **NO PROMPT INJECTION VECTORS** — Prompts must not contain user-controllable interpolation without sanitization. If a prompt accepts parameters, parameter values must be enclosed in delimited blocks (e.g., `<parameter>value</parameter>`) to prevent prompt injection. No raw string concatenation of user input into prompt text.
 
-#### DET-IDCHECK-COVERAGE-01 — ID Check Coverage
-`scripts/deterministic-id-check.sh` (or a sibling script) MUST scan `tests/**` and `scripts/validation/**` in addition to `src/**`. Test paths and validation harnesses are not exempt from determinism rules.
-**Source:** determinism.guard.md NEW RULES 2026-04-10
-**Severity:** S2
+9. **DETERMINISTIC OUTPUT SPECIFICATION** — The `## Output` section must define the exact output format (JSON schema, markdown template, structured report format). Outputs must be machine-parseable when consumed by CI. Free-form prose output is permitted only for human-targeted prompts explicitly marked as such.
 
-#### DET-STOPWATCH-OBSERVABILITY-01 — Stopwatch Observability Only
-`Stopwatch.GetTimestamp()` / `GetElapsedTime()` are PERMITTED solely for observability instrumentation (latency histograms, counters, traces). The resulting value MUST NOT flow into `ExecutionHash`, deterministic IDs, sequence seeds, chain block IDs, or any persisted event payload. Lint: any data flow from `Stopwatch` to a hash/id constructor is a DET violation.
-**Source:** determinism.guard.md NEW RULES 2026-04-13
-**Severity:** S2
+10. **PROMPT DEPENDENCY DECLARATION** — If a prompt depends on output from another prompt (chained execution), the dependency must be declared in a `## Dependencies` section. The dependency graph must be acyclic. Circular prompt dependencies are forbidden.
 
-#### DET-SQL-NOW-ADDENDUM-01 — SQL NOW() Addendum
-SQL `NOW()` / `CURRENT_TIMESTAMP` is acceptable in infrastructure adapter SQL for storage-layer operational timestamps (`created_at`, `projected_at`, `published_at`, `next_retry_at`) provided: (1) the timestamp is never consumed by domain logic, event replay, chain integrity, or deterministic ID generation; (2) business-significant time is always supplied from the `IClock` seam via parameterized values; (3) the usage is confined to the platform/host adapter layer (never in domain or engine SQL).
-**Source:** determinism.guard.md NEW RULES 2026-04-13
-**Severity:** S3
+11. **PROMPT IDEMPOTENCY** — Prompts must be idempotent: running the same prompt with the same inputs on the same codebase state must produce equivalent output. Non-deterministic prompts (e.g., creative generation) must be explicitly marked as `idempotent: false` in metadata.
+
+12. **MAXIMUM PROMPT LENGTH** — Individual prompts must not exceed 4000 words. Prompts exceeding this limit must be decomposed into chained sub-prompts with explicit dependency declarations. Overly long prompts degrade AI performance and are harder to audit.
+
+13. **WRITING BLOCK REQUIRED FOR LONG PROMPTS** — Prompts that generate or modify more than 5 files, or produce output exceeding 2000 lines, must include a `## Writing Block` section. The writing block declares: target files, expected changes, rollback strategy, and validation criteria. This ensures large-scale prompt executions are auditable and reversible.
+
+14. **NO BROKEN CONTAINERS (CRITICAL)** — A prompt container must be syntactically complete. Every opened section must be closed. Every code fence must be balanced. Every parameter placeholder must have a corresponding declaration. A broken container is a prompt that cannot be parsed to completion. Broken containers must fail CI immediately with S0 severity. No partial prompt execution is permitted.
+
+15. **PROMPT MUST DECLARE EXECUTION MODE** — Every prompt must declare its execution mode in metadata or frontmatter:
+    - `mode: autonomous` — prompt runs to completion without human intervention
+    - `mode: supervised` — prompt pauses at checkpoints for human review
+    - `mode: dry-run` — prompt simulates execution and reports what would change
+    Prompts without a declared execution mode default to `supervised` and must be flagged for metadata completion.
 
 ---
 
-### Section: Deterministic IDs (HSID v2.1)
+##### WBSM v3 GLOBAL ENFORCEMENT
 
-Locks the HSID v2.1 compact correlation-id format and its single source of truth. This section is the **second** deterministic identity guard alongside the Determinism Core section, and the two are intentionally non-overlapping:
+##### GE-01: DETERMINISTIC EXECUTION (MANDATORY)
 
-| Seam | Output | Scope |
-|------|--------|-------|
-| `IIdGenerator.Generate(seed)` | `Guid` | Internal row ids, hash inputs, adapter envelopes |
-| `IDeterministicIdEngine.Generate(...)` | compact `string` | External-facing correlation IDs of the form `PPP-LLLL-TTT-TOPOLOGY-SEQ` |
+- No `Guid.NewGuid()`, `DateTime.Now`, `DateTime.UtcNow`, or random generators in domain, engine, or runtime code.
+- Must use:
+  - `IIdGenerator` for identity generation
+  - `ITimeProvider` for temporal operations
 
-#### Locked Format
+##### GE-02: WHYCEPOLICY ENFORCEMENT
 
-```
-PPP-LLLL-TTT-TOPOLOGY-SEQ
-```
+- All state mutations must pass policy validation.
+- Guards must verify:
+  - Policy exists for the action
+  - Policy has been evaluated
+  - Policy decision is attached to the execution context
 
-| Segment | Width | Charset | Meaning |
-|---------|-------|---------|---------|
-| PPP | 3 | `[A-Z]` | `IdPrefix` enum name |
-| LLLL | 4 | `[A-Z]` | `LocationCode` |
-| TTT | 3 | `[A-Z0-9]` | Deterministic time bucket (SHA256 of seed) |
-| TOPOLOGY | 12 | `[A-Z0-9]` | Cluster (3) + SubCluster (3) + SPV (6) |
-| SEQ | 3 | `[A-Z0-9]` | Bounded sequence (`X3`, 0..0xFFF) |
+##### GE-03: WHYCECHAIN ANCHORING
 
-Canonical regex:
+- All critical actions must produce:
+  - `DecisionHash` — cryptographic hash of the policy decision
+  - `ChainBlock` — immutable ledger entry anchoring the action
 
-```
-^[A-Z]{3}-[A-Z]{4}-[A-Z0-9]{3}-[A-Z0-9]{12}-[A-Z0-9]{3}$
-```
+##### GE-04: EVENT-FIRST ARCHITECTURE
 
-#### G1 — SINGLE ENGINE
-All HSIDs MUST be produced by `Whyce.Engines.T0U.Determinism.DeterministicIdEngine`. No other class may construct an HSID literal or implement `IDeterministicIdEngine`.
-**Source:** deterministic-id.guard.md
+- All state changes must emit domain events.
+- No silent mutations — every aggregate state transition must produce at least one event.
 
-#### G2 — NO RANDOMNESS
-The engine, the bucket provider, and the sequence resolver MUST NOT call `Guid.NewGuid`, `Random*`, `RandomNumberGenerator`, `DateTime*.UtcNow`, `DateTimeOffset*.UtcNow`, `Environment.Tick*`, or `Stopwatch.GetTimestamp`. The bucket is derived from the seed via SHA256.
-**Source:** deterministic-id.guard.md
+##### GE-05: CQRS ENFORCEMENT
 
-#### G3 — TOPOLOGY REQUIRED
-Every HSID MUST encode a `TopologyCode` of exactly 12 characters: Cluster (3) + SubCluster (3) + SPV (6). A topology value with any other width is a violation.
-**Source:** deterministic-id.guard.md
-
-#### G4 — SEQUENCE BOUNDED + LAST
-The sequence segment MUST be the LAST segment, MUST be exactly 3 hex chars (`X3`), and MUST be produced by an `ISequenceResolver` whose scope key includes BOTH the topology and the seed. Unbounded counters or sequences keyed only on time are forbidden.
-**Source:** deterministic-id.guard.md
-
-#### G5 — DOMAIN PURITY
-No code under `src/domain/**` may inject or call `IDeterministicIdEngine`. The domain layer is forbidden from naming its own HSIDs.
-**Source:** deterministic-id.guard.md
-
-#### G6 — SINGLE STAMP POINT
-`IDeterministicIdEngine.Generate(...)` may be called from EXACTLY two surfaces:
-1. `src/runtime/control-plane/RuntimeControlPlane.cs` (the prelude that stamps `CommandContext.Hsid`).
-2. `src/engines/T0U/determinism/**` (the engine itself, for self-tests).
-
-A call from any other path is an architectural violation. The HSID is stamped before the locked 8-middleware pipeline runs and is write-once on `CommandContext.Hsid`.
-**Source:** deterministic-id.guard.md
-
-#### G7 — STRUCTURAL VALIDATION
-Every produced HSID MUST pass `IDeterministicIdEngine.IsValid(id)` immediately after generation. The prelude in `RuntimeControlPlane` performs this check; new call sites MUST do the same.
-**Source:** deterministic-id.guard.md
-
-#### G8 — NO RUNTIME-ORDER MUTATION
-This guard MUST NOT be used as a justification to add a 9th middleware to the locked pipeline. The HSID stamp lives in the control-plane prelude, out of band of the 8-stage pipeline.
-**Source:** deterministic-id.guard.md
-
-#### G12 — ENGINE REQUIRED (H2–H6 HARDENING)
-`IDeterministicIdEngine`, `ISequenceResolver`, and `ITopologyResolver` MUST all be configured. The `RuntimeControlPlane` constructor throws on any null. There is no fallback, no nullable injection, no optional DI. NO ENGINE → NO EXECUTION.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G13 — SEQUENCE SOURCE
-The canonical sequence resolver is `PersistedSequenceResolver` backed by `ISequenceStore`. The previous `InMemorySequenceResolver` has been removed. Reintroducing an in-memory resolver in production composition is a violation; the test `InMemorySequenceStore` is permitted ONLY under `tests/integration/setup/`.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G14 — TOPOLOGY TRUST
-Topology MUST come from `ITopologyResolver` (via `IStructureRegistry`) for any command that implements `IHsidCommand`. Caller-supplied topology in a command body, request DTO, or HTTP header is forbidden. The fallback path (non-`IHsidCommand`) derives topology deterministically from `classification|context|domain` via SHA256 — this fallback is permitted but flagged by audit A14.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G15 — PRELUDE ENFORCEMENT
-HSID stamping MUST occur in the `RuntimeControlPlane` prelude, before the locked 8-middleware pipeline runs. No middleware may stamp or replace `CommandContext.Hsid`. The write-once setter on `CommandContext.Hsid` enforces this at runtime.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G16 — SEQUENCE STORE
-`ISequenceStore` MUST exist as a dedicated persistence contract. `IEventStore` MUST NOT be used for HSID sequence persistence. Cross-using the event store for sequence counters conflates two replay surfaces.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G17 — HSID COMMAND INTERFACE
-Commands MAY implement `IHsidCommand`. If implemented, `RuntimeControlPlane` MUST resolve topology via `ITopologyResolver`. A command that implements `IHsidCommand` but bypasses the resolver is a G14 violation.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G18 — SEQUENCE WIDTH
-Sequence segment MUST remain X3 (3 hex chars, 0..0xFFF). Any change to width MUST update this guard, the engine regex, and the audit regex in the SAME commit. Locked 2026-04-07.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G19 — INFRASTRUCTURE READINESS
-`ISequenceStore.HealthCheckAsync()` MUST be invoked at host bootstrap by `HsidInfrastructureValidator`. The runtime MUST NOT begin accepting traffic if the health check returns false or throws. Silent degradation is forbidden.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
-
-#### G20 — MIGRATION REQUIRED
-The `hsid_sequences` table MUST exist in every environment that runs the host. Its canonical migration lives at `infrastructure/data/postgres/hsid/migrations/001_hsid_sequences.sql`. CI MUST run `scripts/hsid-infra-check.sh` against the target database before any deploy. VIOLATION = BLOCKER.
-**Source:** deterministic-id.guard.md H2–H6 HARDENING 2026-04-07
+- Write model ≠ Read model. They are strictly separated.
+- No read-model (projection) usage in write-side decisions.
+- Command handlers must never query projection stores.
 
 ---
 
-### Section: Hash Determinism
+##### Check Procedure
 
-Lock the inputs to `ExecutionHash` and `DecisionHash` to a deterministic, replay-stable set. Any change that introduces a timestamp, RNG value, unordered collection, or non-normalized field into a hash input is a critical violation. Hash determinism is the foundation of replay verification — if hashes drift, replay cannot prove anything.
+1. Enumerate all prompt files matching `*.prompt.md`, `*.prompt.json`, or files in prompt directories.
+2. For each prompt file, verify presence of all five mandatory sections: Role, Objective, Rules, Output, Failure.
+3. Parse markdown fencing and verify no broken nested code blocks (fence depth tracking).
+4. Verify no prompt requires mid-execution user interaction (scan for interactive markers).
+5. Verify each prompt has an entry in `prompt.registry.json`.
+6. Verify version declaration in frontmatter or metadata for each prompt.
+7. Verify category assignment for each prompt.
+8. Scan for raw string interpolation patterns (e.g., `${userInput}`, `{0}`) without delimiters.
+9. Verify `## Output` section defines structured format (JSON schema, template, or format spec).
+10. Build prompt dependency graph and check for cycles.
+11. Verify prompt word count does not exceed 4000 words.
+12. Cross-reference registry entries against actual prompt files (detect orphaned registrations or unregistered prompts).
 
-**Scope:**
-- `src/runtime/deterministic/ExecutionHash.cs`
-- `src/runtime/deterministic/DeterministicHasher.cs` (if present)
-- Any future `*Hash.cs` file under `src/runtime/deterministic/`
-- The `DecisionHash` field/computation in policy evaluation (`src/engines/T0U/whycepolicy/` and the policy result type)
+##### Pass Criteria
 
-#### HASH-PERMITTED-INPUTS — Permitted Hash Inputs
-Only the following classes of input may feed a hash:
+- All prompts use markdown container format.
+- All prompts have all five mandatory sections.
+- No broken code fencing in any prompt.
+- All prompts are batch-safe (no interactive requirements).
+- All prompts registered in prompt registry.
+- All prompts have version declarations.
+- All prompts are categorized.
+- No prompt injection vectors detected.
+- All output specifications are structured.
+- Prompt dependency graph is acyclic.
+- All prompts under 4000 words.
 
-1. **Stable identifiers** — `correlationId`, `commandId`, `aggregateId`, `policyId`, `identityId`, `tenantId`. These are deterministic per command and reproduced exactly on replay.
-2. **Normalized identity context** — `roles` (joined in canonical sort order), `trustScore` (string-formatted with invariant culture), `policyVersion` (string).
-3. **Policy decision artifacts** — `policyDecisionHash`, `policyDecisionAllowed` (as a stable string).
-4. **Domain event content** — event type names + per-event payload hashes computed via `DeterministicHasher.ComputePayloadHash(...)`. Events must be hashed in their emission order, with the position index included so that two events of the same type at different positions produce different signatures.
-5. **Counts** — `domainEvents.Count` as a string. Counts are derived from the event list and are themselves deterministic.
+##### Fail Criteria
 
-**Source:** hash-determinism.guard.md
+- Prompt missing mandatory section (Role, Objective, Rules, Output, or Failure).
+- Broken nested code fencing.
+- Prompt requires interactive input mid-execution.
+- Prompt not registered in prompt registry.
+- Missing version declaration.
+- Missing category assignment.
+- Raw user input interpolation without sanitization.
+- Unstructured output specification for CI-consumed prompt.
+- Circular prompt dependency.
+- Prompt exceeds 4000 words without decomposition.
+- Orphaned registry entry (prompt file deleted but registry entry remains).
 
-#### HASH-FORBIDDEN-INPUTS — Forbidden Hash Inputs
-The following are FORBIDDEN as direct or indirect inputs to any hash computed in scope:
+##### Severity Levels
 
-- `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, `DateTimeOffset.UtcNow` — wall clock readings vary per run.
-- `IClock.UtcNow` — even though `IClock` is the canonical time seam, its value is not stable across replays. Time may be hashed by the *event payload* (because events carry their own deterministic stamps), but the hash function itself must not call into `IClock`.
-- `Guid.NewGuid()` — non-deterministic by definition.
-- `Random`, `Random.Shared`, `RandomNumberGenerator.GetBytes(...)` for hash salt — defeats determinism.
-- `Environment.TickCount`, `Environment.TickCount64`, `Stopwatch.GetTimestamp()`.
-- **Unordered collections** as inputs — `HashSet<T>`, `Dictionary<K,V>`, `ConcurrentDictionary<K,V>`, or any `IEnumerable<T>` that is not explicitly sorted before hashing. Iteration order of unordered collections is implementation-defined and may vary across runs and framework versions.
-- **Non-normalized strings** — locale-sensitive `ToString()` calls (`(0.5).ToString()` rather than `(0.5).ToString(CultureInfo.InvariantCulture)`), case-sensitive comparisons of canonical identifiers without first applying a documented canonicalization, paths with mixed separators.
-- **Reference equality** — hashing the result of `Object.GetHashCode()` or `RuntimeHelpers.GetHashCode()` couples the hash to memory layout.
-- **Floating-point representations** — directly hashing `double`/`float` bit patterns. Use the canonical decimal string form via `InvariantCulture` round-trip format ("R" / "G17") only when absolutely necessary, and prefer `decimal` for any value that flows into a hash.
+| Severity | Condition | Example |
+|----------|-----------|---------|
+| **S0 — CRITICAL** | Prompt injection vector | `${userInput}` concatenated into role section |
+| **S0 — CRITICAL** | Missing mandatory section | Prompt without `## Failure` section |
+| **S1 — HIGH** | Unregistered prompt | Prompt file exists but not in registry |
+| **S1 — HIGH** | Broken code fencing | Triple backticks break outer markdown |
+| **S1 — HIGH** | Interactive prompt in CI pipeline | Prompt asks "Continue? (y/n)" mid-execution |
+| **S2 — MEDIUM** | Missing version | No version in frontmatter or metadata |
+| **S2 — MEDIUM** | Circular dependency | Prompt A depends on B, B depends on A |
+| **S2 — MEDIUM** | Unstructured output | Output section says "describe the findings" |
+| **S3 — LOW** | Missing category | Prompt without category assignment |
+| **S3 — LOW** | Prompt over 4000 words | Long prompt without decomposition |
+| **S3 — LOW** | Orphaned registry entry | Registry points to deleted prompt file |
 
-**Source:** hash-determinism.guard.md
+##### Enforcement Action
 
-#### HASH-REQUIRED-PATTERNS — Required Patterns
-1. **Composite hashes** must be computed via `DeterministicHasher.ComputeCompositeHash(...)` (or equivalent). The composite function must concatenate inputs with a reserved separator that cannot appear in the inputs, so that `("ab", "c")` and `("a", "bc")` produce different hashes.
-2. **Per-event signatures** must include the event's positional index, not just its type and payload. Two `TodoUpdatedEvent`s with the same payload at positions 0 and 1 must produce different per-event signatures.
-3. **Sort before hash.** When hashing a collection, sort by a stable key first. The sort must be culture-invariant and document the comparator.
-4. **Null sentinels.** When a field may be null, hash a fixed sentinel string (e.g. `"none"`, `"anonymous"`) rather than letting the null propagate. The sentinel must be unique enough that it cannot collide with a real value.
+- **S0**: Block merge. Fail CI. Prompt must be fixed or removed immediately.
+- **S1**: Block merge. Fail CI. Must resolve before merge.
+- **S2**: Warn in CI. Must resolve within sprint.
+- **S3**: Advisory. Track for cleanup.
 
-**Source:** hash-determinism.guard.md
+All violations produce a structured report:
+```
+PROMPT_CONTAINER_GUARD_VIOLATION:
+  prompt: <prompt file path>
+  registry_id: <registry ID if applicable>
+  rule: <rule number>
+  severity: <S0-S3>
+  violation: <description>
+  section: <which section is affected>
+  expected: <correct format>
+  actual: <detected issue>
+  remediation: <fix instruction>
+```
 
-#### HASH-CURRENT-COMPLIANCE — Current Compliance (capture date 2026-04-07)
-`ExecutionHash.cs:23-61` is currently **compliant**. Inputs:
+##### NEW RULES INTEGRATED — 2026-04-07 (prompt reconciliation pre-execution)
 
-- `correlationId.ToString()`, `commandId.ToString()`, `aggregateId.ToString()` — stable ids
-- `identityId ?? "anonymous"`, `roles` joined, `trustScore?.ToString() ?? "0"` — normalized identity
-- `policyId`, `policyDecisionHash ?? "none"`, `policyDecisionAllowed?.ToString() ?? "false"`, `policyVersion ?? "none"` — policy artifacts with sentinels
-- `eventSignatures` built as `$"{type}:{i}:{payloadHash}"` per event — position index included
-- `domainEvents.Count.ToString()` — derived count
-
-**Zero forbidden inputs.** No clock read, no RNG, no unordered collection, no locale-sensitive formatting. The file passes this guard by inspection.
-**Source:** hash-determinism.guard.md
-
-**Severity:** Any forbidden input reaching a hash function in scope is S0 — CRITICAL. Hash drift is silent and breaks replay verification without producing an error at the point of mistake.
+- **PROMPT-RECONCILE-01** (S2): Pasted prompts MUST be reconciled against existing repository surface
+  area BEFORE code emission. For every type / interface / method / path / topic named in the prompt,
+  verify the canonical equivalent in the codebase. If the prompt literal differs from the canonical
+  name (e.g. `IKafkaConsumer` vs `GenericKafkaProjectionConsumerWorker`, `t1m/` vs `T1M/`,
+  `whyce.workflow.execution.events` vs `whyce.orchestration-system.workflow.events`,
+  `IEventStore.LoadAsync` vs `LoadEventsAsync`), the canonical name MUST be used and the divergence
+  recorded inline in the project-prompt file under a RECONCILIATION section. Literal execution of an
+  unreconciled prompt is a $5 anti-drift violation.
+- Source: `claude/new-rules/_archives/20260407-220000-prompt-reconciliation-pre-execution.md`.
 
 ---
 
-### Section: Replay Determinism
+### Section: Dependency Graph & Layer Boundaries
 
-Lock the design intent behind `EventReplayService.ReplayAsync` and protect the sentinel envelope fields it produces during projection rebuild. This section exists to prevent future passes from "fixing" sentinels that are intentional design markers.
+Source: dependency-graph.guard.md (absorbed verbatim 2026-04-14 per GUARD-LAYER-MODEL-01).
 
-**Scope:**
-- `src/runtime/event-fabric/EventReplayService.cs`
-- Any future `EventReplay*.cs` file under `src/runtime/event-fabric/`
-- The audit document `claude/audits/replay-determinism.audit.md` which records the by-design rationale and is the source of truth for this guard.
 
-**Background — Two Notions of Replay:**
+##### CLASSIFICATION
+system / governance / dependency-control
 
-- **Type A — Re-execution.** Run the same commands twice through the full RuntimeControlPlane → Engine → EventFabric pipeline. With a frozen `IClock` and the existing `DeterministicIdGenerator`, every envelope field including `ExecutionHash`, `PolicyHash`, and `Timestamp` is byte-equal between runs. This is the property protected by the Hash Determinism section above.
+##### PRIORITY
+S0 — Architectural Safety. Violations HALT execution.
 
-- **Type B — Projection rebuild.** Use `EventReplayService.ReplayAsync` to load events from the event store and dispatch them to projection handlers. This path **deliberately** sets sentinel values:
-  - `PolicyHash = "replay"`
-  - `ExecutionHash = "replay"`
-  - `Timestamp = DateTimeOffset.MinValue`
+##### SCOPE
+Entire repository. Loaded fresh on every prompt execution per CLAUDE.md $1a.
 
-  The sentinels signal to downstream consumers that the envelope is a rebuild artifact, not a fresh execution. They are a feature, not a bug.
+---
 
-#### REPLAY-SENTINEL-PROTECTED-01 — Sentinels are protected design artifacts
-The three sentinel assignments in `EventReplayService.ReplayAsync` MUST remain in place. Any code change, prompt instruction, or audit finding that proposes replacing them with "real" envelope values is a violation of this guard and MUST be rejected at the guard-load stage.
+##### CANONICAL LAYER ORDER (TOP → BOTTOM)
 
-**The protected statements are:**
+```
+platform
+  ↓
+systems
+  ↓
+runtime
+  ↓
+engines
+  ↓
+domain
+  ↓
+shared
+```
+
+A layer MAY only reference layers strictly below it, subject to the rules
+below. Upward references are FORBIDDEN. Cycles are FORBIDDEN.
+
+---
+
+##### RULES
+
+##### R1 — DOMAIN PURITY
+- Path: `src/domain/**`
+- Allowed references: `shared` only
+- Forbidden: `engines`, `runtime`, `systems`, `platform`, `infrastructure`,
+  `projections`
+- Failure → S0 halt
+
+##### R2 — ENGINE PURITY
+- Path: `src/engines/**`
+- Allowed references: `domain`, `shared`
+- Forbidden: `runtime`, `systems`, `platform`, `infrastructure`, `projections`
+
+##### R3 — RUNTIME AUTHORITY
+- Path: `src/runtime/**`
+- Allowed references: `engines`, `domain`, `shared`
+- Forbidden: `systems`, `platform`, `projections`
+
+##### R4 — SYSTEMS BOUNDARY
+- Path: `src/systems/**`
+- Allowed references: `runtime` (contracts/interfaces ONLY), `shared`
+- Forbidden: `engines` (direct), `infrastructure`, `platform`, `projections`
+
+##### R5 — PLATFORM ISOLATION
+- Path: `src/platform/**`
+- Default rule: `src/platform/api` may reference `systems` and `shared`
+  only. Forbidden in `platform/api`: `runtime`, `engines`, `domain`,
+  `projections`.
+- **Composition-root exception:** `src/platform/host` is the composition
+  root and is governed by **DG-R5-EXCEPT-01** (lines below). It MAY
+  reference `runtime`, `engines`, `systems`, `projections`, and
+  infrastructure adapters for DI registration purposes only. It MUST
+  NOT reference `Whycespace.Domain` (see **DG-R5-HOST-DOMAIN-FORBIDDEN**).
+- See DG-R5-EXCEPT-01 and DG-R5-HOST-DOMAIN-FORBIDDEN in the EXCEPTIONS
+  section below for the canonical wording. Authoritative mechanical
+  enforcement is `scripts/dependency-check.sh`.
+
+##### R6 — INFRASTRUCTURE RULE
+- Path: `src/infrastructure/**` (when present)
+- Implements `runtime` interfaces ONLY
+- Forbidden: referenced by `domain` or `engines`
+
+##### R7 — PROJECTION RULE
+- Path: `src/projections/**`
+- Allowed references: `domain` (events only), `shared`
+- Forbidden: `engines`, `runtime`, `systems`, `platform`
+- Projections MUST NOT contain domain logic
+
+---
+
+##### ENFORCEMENT MAPPING
+
+| Layer          | Path              | Allowed Project Refs                          |
+|----------------|-------------------|-----------------------------------------------|
+| shared         | src/shared        | (none)                                        |
+| domain         | src/domain        | shared                                        |
+| engines        | src/engines       | domain, shared                                |
+| runtime        | src/runtime       | engines, domain, shared                       |
+| systems        | src/systems       | runtime (contracts), shared                   |
+| projections    | src/projections   | domain, shared                                |
+| platform/api   | src/platform/api  | systems, shared                               |
+| platform/host  | src/platform/host | systems, shared, api, runtime, engines, projections (DI-only, DG-R5-EXCEPT-01; **NOT domain** per DG-R5-HOST-DOMAIN-FORBIDDEN) |
+
+Any `<ProjectReference>` outside this matrix = VIOLATION.
+
+---
+
+##### CODE-LEVEL CHECKS
+
+**Authoritative enforcement:** `scripts/dependency-check.sh`. The
+script is the single source of truth for the mechanical predicates;
+the patterns below are illustrative summaries that must agree with
+the script and with DG-R5-EXCEPT-01 / DG-R5-HOST-DOMAIN-FORBIDDEN.
+
+Illustrative predicates run on every execution:
+
+```
+grep -r "using .*Runtime"        src/domain
+grep -r "using .*Infrastructure" src/engines
+grep -r "using .*Engines"        src/systems
+grep -r "using .*Runtime"        src/platform/api      # platform/api only
+grep -r "using .*Engines"        src/projections
+grep -r "using .*Runtime"        src/projections
+grep -r "Whycespace\.Domain\."   src/platform/host     # DG-R5-HOST-DOMAIN-FORBIDDEN
+```
+
+`src/platform/host` is intentionally omitted from the runtime/engines
+grep above: composition-root usings are permitted under
+DG-R5-EXCEPT-01. Only `Whycespace.Domain.*` references in
+`src/platform/host/**` are forbidden, and the script enforces all
+three forms (using directive, fully-qualified expression, namespace
+alias) per the §5.1.2 Step C-G strengthening.
+
+Any hit = VIOLATION (subject to documented exceptions below).
+
+---
+
+##### ADAPTER LEAKAGE
+
+Adapters are permitted ONLY in:
+- `src/platform/host/adapters/**`
+- `src/infrastructure/**`
+
+Any type/file matching `*Adapter*` outside those paths = VIOLATION.
+
+---
+
+##### SHARED KERNEL
+
+`src/shared/**` MUST contain only:
+- primitives
+- contracts
+- interfaces
+
+FORBIDDEN inside shared:
+- runtime logic
+- infrastructure logic
+- engine logic
+
+---
+
+##### FAILURE ACTION
+
+On any violation:
+1. HALT execution (CLAUDE.md $12)
+2. Emit structured failure: STATUS / STAGE=GUARD / REASON / ACTION_REQUIRED
+3. Do NOT auto-fix architecture (CLAUDE.md $5). Report and require explicit
+   prompt for remediation.
+
+---
+
+##### LOCK CONDITIONS
+
+Guard is LOCKED only if:
+1. All rules R1–R7 pass, **and** all DG-* additions pass:
+   `DG-R5-EXCEPT-01` (composition-root permission, narrowed 2026-04-08),
+   `DG-R5-HOST-DOMAIN-FORBIDDEN` (host→domain prohibition, strengthened
+   §5.1.2 Step C-G), and `DG-R7-01` (projections→runtime, remediated
+   2026-04-07).
+2. No illegal project references
+3. No circular dependencies
+4. CI runs `scripts/dependency-check.sh`
+5. `claude/audits/canonical/runtime.audit.md` §Dependency Graph & Layer Boundaries reports FULL PASS (historical baseline at `claude/audits/dependency-graph.audit.output.md`)
+---
+
+##### NEW RULES INTEGRATED — 2026-04-07
+
+- **DG-R7-01**: ~~Pre-existing violation tracked: Whycespace.Projections.csproj references Whycespace.Runtime.csproj~~ → **REMEDIATED 2026-04-07**. Resolution: introduced shared `IEnvelopeProjectionHandler` and `IEventEnvelope` contracts under `src/shared/contracts/projection/` and `src/shared/contracts/event-fabric/`. Runtime `EventEnvelope` record now implements `IEventEnvelope`; projection handlers in `src/projections/**` consume the shared contracts only. The runtime project reference has been removed from `Whycespace.Projections.csproj`. Verified by `dotnet build` green across host, unit, and integration projects.
+- **DG-R5-01**: ~~Pre-existing violation tracked~~ → **CONVERTED TO DOCUMENTED EXCEPTION (2026-04-07)**. See DG-R5-EXCEPT-01 below.
+
+##### EXCEPTIONS (documented and granted)
+
+##### DG-R5-EXCEPT-01 — Composition Root references (2026-04-07; narrowed 2026-04-08)
+
+`src/platform/host/Whycespace.Host.csproj` MAY reference `Whycespace.Runtime`,
+`Whycespace.Engines`, `Whycespace.Systems`, `Whycespace.Projections`, and
+infrastructure adapters **for DI registration purposes only**.
+
+`Whycespace.Domain` is **NOT** in the permitted list. Per Phase 1.5 §5.1.1
+Step C (2026-04-08), the sole residual host → domain typed usage in
+`src/platform/host/adapters/PostgresOutboxAdapter.cs` was replaced with a
+reflection-based `.Value` unwrap, and the `<ProjectReference>` to
+`Whycespace.Domain.csproj` was removed from `Whycespace.Host.csproj`.
+Re-introducing either the csproj reference or any `using Whycespace.Domain.*`
+inside `src/platform/host/**` is a fresh S0 violation under R5 and
+**DG-R5-HOST-DOMAIN-FORBIDDEN** (see below).
+
+**Authority:** This exception aligns with the already-canonical composition-root
+permission in [platform.guard.md G-PLATFORM-07](platform.guard.md):
+
+> "Host (`Program.cs`) is the composition root and MAY reference runtime,
+> engines, systems, domain, and infrastructure for DI registration purposes
+> only."
+
+The prior R5 wording ("Allowed: systems only") was inconsistent with
+G-PLATFORM-07 and produced a perpetually-tracked violation that was
+not actually a violation under the canonical platform guard. This
+exception entry resolves the inconsistency by recording the DI-only
+permission explicitly inside dependency-graph.guard.md.
+
+**Constraints on the exception:**
+1. The references are permitted **only** in `Whycespace.Host.csproj` itself.
+   No other project under `src/platform/**` may use this exception.
+2. The references must be **DI registration only**. Per
+   [program-composition.guard.md G-PROGCOMP-01 / G-PROGCOMP-03](program-composition.guard.md),
+   `Program.cs` must not contain `AddSingleton<...>` calls keyed on
+   concrete domain types — domain wiring flows through
+   `IDomainBootstrapModule` and `BootstrapModuleCatalog`, and category
+   wiring flows through the literal-list `CompositionModuleLoader`.
+3. Per [runtime.guard.md rule 11.R-DOM-01](runtime.guard.md), the host
+   may not contain folders nested by `{classification}/{context}/{domain}/`
+   nor hold static dictionaries keyed on a single domain.
+4. Removal of any of these direct references is permitted only after
+   the corresponding wiring has been migrated into a bootstrap module
+   listed in `BootstrapModuleCatalog` or a category composition module.
+
+**LOCK status:** With this exception logged, R5 is no longer suspended
+on `Whycespace.Host.csproj` references. DG-R7-01 (projections → runtime)
+was remediated 2026-04-07. Phase 1.5 §5.1.1 Step C (2026-04-08) removed
+the `host → domain` csproj edge. No outstanding tracked violations remain
+under this guard pending verification by a clean full-solution build and
+a green `scripts/dependency-check.sh` run.
+
+---
+
+##### DG-R5-HOST-DOMAIN-FORBIDDEN — host may not depend on domain (2026-04-08)
+
+**Rule:** `src/platform/host/**` may not, under any circumstance:
+1. Declare `<ProjectReference Include="..\..\domain\Whycespace.Domain.csproj" />`
+   in `Whycespace.Host.csproj`.
+2. Contain `using Whycespace.Domain.*;` in any `*.cs` file.
+3. Contain a **fully-qualified type expression** referencing
+   `Whycespace.Domain.*` — including but not limited to
+   `typeof(Whycespace.Domain.X.Y)`, parameter types, generic arguments,
+   cast expressions `(Whycespace.Domain.X.Y)e`, and field/property type
+   declarations.
+4. Contain a **namespace alias** of the form
+   `using <Alias> = Whycespace.Domain.<…>;` (e.g.
+   `using DomainEvents = Whycespace.Domain.OrchestrationSystem.Workflow.Execution;`).
+5. Re-introduce a typed dependency on any `Whycespace.Domain.SharedKernel.*`
+   primitive. Adapters that need to inspect domain event shapes MUST do so
+   via reflection or via shared contracts under `src/shared/contracts/**`.
+
+Clauses 3 and 4 were added under Phase 1.5 §5.1.2 Step C-G after BPV-D01
+exposed eleven live binding sites that bypassed clause 2 by using
+fully-qualified or aliased forms. The strengthened predicate is enforced
+mechanically by `scripts/dependency-check.sh` (see the `host_fq_hits`
+block immediately following the C2 scan).
+
+**Severity:** S0. Violations HALT execution and fail
+`scripts/dependency-check.sh`.
+
+**Authority:** Phase 1.5 §5.1.1 Step C remediation. The composition root
+must wire modules and own infrastructure adapters; it must not import
+domain primitives directly. Domain reachability remains available
+transitively via `runtime → domain` for type identity at runtime, but
+no host source file may bind to a domain symbol at compile time.
+
+##### NEW RULES INTEGRATED — 2026-04-07 (baseline scan addendum)
+
+- **DG-BASELINE-01** (S0): Dual violations logged — (R7) Projections →
+  Runtime and (R5 ×4) Platform/Host fan-in to Runtime/Engines/Projections/
+  Domain. LOCK blocked until remediated (invert dependencies via shared/
+  domain contracts and route Host composition through systems facades) OR
+  narrow exception documented inline. See
+  `claude/new-rules/_archives/20260407-160000-dependency-graph.md`.
+
+##### NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **DG-SCRIPT-HYGIENE-01** (S3, tooling): `scripts/dependency-check.sh` MUST exclude `/obj/` and `/bin/` from all scans (build artifacts under e.g. `src/shared/obj/*.json` are not source). The adapter-leakage check MUST detect adapters by interface-implementation markers (`: IEventStore`, `: IProjectionWriter`, `: IRepository<>`, `: IOutbox*`, `: IChainAnchor*`) rather than by filename `*Adapter*.cs` — the latter false-positives domain aggregates that legitimately model the *Adapter* concept (e.g., `src/domain/business-system/integration/adapter/**`). The script MUST have unit-test fixtures with known-good and known-bad inputs. Source: `_archives/20260408-132840-audits.md`.
+- **DG-COMPOSITION-ROOT-01** (S1, scoping): The `src/platform/host/composition/**` subtree is the composition root and is NOT exempt from R-DOM-01 host→domain prohibition (see canonical interpretation in `_archives/20260408-180000-guards.md`). However, composition modules legitimately reference Runtime, Engines, Projections, and Systems. `dependency-check.sh` MUST treat `src/platform/host/composition/**` as classification `composition` (distinct from `platform`) so that references to those layers are not flagged as R5 platform leaks. Adapter files (`src/platform/host/adapters/*.cs`) are NOT exempted under this rule and remain subject to standard layer checks; their long-term home is runtime or a documented justification. Source: `_archives/20260408-145000-validation-live-execution.md` Finding 6.
+
+---
+
+### Section: Contracts Boundary
+
+Source: contracts-boundary.guard.md (absorbed verbatim 2026-04-14 per GUARD-LAYER-MODEL-01).
+
+name: contracts-boundary
+type: structural
+severity: S1
+locked: true
+---
+
+##### Contracts Boundary Enforcement Guard
+
+##### Purpose
+Preserve strict separation between business language (domain contracts) and
+system mechanics (infrastructure/runtime contracts) within `src/shared/contracts/`.
+
+##### Rules
+
+##### G-CONTRACTS-01 — Domain Contracts Location
+FAIL IF any domain-specific contract (command, query, intent, DTO, read model,
+policy ID) exists outside the canonical path:
+`src/shared/contracts/{classification}/{context}/{domain}/`
+
+Domain classifications: `operational`, `economic`, `governance`, and future
+classifications as they are onboarded.
+
+##### G-CONTRACTS-02 — System Contracts Location
+FAIL IF any system-level contract exists inside a domain classification path.
+System contracts MUST live under one of:
+- `contracts/events/{classification}/{context}/{domain}/` (event schemas only)
+- `contracts/infrastructure/` (persistence, messaging, health, policy, projection, chain, admission)
+- `contracts/runtime/` (command dispatch, workflow execution, control plane)
+- `contracts/common/` (API envelope, standard response models)
+- `contracts/engine/` (generic engine contracts)
+- `contracts/event-fabric/` (event infrastructure)
+- `contracts/identity/` (identity/auth)
+- `contracts/chain/` (chain integrity/sequencing)
+- `contracts/policy/` (system-wide policy evaluation contracts)
+- `contracts/projection/` (projection infrastructure)
+- `contracts/projections/{classification}/{context}/{domain}/` (cross-domain projection read models)
+
+##### G-CONTRACTS-03 — Prohibited Top-Level Directories
+FAIL IF any of the following directories are introduced under `src/shared/contracts/`:
+- `contracts/domain/`
+- `contracts/business/`
+- `contracts/core/`
+
+These generic groupings violate the classification-based domain structure.
+
+##### G-CONTRACTS-04 — No Domain/System Mixing
+FAIL IF a single directory contains both domain-specific contracts and
+system-level contracts. Domain and system concerns occupy separate directory
+subtrees with no overlap.
+
+##### G-CONTRACTS-05 — Event Schema Location
+FAIL IF event schemas exist outside `contracts/events/{classification}/{context}/{domain}/`.
+Event schemas follow the domain three-level nesting but live under the `events/`
+subtree, not alongside commands/queries in the domain contract path.
+
+##### G-CONTRACTS-06 — Namespace Alignment
+FAIL IF a contract file's declared namespace does not align with its directory
+path. Domain contracts use `Whyce.Shared.Contracts.{Classification}.{Context}.{Domain}`.
+System contracts use `Whyce.Shared.Contracts.{Category}` (e.g., `Infrastructure.Health`,
+`Runtime`, `Common`). Event schemas use
+`Whyce.Shared.Contracts.Events.{Classification}.{Context}.{Domain}`.
+
+##### Severity
+- All G-CONTRACTS-* rules: **S1 — HIGH** (block merge)
+
+---
+
+### Section: Code Quality Enforcement
+
+Subsystem of Runtime Enforcement per GUARD-LAYER-MODEL-01 — consolidates clean-code, no-dead-code, stub-detection.
+
+#### Clean Code
+
+
+##### CLASSIFICATION
+
+governance / clean-code / enforcement
+
+##### MODE
+
+MANDATORY — BLOCKING
+
+---
+
+##### PRINCIPLE
+
+Clean code in Whycespace is defined as:
+
+> Deterministic, readable, domain-aligned, non-over-engineered, and structurally consistent code that is easy to understand, test, and modify.
+
+---
+
+##### ENFORCEMENT RULES
+
+###### CCG-01 — READABILITY (MANDATORY)
+
+* All variables, methods, classes MUST use descriptive, intention-revealing names
+* Single-letter variables are FORBIDDEN (except loop counters)
+* Abbreviations are FORBIDDEN unless domain-standard
+
+BLOCK IF:
+
+* ambiguous naming detected
+* non-semantic identifiers used
+
+---
+
+###### CCG-02 — FUNCTION SIZE & FOCUS
+
+* Functions MUST do ONE thing only
+* Max recommended length: 20–30 lines
+* Nested depth MUST NOT exceed 3 levels
+
+BLOCK IF:
+
+* multiple responsibilities detected
+* deep nesting (>3)
+* large monolithic methods
+
+---
+
+###### CCG-03 — NO SPAGHETTI LOGIC
+
+* Deep nested conditionals MUST be flattened
+* Early returns MUST be preferred
+* Flow MUST be linear and predictable
+
+BLOCK IF:
+
+* nested if/else chains > 3 levels
+* branching chaos without clear flow
+
+---
+
+###### CCG-04 — NO OVER-ENGINEERING
+
+* Do NOT introduce abstractions without clear necessity
+* Avoid premature generalization
+* Avoid unused interfaces, factories, patterns
+
+BLOCK IF:
+
+* unused abstractions
+* speculative architecture
+* indirection without value
+
+---
+
+###### CCG-05 — DOMAIN PURITY (CRITICAL)
+
+* Business logic MUST exist ONLY in domain aggregates/entities
+* No business logic in:
+
+  * controllers
+  * runtime
+  * engines (outside orchestration role)
+
+BLOCK IF:
+
+* domain logic leakage detected outside domain layer
+
+---
+
+###### CCG-06 — LAYER ISOLATION
+
+STRICT enforcement:
+
+| Layer    | Allowed Access   |
+| -------- | ---------------- |
+| Platform | Systems only     |
+| Systems  | Runtime only     |
+| Runtime  | Engines only     |
+| Engines  | Domain only      |
+| Domain   | NOTHING external |
+
+BLOCK IF:
+
+* any cross-layer violation occurs
+
+---
+
+###### CCG-07 — DETERMINISM (CRITICAL)
+
+FORBIDDEN:
+
+* Guid.NewGuid()
+* DateTime.UtcNow
+* Random()
+
+REQUIRED:
+
+* DeterministicIdHelper
+* Injected IClock
+
+BLOCK IF:
+
+* non-deterministic behavior detected
+
+---
+
+###### CCG-08 — SELF-DOCUMENTING CODE
+
+* Code MUST express intent without comments
+* Comments ONLY allowed for:
+
+  * WHY, not WHAT
+
+BLOCK IF:
+
+* excessive comments explaining obvious logic
+* unclear logic requiring explanation
+
+---
+
+###### CCG-09 — CONSISTENCY
+
+* Naming conventions MUST be uniform
+* Folder structure MUST follow canonical rules
+* DDD structure MUST be complete
+
+BLOCK IF:
+
+* inconsistent naming
+* structural deviations
+
+---
+
+###### CCG-10 — TESTABILITY
+
+* Code MUST be:
+
+  * deterministic
+  * side-effect controlled
+  * dependency-injected
+
+BLOCK IF:
+
+* hidden dependencies
+* untestable logic
+
+---
+
+###### CCG-FILE-NAME-MATCHES-TYPE-01 — Source File Name Must Match Contained Public Type
+
+For every file `src/**/*.cs` that contains exactly one public top-level type (class, record, struct, interface, enum, or delegate), the file name (without `.cs`) MUST equal the simple name of that type.
+
+Exceptions:
+1. Partial classes spread across multiple files MAY use the convention `{TypeName}.{Aspect}.cs` (e.g. `FooAggregate.Apply.cs`).
+2. Files containing multiple public top-level types are out of scope (tracked separately under a `CCG-ONE-TYPE-PER-FILE-01` capture if introduced).
+3. Auto-generated `.g.cs` / `.designer.cs` files are exempt.
+
+**Severity:** S3 (formatting) when the contained type IS referenced by its real name elsewhere (silent drift — build is green, grep fails, README-as-evidence audit silently misses the file). Promote to **S2 (structural)** when the misleading file name contradicts a domain README boundary statement (e.g. `FxExecutedEvent.cs` containing `FxPairRegisteredEvent` in a domain whose README bans "Executed" semantics).
+
+**Scan:** for each `*.cs` under `src/**`, parse public top-level type declarations; if exactly one and its simple name ≠ file basename, flag.
+
+**Rationale:** filename–type alignment is the fastest visual contract between filesystem and code. Drift here defeats grep, defeats README-as-evidence audits, and lets boundary-violating names slip past code review.
+**Source:** new-rules 2026-04-15 (exchange/fx post-fix sweep).
+
+---
+
+##### ENFORCEMENT MODE
+
+* PRE-COMMIT: WARNING
+* CI/CD: HARD BLOCK
+* RUNTIME: NOT APPLICABLE
+
+---
+
+##### OUTPUT
+
+Violation MUST return:
+
+```
+CLEAN_CODE_VIOLATION
+Rule: <RULE_ID>
+File: <path>
+Reason: <description>
+Fix: <required correction>
+```
+
+---
+
+##### LOCK STATUS
+
+LOCKED — CANONICAL
+
+#### Dead Code Elimination
+
+
+**Status:** ACTIVE
+**Severity baseline:** S0 = must remove immediately; S1 = should remove.
+**Owner:** WBSM v3 structural integrity.
+
+##### Objective
+
+Ensure the codebase contains only executable, referenced, and purposeful code.
+Eliminate misleading, unused, or placeholder artifacts that introduce ambiguity.
+
+---
+
+##### Core Rule
+
+A file MUST NOT exist in the repository if it has no runtime or compile-time impact,
+unless it is explicitly allowed under the Exceptions section.
+
+---
+
+##### Definitions
+
+###### Dead Code
+
+Code is considered DEAD if ANY of the following are true:
+
+1. It is not referenced anywhere in the codebase
+2. It is not part of the build output
+3. It is not used by runtime execution (API → Runtime → Engine → Domain → Projection)
+4. It is not used by tests
+5. It exists only as:
+
+   * a placeholder
+   * a redirect stub
+   * commented-out logic
+   * legacy artifact
+
+---
+
+##### Prohibited Patterns
+
+The following MUST NOT exist:
+
+###### 1. Redirect Stubs
+
+Example:
 
 ```csharp
-ExecutionHash = "replay",
-PolicyHash    = "replay",
-Timestamp     = DateTimeOffset.MinValue,
+// Moved to ...
+public class X {}
 ```
 
-Located at `EventReplayService.cs:55-59`.
+###### 2. Empty Classes
 
-**Source:** replay-determinism.guard.md
-**Severity:** S1 — HIGH (block merge)
+```csharp
+public class TodoService {}
+```
 
-#### REPLAY-SENTINEL-LIFT-01 — How to lift the protection
-The protection is **not absolute**, but lifting it requires a documented design change, not a hardening fix. The path to changing the sentinel behavior is:
+###### 3. Unused Interfaces / Implementations
 
-1. **First** update `claude/audits/replay-determinism.audit.md` to remove the by-design clause at lines 53-72 and record the new requirement that justifies the change. Without this update, no downstream change is permitted.
-2. Extend `EventStoreService` (or its successor) to persist and return per-event envelope metadata (`PolicyHash`, `ExecutionHash`, `Timestamp`) at the time the events are appended to the store.
-3. Modify `EventReplayService.ReplayAsync` to read those values from the store rather than reconstructing envelopes from raw events.
+* Interfaces with zero callers
+* Implementations not registered or invoked
 
-Steps 2 and 3 may not be performed in any commit that does not also contain step 1.
+###### 4. Duplicate Execution Paths
 
-**Source:** replay-determinism.guard.md
-**Severity:** S1 — HIGH (block merge)
+* Old consumers alongside new ones
+* Parallel patterns doing the same job
 
-#### REPLAY-A-vs-B-DISTINCTION-01 — Audits and prompts must respect the distinction
-Any audit, prompt, or test that asserts envelope-field equality on replay MUST distinguish Type A (re-execution) from Type B (rebuild):
+###### 5. Commented-Out Code Blocks
 
-- For Type A: `ExecutionHash`, `PolicyHash`, and `Timestamp` MUST be byte-equal between runs under a frozen `IClock` and deterministic `IIdGenerator`. Failure here is a true determinism violation under the Hash Determinism / Determinism Core sections above.
-- For Type B: `ExecutionHash`, `PolicyHash`, and `Timestamp` are sentinel values and MUST NOT be asserted equal to the originals. The fields that DO survive rebuild are `EventId`, `AggregateId`, `CorrelationId`, `EventType`, `Payload`, and `SequenceNumber`.
+```csharp
+// var x = ...
+```
 
-Asserting Type A equality on a Type B replay is a misclassification and a violation of this rule.
+---
 
-**Source:** replay-determinism.guard.md
-**Severity:** S2 — MEDIUM (advisory in CI; block in audit)
+##### Allowed Exceptions
 
-#### POLICY-REPLAY-INTEGRITY-01 — No Policy Re-evaluation on Replay
-`EventReplayService` MUST NOT re-evaluate policy during replay. Stored `PolicyEvaluatedEvent` / `PolicyDeniedEvent` records are the source of truth for replayed decisions. Re-evaluation would risk drift if policy versions or trust scores have changed since original evaluation.
-**Source:** replay-determinism.guard.md NEW RULES 2026-04-07 (policy eventification)
-**Severity:** S0
+The following are allowed:
+
+###### 1. Structural Placeholders
+
+Used to preserve folder structure:
+
+* `.gitkeep`
+
+###### 2. Scaffolding for Future Layers
+
+ONLY if empty and intentional:
+
+* `T3I/`
+* `T4A/`
+
+Must contain:
+
+* no logic
+* no fake implementations
+
+###### 3. Documentation (Outside Runtime Path)
+
+* `/docs/`
+* `/claude/`
+
+NOT allowed inside:
+
+* `/src/`
+
+###### 4. Contracts in Active Use
+
+* DTOs, Commands, Queries even if indirectly referenced
+
+---
+
+##### Enforcement Rules
+
+###### R1 — Reference Check
+
+Every class must have at least one of:
+
+* direct reference
+* DI registration
+* runtime invocation
+* test usage
+
+###### R2 — Registration Check
+
+If a class is meant to execute:
+
+* it MUST be registered (DI / engine registry / workflow registry)
+
+###### R3 — Projection Consumption
+
+* No custom consumers if a generic worker exists
+* All projections must be reachable via registry
+
+###### R4 — Single Pattern Rule
+
+* Only ONE valid implementation pattern per concern
+
+---
+
+##### Violation Severity
+
+| Severity | Description                                      |
+| -------- | ------------------------------------------------ |
+| S0       | Dead code affecting runtime clarity or execution |
+| S1       | Unused but harmless code                         |
+| S2       | Cosmetic / formatting                            |
+
+---
+
+##### Action on Violation
+
+* S0 → MUST be removed immediately
+* S1 → SHOULD be removed
+* S2 → optional cleanup
+
+---
+
+##### Example (Correct)
+
+✔ Used handler registered in engine registry
+✔ Projection handler registered in projection registry
+
+##### Example (Violation)
+
+✘ Old event consumer not used
+✘ Empty service class
+✘ Stub file with comment "moved to ..."
+
+---
+
+##### Canonical Principle
+
+> If a developer cannot trace a file to execution, it must not exist.
+
+---
+
+##### Scope
+
+Applies to:
+
+* src/domain
+* src/engines
+* src/runtime
+* src/systems
+* src/projections
+* src/platform
+* src/shared
+
+---
+
+##### Summary
+
+Dead code is not neutral—it creates false architecture.
+
+This guard ensures:
+
+* clarity
+* determinism
+* maintainability
+* correct developer understanding
+
+#### Stub Detection
+
+
+**Status:** ACTIVE
+**Severity baseline:** S0 fails build; S1 requires explicit registry entry.
+**Owner:** WBSM v3 structural integrity.
+
+##### SCOPE
+All files under `src/`. Tests are out of scope.
+
+##### RULES
+
+###### STUB-R1 — Zero NotImplementedException on production path (S0)
+`throw new NotImplementedException(...)` is FORBIDDEN in:
+- `src/domain/**`
+- `src/engines/**`
+- `src/runtime/**`
+- `src/platform/api/**`
+- Anywhere on the Todo E2E path: API → Runtime → Engines → Persistence → Kafka → Response
+
+If a method must be unimplemented, throw a structured domain exception with explicit reason, OR remove the method.
+
+###### STUB-R2 — Zero TODO/FIXME/HACK on production path (S1)
+Comments containing `TODO`, `FIXME`, `HACK`, `XXX` are forbidden in production code. Convert to GitHub issues or new-rules entries instead.
+
+###### STUB-R3 — Placeholder implementations must be registered (S1)
+A class is a "tracked placeholder" only if:
+1. Class name begins with `InMemory` OR file/class XML doc contains the literal token `PLACEHOLDER (T-PLACEHOLDER-NN)`
+2. There is a corresponding registry entry in `claude/registry/placeholders.json` (or equivalent) with:
+   - `id` (matching `T-PLACEHOLDER-NN`)
+   - `file`
+   - `replacement_target` (e.g., the migration script or canonical implementation path)
+   - `phase_gate` (which phase must replace it)
+3. Architecture test enforces 1:1 between marker and registry.
+
+Untracked placeholders are S1 violations.
+
+###### STUB-R4 — No silent exception swallowing (S2)
+Forbidden:
+```csharp
+catch { }
+catch (Exception) { }
+```
+Allowed:
+- `catch (OperationCanceledException) { return; }` in shutdown paths
+- `catch (SpecificException ex) { _logger.LogDebug(ex, "..."); /* known recoverable */ }`
+
+###### STUB-R5 — No empty interface implementations without doc (S2)
+An empty `void` method implementing an interface contract requires an XML doc comment explaining why it is intentionally a no-op (e.g., "schema-only module owns no engines").
+
+###### STUB-R6 — No hardcoded placeholder return values (S2)
+`return true;`, `return 0;`, `return "ok";`, `return new List<T>();` as the entire method body is forbidden unless the method's contract permits it (verified by name like `IsAlwaysTrue` or interface explicitly states "returns empty when …").
+
+##### CI ENFORCEMENT
+1. **Architecture test:** grep `src/{domain,engines,runtime,platform/api}/**/*.cs` for `NotImplementedException` — fail.
+2. **Architecture test:** grep `src/**/*.cs` for `\bTODO\b|\bFIXME\b|\bHACK\b|\bXXX\b` outside `// XML doc` — fail.
+3. **Architecture test:** for every class matching `^InMemory.*` or comment `PLACEHOLDER \(T-PLACEHOLDER-\d+\)`, assert a registry entry exists in `claude/registry/placeholders.json`.
+4. **Architecture test:** scan for `catch\s*\{\s*\}` — fail.
+
+##### CURRENTLY TRACKED PLACEHOLDERS
+- `T-PLACEHOLDER-01` — InMemoryWorkflowExecutionProjectionStore (replaced by Postgres impl after migration 002)
+- `T-PLACEHOLDER-02` — InMemoryStructureRegistry (replaced by canonical constitutional registry)
+
+(Both must be added to `claude/registry/placeholders.json` when that registry is created — see new-rules entry 20260408-132840-stub-detection.md.)
+
+---
+
+### Section: Test & E2E Validation
+
+Subsystem of Runtime Enforcement per GUARD-LAYER-MODEL-01 — consolidates tests, e2e-validation.
+
+#### Test Architecture
+
+
+##### Purpose
+
+Enforce test architecture rules across the WBSM v3 system. Tests must mirror the domain structure, respect layer boundaries, cover the full execution pipeline, and ensure that simulation capabilities exist for policy and chain validation. Tests are a constitutional enforcement layer — not optional, not advisory.
+
+##### Scope
+
+All test files across `tests/`. Applies to unit tests, integration tests, end-to-end tests, and simulation tests. Evaluated at CI, code review, and governance audit.
+
+##### Rules
+
+1. **UNIT TESTS MUST MIRROR DOMAIN** — The unit test folder structure must mirror `src/domain/` exactly. For each bounded context at `src/domain/{system}/{context}/{domain}/`, a corresponding test folder must exist at `tests/unit/{system}/{context}/{domain}/`. Each aggregate, entity, value object, service, and specification must have a corresponding test class following the `{ClassName}Tests` naming pattern.
+
+2. **INTEGRATION TESTS MUST USE RUNTIME** — Integration tests must exercise the full runtime pipeline: command dispatch → middleware → engine → domain → event → projection. Integration tests must not call domain aggregates or engines directly. They must dispatch commands through the runtime command bus and verify results through the query/projection path. This validates the complete execution flow.
+
+3. **E2E TESTS MUST COVER FULL PIPELINE** — End-to-end tests must cover the complete pipeline from platform entry point to persistence and projection. E2E tests verify: API request → platform → systems → runtime → engine → domain → event store → outbox → Kafka → projection. E2E tests use real infrastructure (or containerized equivalents) — no mocks at this level.
+
+4. **NO INFRASTRUCTURE IN UNIT TESTS** — Unit tests must not reference any infrastructure type: no `DbContext`, no `HttpClient`, no Kafka types, no file system calls, no external service clients. Unit tests operate on pure domain logic with in-memory fakes or stubs for repository interfaces. Any infrastructure import in a unit test is a structural violation.
+
+5. **SIMULATION TESTS MUST EXIST** — Policy simulation tests and chain verification tests must exist. Simulation tests validate:
+   - Policy evaluation produces correct `DecisionHash` for known inputs
+   - Chain anchoring produces valid `ChainBlock` entries
+   - Policy simulation mode correctly reports what would happen without enforcing
+   - Event replay produces consistent aggregate state
+   Systems without simulation tests cannot pass governance audit.
+
+---
+
+##### WBSM v3 GLOBAL ENFORCEMENT
+
+###### GE-01: DETERMINISTIC EXECUTION (MANDATORY)
+
+- No `Guid.NewGuid()`, `DateTime.Now`, `DateTime.UtcNow`, or random generators in domain, engine, or runtime code.
+- Must use:
+  - `IIdGenerator` for identity generation
+  - `ITimeProvider` for temporal operations
+
+###### GE-02: WHYCEPOLICY ENFORCEMENT
+
+- All state mutations must pass policy validation.
+- Guards must verify:
+  - Policy exists for the action
+  - Policy has been evaluated
+  - Policy decision is attached to the execution context
+
+###### GE-03: WHYCECHAIN ANCHORING
+
+- All critical actions must produce:
+  - `DecisionHash` — cryptographic hash of the policy decision
+  - `ChainBlock` — immutable ledger entry anchoring the action
+
+###### GE-04: EVENT-FIRST ARCHITECTURE
+
+- All state changes must emit domain events.
+- No silent mutations — every aggregate state transition must produce at least one event.
+
+###### GE-05: CQRS ENFORCEMENT
+
+- Write model ≠ Read model. They are strictly separated.
+- No read-model (projection) usage in write-side decisions.
+- Command handlers must never query projection stores.
+
+---
+
+##### Check Procedure
+
+1. Enumerate all BCs at D2 activation level and verify corresponding test folders exist in `tests/unit/`.
+2. Verify each D2 aggregate has a corresponding `{Aggregate}Tests` class.
+3. Scan integration test files for direct aggregate or engine instantiation (must use runtime pipeline).
+4. Verify integration tests dispatch commands through `ICommandBus` or runtime mediator.
+5. Verify E2E tests exercise the full platform-to-projection pipeline.
+6. Scan unit test files for infrastructure imports (`DbContext`, `HttpClient`, `Confluent.Kafka`, etc.).
+7. Verify simulation test files exist for policy evaluation and chain anchoring.
+8. Verify simulation tests cover: DecisionHash generation, ChainBlock creation, policy simulation mode, event replay consistency.
+9. Verify test naming follows `{ClassName}Tests` pattern.
+10. Verify test folder structure mirrors domain structure.
+
+##### Pass Criteria
+
+- All D2-level BCs have mirrored unit test folders.
+- All aggregates, services, and specifications at D2 have test classes.
+- Integration tests use runtime pipeline exclusively.
+- E2E tests cover full pipeline.
+- Zero infrastructure imports in unit tests.
+- Simulation tests exist for policy and chain.
+- Test folder structure mirrors domain structure.
+
+##### Fail Criteria
+
+- D2-level BC without corresponding test folder.
+- Aggregate without test class.
+- Integration test calling domain/engine directly (bypassing runtime).
+- E2E test missing pipeline stages.
+- Infrastructure import in unit test.
+- Missing simulation tests for policy or chain.
+- Test folder structure does not mirror domain.
+
+##### Severity Levels
+
+| Severity | Condition | Example |
+|----------|-----------|---------|
+| **S0 — CRITICAL** | Integration test bypasses runtime | Test calls `aggregate.Apply()` directly instead of dispatching command |
+| **S0 — CRITICAL** | Missing simulation tests | No policy simulation or chain verification tests exist |
+| **S1 — HIGH** | Infrastructure in unit test | `using Microsoft.EntityFrameworkCore;` in unit test |
+| **S1 — HIGH** | D2 BC without test folder | `economic-system/capital/vault/` has no test mirror |
+| **S2 — MEDIUM** | Missing aggregate test | `VaultAggregate` has no `VaultAggregateTests` class |
+| **S2 — MEDIUM** | E2E test missing stages | E2E test skips outbox/Kafka stage |
+| **S3 — LOW** | Test naming violation | `VaultTest` instead of `VaultAggregateTests` |
+| **S3 — LOW** | Test folder structure drift | Test folder doesn't match domain folder hierarchy |
+
+##### Enforcement Action
+
+- **S0**: Block merge. Fail CI. Immediate remediation required.
+- **S1**: Block merge. Fail CI. Must resolve before merge.
+- **S2**: Warn in CI. Must resolve within sprint.
+- **S3**: Advisory. Track for cleanup.
+
+All violations produce a structured report:
+```
+TESTS_GUARD_VIOLATION:
+  test_type: <unit|integration|e2e|simulation>
+  bc: <classification/context/domain>
+  file: <path>
+  rule: <rule number>
+  severity: <S0-S3>
+  violation: <description>
+  expected: <correct test structure>
+  actual: <detected issue>
+  remediation: <fix instruction>
+```
+
+---
+
+##### NEW RULES INTEGRATED — 2026-04-07
+
+- **T-BUILD-01**: tests/integration/ MUST compile on every CI run. A red integration project halts merge. The CI gate fails when "dotnet build tests/integration/Whycespace.Tests.Integration.csproj" fails.
+- **T-DOUBLES-01**: All in-memory test doubles (InMemoryChainAnchor, InMemoryOutbox, InMemoryEventStore, etc.) MUST take IClock and IIdGenerator constructor parameters. No Guid.NewGuid() / DateTimeOffset.UtcNow inside test doubles.
+- **T-PLACEHOLDER-01**: In-memory repository implementations used in production composition MUST be clearly marked as placeholders AND have a corresponding migration script in scripts/migrations/ ready for swap.
+
+##### NEW RULES INTEGRATED — 2026-04-07 (workflow resume test coverage)
+
+- **T1M-RESUME-TEST-COVERAGE-01** (S2): A `T1MWorkflowHarness` test fixture MUST exist under
+  `tests/integration/orchestration-system/workflow/` wiring `T1MWorkflowEngine`, `WorkflowStepExecutor`,
+  in-memory `IWorkflowRegistry`, and a real `IEventStore`. Required scenarios: resume midway
+  (cursor = 2 of 4 → executes steps 2,3); resume completed → fails with "not in resumable state";
+  resume after failure → re-runs the failed step per chosen policy. `NoOpWorkflowEngine` stubs do not
+  satisfy this rule.
+- Source: `claude/new-rules/_archives/20260407-230000-workflow-resume-payload-and-test-coverage.md`.
+
+##### NEW RULES INTEGRATED — 2026-04-10 (promoted from new-rules backlog)
+
+- **ACT-FABRIC-ROUNDTRIP-TEST-01** (S0): Every domain event whose schema is registered with `IEventSchemaRegistry` MUST have at least one integration test that constructs the event, persists it via the real `IEventFabric` (not a double), reloads it from the real event store, and asserts payload integrity round-trip. Tests that bypass the real fabric MUST be tagged `[Trait("Fabric","Bypass")]`. CI gate enumerates registered events and fails the build on any uncovered registration. Rationale: prevents the `WorkflowExecutionResumedEvent` class of drift where in-memory doubles green-light a path the real fabric does not know about. Source: `_archives/20260408-103326-activation.md`.
+- **G-E2E-010 — Untested = FAIL** (S1): Validation, audit, and e2e prompts MUST treat any test case that is unreachable, un-runnable, or skipped as a FAILURE, never a SKIP. Reports listing SKIP in place of executable evidence are non-compliant. Applies cross-cutting to all test/validation/audit prompts. Source: `_archives/20260408-142631-validation.md` Finding 1.
+- **T-POLICY-001** (S1): Test fixtures touching the command path MUST assert non-null `decision_hash` and `policy.version` on the resulting event/command-result. Production code is covered by `policy-binding.guard.md`; this closes the test-side gap. Source: `_archives/20260408-142631-validation.md` Finding 3.
+- **T-BUILD-01 STRENGTHENING** (S1): A commit that changes a production interface signature (constructor args or interface members) MUST update the corresponding test doubles in `tests/integration/setup/` in the SAME commit. Orphaned test doubles are an S1 architectural violation. The executable enforcement is `claude/audits/canonical/runtime.audit.md` §Test & E2E Validation (T-BUILD-01). Source: `_archives/20260409-120500-infrastructure-tests-integration-baseline-drift.md`.
+
+#### E2E Validation
+
+
+**Classification:** validation
+**Scope:** Phase 1.5 certification gate. Loaded before any prompt that claims to validate, certify, or smoke-test the Whycespace system end-to-end.
+
+##### RULES
+
+###### G-E2E-001 — No PASS without execution evidence
+Any test entry in `/docs/validation/*.md` marked `STATUS: PASS` MUST carry an `EVIDENCE:` block containing at minimum: command run, exit code, captured event_id(s), kafka offset, and timestamp of execution. Missing evidence = `STATUS: FAIL — NOT EXECUTED`.
+
+###### G-E2E-002 — Layer coverage is mandatory
+Every E2E test MUST exercise: API → Runtime → Engine → Event Store → Kafka → Projection → Read API. Skipping any layer = S1 violation. Single-layer unit assertions are NOT E2E.
+
+###### G-E2E-003 — Determinism in fixtures
+Test fixtures MUST NOT embed `Guid.NewGuid()`, `DateTime.UtcNow`, `new Random()`, or wall-clock-derived IDs. All IDs derived via `IDeterministicIdGenerator`; all clocks via `IClock`. Violations = S1 ($9).
+
+###### G-E2E-004 — Policy decision required
+Every command-side test MUST capture `policy.decision`, `policy.decision_hash`, `policy.version`. Absence = S0 ($8 — no operation may bypass WHYCEPOLICY).
+
+###### G-E2E-005 — Chain anchor required
+Every event-emitting test MUST capture `chain.block_id` and `chain.hash`. Hash MUST be reproducible across two runs of the same fixture. Non-reproducibility = S1 ($9).
+
+###### G-E2E-006 — DLQ before commit
+Failure-injection tests MUST assert that on engine/projection/consumer failure the message lands on the DLQ topic BEFORE the source offset is committed. Commit-then-DLQ = S0 (data loss risk).
+
+###### G-E2E-007 — Replay equivalence
+Every aggregate touched by an E2E test MUST be replayable from the event store and produce a byte-equal projection state. Divergence = S1.
+
+###### G-E2E-008 — No test self-cleanup that hides failures
+Tests MUST NOT delete event-store rows, kafka topics, or projection state on failure. Cleanup runs ONLY on PASS, after evidence capture.
+
+###### G-E2E-009 — Severity ladder
+Failures classified per source prompt §14: CRITICAL (blocks Phase 1.5) / HIGH / MEDIUM / LOW. CRITICAL is reserved for: data loss, policy bypass, chain break, replay divergence, DLQ-after-commit.
+
+###### G-E2E-011 — Static checks are STAGE 0
+`scripts/validation/run-e2e.sh` MUST invoke every `scripts/*-check.sh` as STAGE 0 before any HTTP/Kafka call. Any non-zero exit aborts the run with status `FAIL — STAGE 0`. Rationale: cheap signal catches config and dependency bugs before expensive live execution.
+
+###### G-E2E-010 — Untested = FAIL
+Per source §15, any case the harness cannot execute (missing service, missing fixture, environmental gap) is recorded as `FAIL — NOT EXECUTED` with `severity: CRITICAL` if it sits on the gate path. Silent skips are forbidden.
+
+##### INTEGRATION
+- Loaded by `$1a` pre-execution stage for any prompt classified `validation` or `phase1.5-gate`.
+- Audited by `claude/audits/canonical/runtime.audit.md` §Test & E2E Validation (G-E2E-001..011).
 
 ---
 
@@ -1459,7 +2392,13 @@ RUNTIME_GUARD_VIOLATION:
 
 ## Relationship to Other Guards
 
-This consolidated guard does not replace `behavioral.guard.md` or `domain.guard.md` GE-01 sections. It supplements them by widening the enforcement surface to runtime, engines, projections, composition, and platform adapters. Where this guard and an existing guard overlap, the stricter rule wins.
+Per GUARD-LAYER-MODEL-01 (4-layer canonical model, LOCKED 2026-04-14):
+- **Determinism, Deterministic Identifiers (HSID), Hash Determinism, Replay Determinism** live in `constitutional.guard.md`. Rule IDs DET-*, G1..G8/G12..G20, HASH-*, REPLAY-*, POLICY-REPLAY-INTEGRITY-01 are owned there, not here.
+- **Composition Loader (G-COMPLOAD-*) and Program Composition (G-PROGCOMP-*)** live in `infrastructure.guard.md` (host-process assembly).
+- **Domain purity, structural, behavioral, DTO naming, classification-suffix, and domain-aligned (economic/governance/identity/observability/workflow)** live in `domain.guard.md`.
+- This guard (`runtime.guard.md`) is authoritative for the Runtime enforcement surface: execution order, engine purity, projections, prompt container, dependency graph & layer boundaries, contracts boundary, code quality enforcement (Runtime subsystem), and test/E2E validation (Runtime subsystem).
+
+Where this guard and another canonical guard overlap in subject matter (e.g., GE-01 deterministic execution appears in all four canonical files as the shared WBSM v3 baseline), the stricter rule wins; the GE-01..05 block appears exactly once within each canonical file as a shared appendix.
 
 ## Locked-Status
 

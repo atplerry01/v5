@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Infrastructure.Messaging;
 
 namespace Whycespace.Tests.Integration.Setup;
 
@@ -23,12 +23,12 @@ public sealed class InMemoryOutbox : IOutbox
         get { lock (_lock) return _batches.ToArray(); }
     }
 
-    public Task EnqueueAsync(Guid correlationId, IReadOnlyList<object> events, string topic, CancellationToken cancellationToken = default)
+    public Task EnqueueAsync(Guid correlationId, Guid aggregateId, IReadOnlyList<object> events, string topic, CancellationToken cancellationToken = default)
     {
-        lock (_lock) _batches.Add(new Batch(correlationId, events.ToArray(), topic));
+        lock (_lock) _batches.Add(new Batch(correlationId, aggregateId, events.ToArray(), topic));
         _recorder?.Record("Outbox");
         return Task.CompletedTask;
     }
 
-    public sealed record Batch(Guid CorrelationId, IReadOnlyList<object> Events, string Topic);
+    public sealed record Batch(Guid CorrelationId, Guid AggregateId, IReadOnlyList<object> Events, string Topic);
 }

@@ -14,11 +14,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Whycespace.Shared.csproj" />
     <ProjectReference Include="..\..\systems\Whycespace.Systems.csproj" />
+    <ProjectReference Include="..\..\domain\Whycespace.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <PackageReference Include="Npgsql" Version="9.0.3" />
+    <!-- DEV ONLY — used by DevAuthController. Remove when DevAuthController is removed. -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.2" />
   </ItemGroup>
 
 </Project>

@@ -56,12 +56,10 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
     public void AllocateToSpv(string targetId, decimal ownershipPercentage)
     {
         if (string.IsNullOrWhiteSpace(targetId))
-            throw new ArgumentException("SPV targetId cannot be empty.", nameof(targetId));
+            throw AllocationErrors.InvalidSpvTargetId();
 
         if (ownershipPercentage <= 0m || ownershipPercentage > 100m)
-            throw new ArgumentException(
-                "OwnershipPercentage must be greater than 0 and less than or equal to 100.",
-                nameof(ownershipPercentage));
+            throw AllocationErrors.InvalidOwnershipPercentage();
 
         RaiseDomainEvent(new CapitalAllocatedToSpvEvent(
             AllocationId.Value.ToString(),

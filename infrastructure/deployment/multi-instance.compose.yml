@@ -95,6 +95,8 @@ services:
       MinIO__Endpoint: "minio:9000"
       MinIO__AccessKey: ${MINIO_ROOT_USER}
       MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
+      # WP-1 fail-closed JWT signing (HMAC-SHA256). No fallback in code.
+      JWT__SigningKey: ${JWT_SIGNING_KEY}
       # Identifier so log lines + readiness payloads can attribute back
       # to a specific host instance. Picked up by ASPNETCORE_HOSTNAME and
       # surfaces in standard ASP.NET logging.
@@ -159,6 +161,8 @@ services:
       MinIO__Endpoint: "minio:9000"
       MinIO__AccessKey: ${MINIO_ROOT_USER}
       MinIO__SecretKey: ${MINIO_ROOT_PASSWORD}
+      # WP-1 fail-closed JWT signing (HMAC-SHA256). No fallback in code.
+      JWT__SigningKey: ${JWT_SIGNING_KEY}
       DOTNET_HOSTNAME: "whyce-host-2"
     ports:
       - "18082:8080"

@@ -1,4 +1,4 @@
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Tests.Shared;
 

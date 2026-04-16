@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.transaction.limit.commands",
+    "whyce.economic.transaction.limit.events",
+    "whyce.economic.transaction.limit.retry",
+    "whyce.economic.transaction.limit.deadletter"
+  ]
+}

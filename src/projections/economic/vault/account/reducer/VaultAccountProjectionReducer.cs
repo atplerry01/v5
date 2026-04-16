@@ -11,6 +11,13 @@ namespace Whycespace.Projections.Economic.Vault.Account.Reducer;
 /// </summary>
 public static class VaultAccountProjectionReducer
 {
+    public static VaultAccountReadModel Apply(VaultAccountReadModel state, VaultAccountCreatedEventSchema e) =>
+        state with
+        {
+            VaultAccountId = e.AggregateId,
+            Currency = e.Currency
+        };
+
     public static VaultAccountReadModel Apply(VaultAccountReadModel state, SpvProfitReceivedEventSchema e) =>
         state with
         {

@@ -241,6 +241,24 @@ public sealed class KafkaOutboxPublisher : BackgroundService
 
         foreach (var entry in batch)
         {
+            // K-AGGREGATE-ID-HEADER-01: fail-fast invariant. Kafka message key
+            // and the aggregate-id header MUST carry a non-empty AggregateId
+            // so per-aggregate partition ordering (R-K-11 / R-K-15) and the
+            // header contract (R-K-24) hold. If a zero GUID made it into the
+            // outbox row, the upstream IOutbox path is broken — mark the row
+            // failed and continue. NEVER publish a zero key to Kafka.
+            if (entry.AggregateId == Guid.Empty)
+            {
+                _logger?.LogError(
+                    "AggregateId cannot be empty when publishing to Kafka (K-AGGREGATE-ID-HEADER-01). OutboxId={OutboxId}, EventType={EventType}, Topic={Topic}",
+                    entry.Id, entry.EventType, entry.Topic);
+                await RecordFailureAsync(
+                    conn, tx, entry.Id, entry.RetryCount,
+                    "K-AGGREGATE-ID-HEADER-01: AggregateId cannot be empty when publishing to Kafka",
+                    ct);
+                continue;
+            }
+
             // phase1-gate-S2: event_id and aggregate_id are now first-class outbox
             // columns (migration 004). No more JSON parsing of the payload at
             // publish time — headers come straight from the row.

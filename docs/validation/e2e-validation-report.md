@@ -3,7 +3,7 @@
 - **Classification:** validation / phase1.5-gate / whycespace-system
 - **Generated:** 2026-04-08 (scaffold)
 - **Guard:** [e2e-validation.guard.md](../../claude/guards/e2e-validation.guard.md)
-- **Audit:** [e2e-validation.audit.md](../../claude/audits/e2e-validation.audit.md)
+- **Audit:** [runtime.audit.md §Test & E2E Validation](../../claude/audits/canonical/runtime.audit.md) (G-E2E-001..011)
 - **Harness:** [scripts/validation/](../../scripts/validation/)
 
 ## GATE STATUS
@@ -290,7 +290,7 @@ See per-test §13 blocks above; harness emits identical structure.
 
 ## Sign-off
 - [ ] All CRITICAL items resolved
-- [ ] Audit `e2e-validation.audit.md` runs clean
+- [ ] Audit `claude/audits/canonical/runtime.audit.md` §Test & E2E Validation runs clean
 - [ ] Guard `e2e-validation.guard.md` violations: 0
 - [ ] Operator signature: ______________________
 - [ ] Date: ______________________

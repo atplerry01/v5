@@ -50,6 +50,8 @@ public static class AuthenticationInfrastructureModule
         })
         .AddJwtBearer(options =>
         {
+            options.IncludeErrorDetails = true;
+
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -73,13 +75,24 @@ public static class AuthenticationInfrastructureModule
             // Fail-closed: no automatic redirect, return 401 directly
             options.Events = new JwtBearerEvents
             {
+                OnAuthenticationFailed = context =>
+                {
+                    Console.WriteLine("AUTH FAILED: " + context.Exception.Message);
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    Console.WriteLine("AUTH SUCCESS: " + (context.Principal?.Identity?.Name ?? "<no-name>"));
+                    return Task.CompletedTask;
+                },
                 OnChallenge = context =>
                 {
                     context.HandleResponse();
                     context.Response.StatusCode = 401;
                     context.Response.ContentType = "application/json";
+                    var errorDetail = context.ErrorDescription ?? context.Error ?? "no-detail";
                     return context.Response.WriteAsync(
-                        """{"error":"WP-1: Authentication required. Provide a valid JWT Bearer token."}""");
+                        $$"""{"error":"WP-1: Authentication required. Provide a valid JWT Bearer token.","detail":"{{errorDetail}}"}""");
                 },
                 OnForbidden = context =>
                 {

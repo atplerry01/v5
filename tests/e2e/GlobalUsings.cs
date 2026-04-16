@@ -1,1 +1,9 @@
 global using Xunit;
+global using Whycespace.Tests.E2E.Economic.Capital.Setup;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Account;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Allocation;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Asset;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Binding;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Pool;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Reserve;
+global using Whycespace.Platform.Api.Controllers.Economic.Capital.Vault;

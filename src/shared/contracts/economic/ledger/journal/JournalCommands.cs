@@ -1,3 +1,5 @@
+using Whycespace.Shared.Contracts.Runtime;
+
 namespace Whycespace.Shared.Contracts.Economic.Ledger.Journal;
 
 public sealed record JournalEntryInput(
@@ -10,4 +12,7 @@ public sealed record JournalEntryInput(
 public sealed record PostJournalEntriesCommand(
     Guid LedgerId,
     Guid JournalId,
-    IReadOnlyList<JournalEntryInput> Entries);
+    IReadOnlyList<JournalEntryInput> Entries) : IHasAggregateId
+{
+    public Guid AggregateId => LedgerId;
+}

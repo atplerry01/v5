@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Ledger.Entry;
 using Whycespace.Domain.EconomicSystem.Ledger.Journal;
 using Whycespace.Domain.EconomicSystem.Ledger.Ledger;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
@@ -43,6 +44,24 @@ public sealed class PostJournalEntriesHandler : IEngine
         emitted.AddRange(journal.DomainEvents);
         journal.ClearDomainEvents();
 
+        // Per-entry emission: every posted journal entry produces a corresponding
+        // LedgerEntryRecordedEvent so the entry projection pipeline populates.
+        // EntryIds are deterministic (carried from the command), so replay yields
+        // identical aggregate ids and the entry_read_model upsert stays idempotent.
+        foreach (var e in cmd.Entries)
+        {
+            var entry = LedgerEntryAggregate.Record(
+                new EntryId(e.EntryId),
+                cmd.JournalId,
+                e.AccountId,
+                new Amount(e.Amount),
+                new Currency(e.Currency),
+                ParseEntryDirection(e.Direction),
+                now);
+            emitted.AddRange(entry.DomainEvents);
+            entry.ClearDomainEvents();
+        }
+
         var ledger = (LedgerAggregate)await context.LoadAggregateAsync(typeof(LedgerAggregate));
         ledger.AppendJournal(cmd.JournalId, now);
         emitted.AddRange(ledger.DomainEvents);
@@ -56,6 +75,14 @@ public sealed class PostJournalEntriesHandler : IEngine
         {
             "Debit" => BookingDirection.Debit,
             "Credit" => BookingDirection.Credit,
+            _ => throw JournalErrors.InvalidDirection()
+        };
+
+    private static EntryDirection ParseEntryDirection(string direction) =>
+        direction switch
+        {
+            "Debit" => EntryDirection.Debit,
+            "Credit" => EntryDirection.Credit,
             _ => throw JournalErrors.InvalidDirection()
         };
 }

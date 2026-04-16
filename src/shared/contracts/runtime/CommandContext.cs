@@ -32,6 +32,18 @@ public sealed record CommandContext
     public required string PolicyId { get; init; }
     public bool RuntimeOrigin { get; set; }
 
+    /// <summary>
+    /// Enforcement constraint applied by <c>ExecutionGuardMiddleware</c>
+    /// after consulting the active-violation projection for
+    /// <see cref="IdentityId"/>. Null when no active non-blocking
+    /// violation applies; "Restrict" when a Restrict-action violation
+    /// is active. Engine handlers may read this flag to degrade behavior
+    /// (e.g. reject limit-increasing commands) without re-querying the
+    /// projection. Critical+Block violations short-circuit in the guard
+    /// before reaching this field.
+    /// </summary>
+    public string? EnforcementConstraint { get; set; }
+
     // Domain routing metadata — used for canonical Kafka topic resolution
     public required string Classification { get; init; }
     public required string Context { get; init; }

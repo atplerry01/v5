@@ -1,6 +1,7 @@
 using Npgsql;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Tests.Integration.Setup;
 using Whycespace.Tests.Shared;
 
 namespace Whycespace.Tests.Integration.EventStore;
@@ -74,7 +75,7 @@ public sealed class PostgresEventStoreConcurrencyTest
                 {
                     await adapter.AppendEventsAsync(
                         aggregateId,
-                        new object[] { new ConcurrencyProbeEvent($"e{i}") },
+                        RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent($"e{i}")),
                         expectedVersion: -1);
                 }))
                 .ToArray();
@@ -116,9 +117,9 @@ public sealed class PostgresEventStoreConcurrencyTest
             // table-level lock. We don't measure timing — we only assert that
             // both produce the expected per-aggregate version stream.
             var tA = adapter.AppendEventsAsync(
-                aggA, new object[] { new ConcurrencyProbeEvent("a0"), new ConcurrencyProbeEvent("a1") }, -1);
+                aggA, RawEnvelopes.Wrap(aggA, new ConcurrencyProbeEvent("a0"), new ConcurrencyProbeEvent("a1")), -1);
             var tB = adapter.AppendEventsAsync(
-                aggB, new object[] { new ConcurrencyProbeEvent("b0"), new ConcurrencyProbeEvent("b1") }, -1);
+                aggB, RawEnvelopes.Wrap(aggB, new ConcurrencyProbeEvent("b0"), new ConcurrencyProbeEvent("b1")), -1);
 
             await Task.WhenAll(tA, tB);
 
@@ -153,7 +154,7 @@ public sealed class PostgresEventStoreConcurrencyTest
             // Establish two events: stream now has versions 0 and 1.
             await adapter.AppendEventsAsync(
                 aggregateId,
-                new object[] { new ConcurrencyProbeEvent("v0"), new ConcurrencyProbeEvent("v1") },
+                RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("v0"), new ConcurrencyProbeEvent("v1")),
                 expectedVersion: -1);
 
             // A stale writer asserts it expected version 0 (i.e. it observed
@@ -162,7 +163,7 @@ public sealed class PostgresEventStoreConcurrencyTest
             var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
                 adapter.AppendEventsAsync(
                     aggregateId,
-                    new object[] { new ConcurrencyProbeEvent("stale") },
+                    RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("stale")),
                     expectedVersion: 0));
 
             Assert.Equal(aggregateId, ex.AggregateId);
@@ -177,7 +178,7 @@ public sealed class PostgresEventStoreConcurrencyTest
             // A correct writer (expected = 1) succeeds and produces version 2.
             await adapter.AppendEventsAsync(
                 aggregateId,
-                new object[] { new ConcurrencyProbeEvent("v2") },
+                RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("v2")),
                 expectedVersion: 1);
             versions = await ReadVersionsAsync(connectionString, aggregateId);
             Assert.Equal(new[] { 0, 1, 2 }, versions.ToArray());
@@ -207,11 +208,11 @@ public sealed class PostgresEventStoreConcurrencyTest
             // of stream state. This protects unmigrated callers from
             // breaking when H8b is rolled out.
             await adapter.AppendEventsAsync(aggregateId,
-                new object[] { new ConcurrencyProbeEvent("a") }, -1);
+                RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("a")), -1);
             await adapter.AppendEventsAsync(aggregateId,
-                new object[] { new ConcurrencyProbeEvent("b") }, -1);
+                RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("b")), -1);
             await adapter.AppendEventsAsync(aggregateId,
-                new object[] { new ConcurrencyProbeEvent("c") }, -1);
+                RawEnvelopes.Wrap(aggregateId, new ConcurrencyProbeEvent("c")), -1);
 
             var versions = await ReadVersionsAsync(connectionString, aggregateId);
             Assert.Equal(new[] { 0, 1, 2 }, versions.ToArray());

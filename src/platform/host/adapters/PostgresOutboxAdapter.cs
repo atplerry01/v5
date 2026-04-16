@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Npgsql;
+using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -18,6 +19,7 @@ public sealed class PostgresOutboxAdapter : IOutbox
     private readonly IOutboxDepthSnapshot _depthSnapshot;
     private readonly OutboxOptions _options;
     private readonly IClock _clock;
+    private readonly EventSchemaRegistry _schemaRegistry;
 
     // phase1.5-S5.2.1 / PC-4 (POSTGRES-POOL-01): connection lifecycle
     // moved to the declared event-store pool. The high-water-mark
@@ -32,12 +34,14 @@ public sealed class PostgresOutboxAdapter : IOutbox
         EventStoreDataSource dataSource,
         IOutboxDepthSnapshot depthSnapshot,
         OutboxOptions options,
-        IClock clock)
+        IClock clock,
+        EventSchemaRegistry schemaRegistry)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(depthSnapshot);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(schemaRegistry);
         if (options.HighWaterMark < 1)
             throw new ArgumentOutOfRangeException(
                 nameof(options), options.HighWaterMark,
@@ -51,14 +55,27 @@ public sealed class PostgresOutboxAdapter : IOutbox
         _depthSnapshot = depthSnapshot;
         _options = options;
         _clock = clock;
+        _schemaRegistry = schemaRegistry;
     }
 
     public async Task EnqueueAsync(
         Guid correlationId,
+        Guid aggregateId,
         IReadOnlyList<object> events,
         string topic,
         CancellationToken cancellationToken = default)
     {
+        // D9 / K-AGGREGATE-ID-HEADER-01 fail-fast at the outbox boundary.
+        // Producer-side guarantee: the row stamped here is the same value the
+        // KafkaOutboxPublisher will put on the message key + `aggregate-id`
+        // header, so a Guid.Empty here would surface downstream as a key-zero
+        // partition collision (R-K-11 / R-K-15) and a missing-header contract
+        // violation (R-K-24). Reject at the entry rather than letting the
+        // empty value flow further.
+        if (aggregateId == Guid.Empty && events.Count > 0)
+            throw new InvalidOperationException(
+                "PostgresOutboxAdapter.EnqueueAsync received Guid.Empty aggregateId (D9 / K-AGGREGATE-ID-HEADER-01).");
+
         // phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): high-water-mark
         // refusal. Read the latest sampled depth from the shared
         // snapshot — never a per-enqueue COUNT(*). Until the sampler
@@ -110,10 +127,34 @@ public sealed class PostgresOutboxAdapter : IOutbox
         {
             var domainEvent = events[i];
             var eventType = domainEvent.GetType().Name;
-            var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType());
+
+            // E6.X/OUTBOX-PAYLOAD-ALIGNMENT: the outbox stores the SCHEMA-MAPPED
+            // payload, not the raw domain event. Previously this adapter
+            // serialised `domainEvent` directly, which shipped nested
+            // value-object shapes (e.g. `"Currency": {"Code":"USD"}`) on the
+            // Kafka wire. The projection consumer deserialises `eventType`
+            // against the registered INBOUND SCHEMA type
+            // (`CapitalAccountOpenedEventSchema`, flat fields), so nested
+            // payloads produced a `JsonException` on every capital event and
+            // the Kafka messages were correctly DLQ'd by the consumer (E12
+            // projection-pipeline correction). The fix is to apply
+            // `EventSchemaRegistry.MapPayload(eventType, domainEvent)` before
+            // serialisation — the mapper returns the flat inbound schema
+            // object when a mapper is registered for the event type, and
+            // returns the input unchanged otherwise (no double-map: the
+            // mapped object carries no registered mapper of its own). The
+            // `event-type` column + Kafka header remain the DOMAIN event
+            // class name so the consumer's registry lookup is preserved.
+            var mappedPayload = _schemaRegistry.MapPayload(eventType, domainEvent);
+            var payload = JsonSerializer.Serialize(mappedPayload, mappedPayload.GetType());
+
             var idempotencyKey = ComputeIdempotencyKey(correlationId, payload, i);
             var eventId = ComputeDeterministicId(correlationId, eventType, i);
-            var aggregateId = ExtractAggregateId(domainEvent);
+            // D9 / K-AGGREGATE-ID-HEADER-01: the per-loop alias keeps the
+            // existing parameter binding below readable. The outbox now uses
+            // the envelope's authoritative aggregateId passed in by EventFabric
+            // — no more reflection-by-property-name fallback.
+            var rowAggregateId = aggregateId;
 
             await using var cmd = new NpgsqlCommand(
                 """
@@ -126,7 +167,7 @@ public sealed class PostgresOutboxAdapter : IOutbox
             cmd.Parameters.AddWithValue("id", eventId);
             cmd.Parameters.AddWithValue("corrId", correlationId);
             cmd.Parameters.AddWithValue("eventId", eventId);
-            cmd.Parameters.AddWithValue("aggregateId", aggregateId);
+            cmd.Parameters.AddWithValue("aggregateId", rowAggregateId);
             cmd.Parameters.AddWithValue("evtType", eventType);
             cmd.Parameters.AddWithValue("payload", payload);
             cmd.Parameters.AddWithValue("idempKey", idempotencyKey);
@@ -143,29 +184,6 @@ public sealed class PostgresOutboxAdapter : IOutbox
         var seed = $"{correlationId}:{eventType}:{sequenceNumber}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(seed));
         return new Guid(hash.AsSpan(0, 16));
-    }
-
-    /// <summary>
-    /// Pulls AggregateId off a domain event by convention without taking a
-    /// project reference on the domain layer. All domain events in this
-    /// codebase carry an `AggregateId` property — either a raw <see cref="Guid"/>
-    /// or a value-object wrapper exposing a `Value` property of type Guid.
-    /// Returns Guid.Empty when neither shape is present — the column is NOT NULL
-    /// in the outbox schema, so we never return null.
-    /// </summary>
-    private static Guid ExtractAggregateId(object domainEvent)
-    {
-        var prop = domainEvent.GetType().GetProperty("AggregateId");
-        if (prop is null) return Guid.Empty;
-
-        var value = prop.GetValue(domainEvent);
-        if (value is null) return Guid.Empty;
-        if (value is Guid g) return g;
-
-        var valueProp = value.GetType().GetProperty("Value");
-        if (valueProp?.GetValue(value) is Guid wrapped) return wrapped;
-
-        return Guid.Empty;
     }
 
     private static string ComputeIdempotencyKey(Guid correlationId, string payload, int sequenceNumber)

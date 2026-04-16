@@ -7,7 +7,7 @@ public sealed class EconomicSubjectAggregate : AggregateRoot
     public SubjectId SubjectId { get; private set; }
     public SubjectType SubjectType { get; private set; }
     public StructuralRef StructuralRef { get; private set; } = null!;
-    public EconomicRef? EconomicRef { get; private set; }
+    public EconomicRef EconomicRef { get; private set; } = null!;
     public bool IsRegistered { get; private set; }
 
     private EconomicSubjectAggregate() { }
@@ -19,18 +19,18 @@ public sealed class EconomicSubjectAggregate : AggregateRoot
         EconomicRef economicRef)
     {
         if (structuralRef is null)
-            throw new ArgumentException("StructuralRef cannot be null", nameof(structuralRef));
+            throw SubjectErrors.MissingStructuralRef();
+        if (economicRef is null)
+            throw SubjectErrors.MissingEconomicRef();
+
+        EconomicRefRules.Validate(subjectType, economicRef.RefType);
 
         var aggregate = new EconomicSubjectAggregate();
-
         aggregate.RaiseDomainEvent(new EconomicSubjectRegisteredEvent(
             subjectId,
             subjectType,
             structuralRef,
             economicRef));
-
-        aggregate.EnsureInvariants();
-
         return aggregate;
     }
 
@@ -50,17 +50,13 @@ public sealed class EconomicSubjectAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        // The base class calls EnsureInvariants BEFORE Apply on the initial
-        // RaiseDomainEvent. Skip strict checks until state has been populated
-        // by Apply; Register() re-invokes EnsureInvariants post-Apply so the
-        // fully-constituted aggregate is always validated before returning.
         if (!IsRegistered)
             return;
 
         if (StructuralRef is null)
-            throw new InvalidOperationException("StructuralRef must be set");
+            throw SubjectErrors.MissingStructuralRef();
 
         if (EconomicRef is null)
-            throw new InvalidOperationException("EconomicRef must be set");
+            throw SubjectErrors.MissingEconomicRef();
     }
 }

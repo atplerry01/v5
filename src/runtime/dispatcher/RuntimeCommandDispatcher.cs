@@ -128,12 +128,10 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
 
     private async Task<CommandResult> ResumeWorkflowAsync(WorkflowResumeCommand command, CommandContext context, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(command.WorkflowId, out var workflowExecutionId))
-        {
-            return CommandResult.Failure(
-                $"WorkflowResumeCommand.WorkflowId '{command.WorkflowId}' is not a valid Guid.");
-        }
-
+        // β #1: WorkflowResumeCommand.WorkflowId is now Guid (was string);
+        // the contract enforces the type so the runtime no longer needs to
+        // TryParse on the way in.
+        var workflowExecutionId = command.WorkflowId;
         var state = await _replayService.ReplayAsync(workflowExecutionId);
         if (state is null)
         {
@@ -280,12 +278,51 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
             async (type, aggregateId) =>
             {
                 var aggregate = (AggregateRoot)Activator.CreateInstance(type, nonPublic: true)!;
+                // AGGREGATE-IDENTITY-REHYDRATION-01: stamp the canonical
+                // aggregate id BEFORE replay so Apply methods can recover
+                // identity when the stored payload shape loses typed
+                // value-object keys on JSON round-trip (observed for Exchange
+                // FxPairRegisteredEvent: stored `{"AggregateId":"guid"}` never
+                // matches domain record `FxId` parameter, defaulting the
+                // value object to empty). Downstream mutating events then
+                // carry the correct id into events / outbox / Kafka.
+                aggregate.HydrateIdentity(aggregateId);
                 // phase1.5-S5.2.3 / TC-5: forward CT into the
                 // event-store load so PostgresEventStoreAdapter
                 // ExecuteReaderAsync honors cancellation.
                 var events = await _eventStore.LoadEventsAsync(aggregateId, cancellationToken);
                 aggregate.LoadFromHistory(events);
                 loadedVersion = aggregate.Version;
+
+                // E1.X/AGGREGATE-EXISTENCE-GUARD: centralized existence check.
+                //
+                // Handlers for "operate on existing aggregate" commands
+                // (release / dispose / revalue / close / freeze / …) call
+                // LoadAggregateAsync and then invoke a mutator on the loaded
+                // state. If the aggregate does not exist, LoadEventsAsync
+                // returns an empty list and LoadFromHistory is a no-op, which
+                // leaves `aggregate.Version == -1` — the initial sentinel on
+                // AggregateRoot. Without this guard the mutator would execute
+                // against default/blank state, emit a ghost event with
+                // zero-filled fields, or raise an untyped exception that
+                // surfaces to the HTTP edge as 500.
+                //
+                // The guard throws `DomainException` so the existing
+                // `DomainExceptionHandler` maps it to HTTP 400 with the
+                // canonical RFC 7807 `urn:whyce:error:domain-invariant` shape,
+                // uniformly across every "operate on existing" command.
+                // Creation commands never call LoadAggregateAsync (they use
+                // static factory methods on the aggregate type) and are
+                // therefore unaffected. The guard is version-based, not
+                // identity-based — no reflection into the aggregate schema is
+                // required, and every aggregate benefits by construction.
+                if (aggregate.Version == -1)
+                {
+                    throw new DomainException(
+                        $"Aggregate {type.Name} with id {aggregateId} does not exist. " +
+                        "Operation requires an existing aggregate.");
+                }
+
                 return aggregate;
             });
 

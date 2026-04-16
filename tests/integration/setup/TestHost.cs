@@ -1,28 +1,28 @@
-using Whyce.Engines.T0U.Determinism;
-using Whyce.Engines.T0U.Determinism.Sequence;
-using Whyce.Engines.T0U.Determinism.Time;
-using Whyce.Engines.T0U.WhyceChain.Engine;
-using Whyce.Engines.T0U.WhyceId.Engine;
-using Whyce.Engines.T0U.WhycePolicy.Engine;
-using Whyce.Runtime.Topology;
-using Whyce.Shared.Kernel.Determinism;
-using Whyce.Engines.T2E.Operational.Sandbox.Todo;
-using Whyce.Runtime.ControlPlane;
-using Whyce.Runtime.Dispatcher;
-using Whyce.Runtime.EventFabric;
-using Whyce.Runtime.Middleware;
-using Whyce.Runtime.Middleware.Execution;
-using Whyce.Runtime.Middleware.Observability;
-using Whyce.Runtime.Middleware.PostPolicy;
-using Whyce.Runtime.Middleware.PrePolicy;
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
-using Whyce.Shared.Contracts.Infrastructure.Health;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Engines.T0U.Determinism;
+using Whycespace.Engines.T0U.Determinism.Sequence;
+using Whycespace.Engines.T0U.Determinism.Time;
+using Whycespace.Engines.T0U.WhyceChain.Engine;
+using Whycespace.Engines.T0U.WhyceId.Engine;
+using Whycespace.Engines.T0U.WhycePolicy.Engine;
+using Whycespace.Runtime.Topology;
+using Whycespace.Shared.Kernel.Determinism;
+using Whycespace.Engines.T2E.Operational.Sandbox.Todo;
+using Whycespace.Runtime.ControlPlane;
+using Whycespace.Runtime.Dispatcher;
+using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Middleware;
+using Whycespace.Runtime.Middleware.Execution;
+using Whycespace.Runtime.Middleware.Observability;
+using Whycespace.Runtime.Middleware.PostPolicy;
+using Whycespace.Runtime.Middleware.PrePolicy;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 using Whycespace.Tests.Shared;
-using PolicyMw = Whyce.Runtime.Middleware.Policy.PolicyMiddleware;
+using PolicyMw = Whycespace.Runtime.Middleware.Policy.PolicyMiddleware;
 
 namespace Whycespace.Tests.Integration.Setup;
 
@@ -58,7 +58,7 @@ internal sealed class TestRuntimeMaintenanceModeProvider : IRuntimeMaintenanceMo
 /// semantics in memory so the integration suite exercises the
 /// lock acquire/release flow without spinning up Redis.
 /// </summary>
-internal sealed class InMemoryExecutionLockProvider : Whyce.Shared.Contracts.Runtime.IExecutionLockProvider
+internal sealed class InMemoryExecutionLockProvider : Whycespace.Shared.Contracts.Runtime.IExecutionLockProvider
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _held =
         new(StringComparer.Ordinal);
@@ -124,8 +124,8 @@ public sealed class TestHost
         IClock? clock = null,
         IIdGenerator? idGenerator = null,
         bool denyPolicy = false,
-        Whyce.Shared.Contracts.Infrastructure.Policy.IPolicyEvaluator? policyEvaluator = null,
-        Whyce.Shared.Contracts.Infrastructure.Chain.IChainAnchor? chainAnchorOverride = null)
+        Whycespace.Shared.Contracts.Infrastructure.Policy.IPolicyEvaluator? policyEvaluator = null,
+        Whycespace.Shared.Contracts.Infrastructure.Chain.IChainAnchor? chainAnchorOverride = null)
     {
         clock ??= new TestClock();
         idGenerator ??= new TestIdGenerator();
@@ -151,7 +151,7 @@ public sealed class TestHost
         // property for tests that don't override (existing tests are
         // unaffected). Tests that DO override read the override directly.
         var chainAnchor = new InMemoryChainAnchor(clock, idGenerator, recorder);
-        var resolvedChainAnchor = chainAnchorOverride ?? (Whyce.Shared.Contracts.Infrastructure.Chain.IChainAnchor)chainAnchor;
+        var resolvedChainAnchor = chainAnchorOverride ?? (Whycespace.Shared.Contracts.Infrastructure.Chain.IChainAnchor)chainAnchor;
         var outbox = new InMemoryOutbox(recorder);
         var idempotencyStore = new InMemoryIdempotencyStore();
 
@@ -220,7 +220,8 @@ public sealed class TestHost
                 whycePolicyEngine,
                 resolvedPolicyEvaluator,
                 idGenerator,
-                new Whyce.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory()))
+                new Whycespace.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory(),
+                new TestNoOpCallerIdentityAccessor()))
             .UseAuthorizationGuard(new AuthorizationGuardMiddleware())
             .UseIdempotency(new IdempotencyMiddleware(idempotencyStore))
             .UseExecutionGuard(new ExecutionGuardMiddleware());

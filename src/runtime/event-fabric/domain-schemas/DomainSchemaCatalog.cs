@@ -28,4 +28,16 @@ public static class DomainSchemaCatalog
 
     public static void RegisterEconomic(EventSchemaRegistry registry)
         => new EconomicSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterEconomicTransaction(EventSchemaRegistry registry)
+        => new TransactionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaAsset(EventSchemaRegistry registry)
+        => new MediaAssetSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentInteractionMessaging(EventSchemaRegistry registry)
+        => new MessagingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentLearningCourse(EventSchemaRegistry registry)
+        => new CourseSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

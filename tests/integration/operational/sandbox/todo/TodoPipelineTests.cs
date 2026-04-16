@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
 using Whycespace.Domain.ConstitutionalSystem.Policy.Decision;
 using Whycespace.Domain.OperationalSystem.Sandbox.Todo;
 using Whycespace.Tests.Integration.Setup;
@@ -38,7 +38,7 @@ public sealed class TodoPipelineTests
         var stored = host.EventStore.AllEvents(aggregateId);
         Assert.Equal(3, stored.Count);
         Assert.IsType<TodoCreatedEvent>(stored[0]);
-        Assert.IsType<TodoUpdatedEvent>(stored[1]);
+        Assert.IsType<TodoTitleRevisedEvent>(stored[1]);
         Assert.IsType<TodoCompletedEvent>(stored[2]);
         Assert.DoesNotContain(stored, e => e is PolicyEvaluatedEvent);
 

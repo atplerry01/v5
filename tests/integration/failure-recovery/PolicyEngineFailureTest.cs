@@ -1,5 +1,5 @@
-using Whyce.Shared.Contracts.Operational.Sandbox.Todo;
-using Whyce.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Operational.Sandbox.Todo;
+using Whycespace.Shared.Contracts.Infrastructure.Policy;
 using Whycespace.Tests.Integration.Setup;
 
 namespace Whycespace.Tests.Integration.FailureRecovery;

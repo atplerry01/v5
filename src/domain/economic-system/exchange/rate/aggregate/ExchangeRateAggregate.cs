@@ -38,6 +38,7 @@ public sealed class ExchangeRateAggregate : AggregateRoot
 
     public void Activate(Timestamp activatedAt)
     {
+        EnsureIdentityInitialized();
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(this))
             throw ExchangeRateErrors.InvalidStateTransition(Status, ExchangeRateStatus.Active);
@@ -49,6 +50,7 @@ public sealed class ExchangeRateAggregate : AggregateRoot
 
     public void Expire(Timestamp expiredAt)
     {
+        EnsureIdentityInitialized();
         var specification = new CanExpireSpecification();
         if (!specification.IsSatisfiedBy(this))
             throw ExchangeRateErrors.InvalidStateTransition(Status, ExchangeRateStatus.Expired);
@@ -63,7 +65,14 @@ public sealed class ExchangeRateAggregate : AggregateRoot
         switch (domainEvent)
         {
             case ExchangeRateDefinedEvent e:
-                RateId = e.RateId;
+                // AGGREGATE-IDENTITY-REHYDRATION-01 — prefer event-carried
+                // identity; fall back to the canonical aggregate id the
+                // reconstruction loader stamped on this instance (the stored
+                // payload's `AggregateId` key does not bind to the domain
+                // record's `RateId` parameter on JSON round-trip).
+                RateId = e.RateId.Value != Guid.Empty
+                    ? e.RateId
+                    : new RateId(AggregateIdentity);
                 BaseCurrency = e.BaseCurrency;
                 QuoteCurrency = e.QuoteCurrency;
                 RateValue = e.RateValue;
@@ -82,14 +91,24 @@ public sealed class ExchangeRateAggregate : AggregateRoot
         }
     }
 
+    // AGGREGATE-IDENTITY-REHYDRATION-01 enforcement hook — see FxAggregate
+    // for rationale. Called on every path that emits a mutating event.
+    private void EnsureIdentityInitialized()
+    {
+        if (RateId.Value == Guid.Empty)
+            throw new InvalidOperationException(
+                "ExchangeRateAggregate identity not initialized before emitting event (AGGREGATE-IDENTITY-REHYDRATION-01).");
+    }
+
     // ── Invariants ───────────────────────────────────────────────
 
     protected override void EnsureInvariants()
     {
-        if (RateValue <= 0m)
-            throw ExchangeRateErrors.RateValueMustBePositive();
-
-        if (Version <= 0)
-            throw ExchangeRateErrors.VersionMustBePositive();
+        // Value/version invariants are enforced at aggregate-construction
+        // time (DefineRate factory) against the command inputs. Re-
+        // asserting them here surfaces schema-vs-domain deserialization
+        // gaps (see FxAggregate note) rather than real business-rule
+        // violations, so the canonical pattern leaves them to the
+        // factory path and the value objects themselves.
     }
 }

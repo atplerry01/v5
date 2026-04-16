@@ -1,4 +1,4 @@
-using Whyce.Shared.Contracts.Infrastructure.Persistence;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 
 namespace Whycespace.Tests.Integration.Setup;
 

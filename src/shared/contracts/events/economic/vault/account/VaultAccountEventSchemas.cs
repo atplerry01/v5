@@ -11,6 +11,11 @@ public enum VaultSliceType
     Slice4 = 4
 }
 
+public sealed record VaultAccountCreatedEventSchema(
+    Guid AggregateId,
+    Guid OwnerSubjectId,
+    string Currency);
+
 public sealed record SpvProfitReceivedEventSchema(
     Guid AggregateId,
     decimal Amount,

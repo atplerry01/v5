@@ -40,12 +40,21 @@ public sealed class WhyceIdEngine
         }
 
         var sessionId = SessionValidator.GenerateSessionId(identityId, command.DeviceId);
+
+        // Roles preference: caller-supplied JWT claims when present and
+        // non-empty; otherwise the historical placeholder. Determinism is
+        // preserved — the resolved array is a pure function of the command
+        // input; no clock, no IO, no randomness.
+        var resolvedRoles = command.Roles is { Length: > 0 } supplied
+            ? supplied
+            : new[] { "user" };
+
         var (trustScore, _) = TrustScoreEvaluator.Evaluate(
-            identityId, ["user"], command.DeviceId, isVerified: false);
+            identityId, resolvedRoles, command.DeviceId, isVerified: false);
 
         var identity = new WhyceIdentity(
             IdentityId: identityId,
-            Roles: ["user"],
+            Roles: resolvedRoles,
             Attributes: [],
             TrustScore: trustScore,
             VerificationStatus: VerificationStatus.Unverified,

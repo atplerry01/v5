@@ -31,19 +31,22 @@ public sealed class PolicyMiddleware : IMiddleware
     private readonly IPolicyEvaluator _policyEvaluator;
     private readonly IIdGenerator _idGenerator;
     private readonly IPolicyDecisionEventFactory _decisionEventFactory;
+    private readonly ICallerIdentityAccessor _callerIdentity;
 
     public PolicyMiddleware(
         WhyceIdEngine whyceIdEngine,
         WhycePolicyEngine whycePolicyEngine,
         IPolicyEvaluator policyEvaluator,
         IIdGenerator idGenerator,
-        IPolicyDecisionEventFactory decisionEventFactory)
+        IPolicyDecisionEventFactory decisionEventFactory,
+        ICallerIdentityAccessor callerIdentity)
     {
         _whyceIdEngine = whyceIdEngine;
         _whycePolicyEngine = whycePolicyEngine;
         _policyEvaluator = policyEvaluator;
         _idGenerator = idGenerator;
         _decisionEventFactory = decisionEventFactory;
+        _callerIdentity = callerIdentity;
     }
 
     public async Task<CommandResult> ExecuteAsync(
@@ -52,11 +55,28 @@ public sealed class PolicyMiddleware : IMiddleware
         Func<CancellationToken, Task<CommandResult>> next,
         CancellationToken cancellationToken = default)
     {
-        // Step 1: Resolve identity via WhyceIdEngine (T0U)
+        // Step 1: Resolve identity via WhyceIdEngine (T0U).
+        // Pull JWT role claims from the authenticated principal at the HTTP
+        // boundary and forward them into the engine. Empty / absent claims
+        // leave Roles null so the engine retains its safe-default behaviour.
+        // GetRoles() may throw when invoked outside an HTTP context (e.g.
+        // worker-driven internal dispatch); treat that as "no claims" rather
+        // than failing the whole pipeline so non-HTTP callers continue to
+        // resolve to the default role.
+        string[]? callerRoles = null;
+        IReadOnlyDictionary<string, object>? subjectAttributes = null;
+        try
+        {
+            callerRoles = _callerIdentity.GetRoles();
+            subjectAttributes = _callerIdentity.GetSubjectAttributes();
+        }
+        catch (InvalidOperationException) { /* no HTTP context — leave null */ }
+
         var authenticateCommand = new AuthenticateIdentityCommand(
             Token: null,
             UserId: context.ActorId,
-            DeviceId: null);
+            DeviceId: null,
+            Roles: callerRoles);
 
         var authResult = await _whyceIdEngine.AuthenticateIdentity(authenticateCommand);
 
@@ -71,8 +91,12 @@ public sealed class PolicyMiddleware : IMiddleware
         context.Roles = authResult.Identity.Roles;
         context.TrustScore = authResult.Identity.TrustScore;
 
-        // Step 3: Evaluate external policy via OPA (IPolicyEvaluator)
-        var policyPath = $"{context.Classification}.{context.Context}.{context.Domain}";
+        // Step 3: Evaluate external policy via OPA (IPolicyEvaluator).
+        // Pass the canonical per-command policy id (e.g.
+        // "whyce.economic.capital.account.open") so the rego rules that gate
+        // on `input.policy_id == "..."` can match. The OPA evaluator derives
+        // both the data-path URL and the `input.policy_id` field from this
+        // value (via BuildOpaPackagePath / direct echo).
         var opaContext = new PolicyContext(
             context.CorrelationId,
             context.TenantId,
@@ -81,9 +105,10 @@ public sealed class PolicyMiddleware : IMiddleware
             authResult.Identity.Roles,
             context.Classification,
             context.Context,
-            context.Domain);
+            context.Domain,
+            subjectAttributes);
 
-        var opaDecision = await _policyEvaluator.EvaluateAsync(policyPath, command, opaContext);
+        var opaDecision = await _policyEvaluator.EvaluateAsync(context.PolicyId, command, opaContext);
         if (!opaDecision.IsAllowed)
         {
             // OPA-deny is also a governed decision and MUST emit audit. The

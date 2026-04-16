@@ -125,7 +125,15 @@ public sealed class WorkflowTriggerWorker : BackgroundService
                     Timestamp = _clock.UtcNow
                 };
 
-                await _handler.HandleAsync(envelope, stoppingToken);
+                // D11: background dispatch carries no HTTP context. Scope to
+                // a known system identity so HttpCallerIdentityAccessor can
+                // satisfy SystemIntentDispatcher's actor/tenant lookups
+                // without violating WP-1 (HTTP requests still fail-closed
+                // because the scope is opt-in and AsyncLocal-bound).
+                using (SystemIdentityScope.Begin("system/workflow-trigger", "system", "system"))
+                {
+                    await _handler.HandleAsync(envelope, stoppingToken);
+                }
                 consumer.Commit(result);
             }
             catch (OperationCanceledException)

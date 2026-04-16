@@ -50,7 +50,7 @@ Defined ──Activate()──> Active ──Deactivate()──> Deactivated (te
 * **InvalidStateTransition** — Guard for illegal status transitions.
 
 ## Domain Services
-* **FxService** — Reserved for cross-aggregate coordination within FX context.
+* None — no cross-aggregate coordination required for structural FX pair definitions.
 
 ## Lifecycle Pattern
 TERMINAL — Once deactivated, an FX pair cannot be reactivated.

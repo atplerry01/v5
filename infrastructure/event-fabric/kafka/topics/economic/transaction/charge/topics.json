@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.economic.transaction.charge.commands",
+    "whyce.economic.transaction.charge.events",
+    "whyce.economic.transaction.charge.retry",
+    "whyce.economic.transaction.charge.deadletter"
+  ]
+}

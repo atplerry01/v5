@@ -1,0 +1,24 @@
+using Whycespace.Domain.EconomicSystem.Routing.Execution;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Shared.Contracts.Economic.Routing.Execution;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Kernel.Domain;
+
+namespace Whycespace.Engines.T2E.Economic.Routing.Execution;
+
+public sealed class FailExecutionHandler : IEngine
+{
+    private readonly IClock _clock;
+
+    public FailExecutionHandler(IClock clock) => _clock = clock;
+
+    public async Task ExecuteAsync(IEngineContext context)
+    {
+        if (context.Command is not FailExecutionCommand cmd)
+            return;
+
+        var aggregate = (ExecutionAggregate)await context.LoadAggregateAsync(typeof(ExecutionAggregate));
+        aggregate.Fail(cmd.Reason, new Timestamp(_clock.UtcNow));
+        context.EmitEvents(aggregate.DomainEvents);
+    }
+}

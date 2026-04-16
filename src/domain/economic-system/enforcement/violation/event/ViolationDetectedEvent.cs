@@ -8,4 +8,6 @@ public sealed record ViolationDetectedEvent(
     RuleId RuleId,
     SourceReference Source,
     string Reason,
+    ViolationSeverity Severity,
+    EnforcementAction RecommendedAction,
     Timestamp DetectedAt) : DomainEvent;

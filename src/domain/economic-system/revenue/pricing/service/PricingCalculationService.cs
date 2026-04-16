@@ -1,5 +1,5 @@
 namespace Whycespace.Domain.EconomicSystem.Revenue.Pricing;
 
-public sealed class PricingService
+public sealed class PricingCalculationService
 {
 }

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Tests.Shared;
 

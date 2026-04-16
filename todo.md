@@ -53,3 +53,32 @@ Step 4: FOR EACH ParticipantShare:
 
 Step 5: Validate total debit == total credit
 Step 6: Mark workflow complete
+
+
+
+
+Phase 1 (Core Foundation)
+media/asset
+interaction/messaging
+learning/course
+→ Full E2E (API → runtime → engine → event → Kafka → projection)
+
+Phase 2 (Core Extensions)
+streaming/stream-session
+engagement/comment
+monetization/subscription
+
+Phase 3 (Advanced)
+feed
+search
+payout
+moderation
+
+cross domain implementation
+
+
+lets execute the prompt @/validation-prompt.md
+
+
+
+STAGE E9 - WORKFLOW DEFFER

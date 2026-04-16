@@ -274,7 +274,46 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 
                 ConsumedCounter.Add(1, new KeyValuePair<string, object?>("topic", _topic));
                 _logger?.LogDebug("Consumed {EventType} from {Topic}", eventType, _topic);
-                var @event = _deserializer.DeserializeInbound(eventType, rawPayload);
+
+                // E5.Z/Projection-Pipeline-Correction: poisoned-payload isolation.
+                //
+                // DeserializeInbound (and downstream handler JSON work) can throw
+                // for a poisoned message whose on-wire shape no longer matches the
+                // registered inbound schema (e.g. historical pre-fix events on an
+                // upgraded topic). Before this pass the generic `catch (Exception)`
+                // at the bottom of the poll loop logged the failure and slept 1s
+                // WITHOUT committing — so Kafka redelivered the same offset on the
+                // next poll and the consumer livelocked, blocking every valid
+                // message queued behind it on that partition.
+                //
+                // The fix is a narrow nested try around the deserialize+project
+                // block. On the two well-defined poison classes (JSON shape
+                // mismatch, schema-registry mismatch) we publish the *original*
+                // Kafka record to the `.deadletter` topic (reason header carries
+                // topic/partition/offset/event-type for forensic replay), commit
+                // the source offset, and `continue` to the next message. Valid
+                // messages after the poisoned one are processed normally and in
+                // order — Kafka's per-partition ordering is preserved because the
+                // commit advances the offset by exactly one bad record. Any other
+                // exception type is intentionally NOT caught here and falls through
+                // to the outer generic catch so its back-off behaviour is unchanged
+                // (a handler DB outage must not silently DLQ application state).
+                object @event;
+                try
+                {
+                    @event = _deserializer.DeserializeInbound(eventType, rawPayload);
+                }
+                catch (Exception ex) when (IsPoisonedPayload(ex))
+                {
+                    var reason = $"poisoned payload (event-type={eventType}, partition={result.Partition.Value}, offset={result.Offset.Value}): {ex.GetType().Name}: {ex.Message}";
+                    _logger?.LogError(ex,
+                        "Poisoned payload on {Topic} p{Partition} o{Offset} event-type={EventType}; routing to DLQ and committing offset",
+                        _topic, result.Partition.Value, result.Offset.Value, eventType);
+                    await PublishToDeadletterAsync(
+                        deadletterProducer, deadletterTopic, result.Message, reason, stoppingToken);
+                    consumer.Commit(result);
+                    continue;
+                }
 
                 var causationIdHeader = ExtractHeader(result.Message.Headers, "causation-id");
                 var envelope = new EventEnvelope
@@ -364,6 +403,33 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
 
         consumer.Close();
     }
+
+    /// <summary>
+    /// E5.Z/Projection-Pipeline-Correction: recognises the narrow set of
+    /// exceptions that mean "the on-wire payload cannot be mapped to a
+    /// registered inbound schema" — i.e. a poisoned message that no amount
+    /// of retry will fix. Matching is intentionally tight:
+    ///
+    ///   - <see cref="System.Text.Json.JsonException"/> covers shape
+    ///     mismatches (e.g. historical pre-fix events whose primitives are
+    ///     still nested domain value-objects).
+    ///   - <see cref="InvalidOperationException"/> is matched ONLY when the
+    ///     message text corresponds to one of the two sentinels thrown by
+    ///     <c>EventDeserializer.DeserializeInbound</c>:
+    ///       * "EventSchemaRegistry has no InboundEventType registered"
+    ///       * "Failed to deserialize inbound event"
+    ///     Any other InvalidOperationException (DB layer, etc.) is deliberately
+    ///     NOT treated as poisoned so it continues to propagate to the outer
+    ///     back-off catch and does not silently DLQ application-level state.
+    /// </summary>
+    private static bool IsPoisonedPayload(Exception ex) => ex switch
+    {
+        System.Text.Json.JsonException => true,
+        InvalidOperationException ioe when
+            ioe.Message.StartsWith("EventSchemaRegistry has no InboundEventType registered", StringComparison.Ordinal)
+            || ioe.Message.StartsWith("Failed to deserialize inbound event", StringComparison.Ordinal) => true,
+        _ => false,
+    };
 
     /// <summary>
     /// phase1.6-S2.3: returns null when the header key is absent (so the

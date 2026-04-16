@@ -7,7 +7,7 @@ economic-system
 revenue
 
 ## Domain Responsibility
-Defines pricing structures — the recorded price definitions with model type, contract reference, and currency. This domain defines pricing structure only and contains no price calculation logic.
+Defines pricing structures — recorded price definitions with model type, contract reference, and currency. Adjustments are immutable events; the aggregate enforces invariants on definition and adjustment but performs no calculation logic.
 
 ## Aggregate
 * **PricingAggregate** — Root aggregate representing a pricing definition.
@@ -22,7 +22,7 @@ Defines pricing structures — the recorded price definitions with model type, c
 ## State Model
 ```
 DefinePrice() -> Defined (initial price set from model)
-  AdjustPrice() -> Adjusted (repeatable, with reason tracking, previous price captured)
+  AdjustPrice() -> price replaced, previous price captured in event (repeatable, with reason)
 ```
 
 ## Value Objects
@@ -36,13 +36,11 @@ DefinePrice() -> Defined (initial price set from model)
 ## Invariants
 * PricingId must not be null/default.
 * ContractId must not be empty.
-* Price must be >= 0 (invariant), > 0 at creation.
-* Must not calculate price — structure definition only.
-* Price adjustments require a reason.
+* Price must be >= 0 (invariant), > 0 at creation and adjustment.
+* Price adjustments require a non-empty reason.
 
 ## Specifications
-* **HasContractSpecification** — ContractId non-empty.
-* **CanAdjustPriceSpecification** — Pricing must have a valid contract and positive price.
+* **CanAdjustPriceSpecification** — Pricing must have a valid contract and positive current price for adjustment to be allowed.
 
 ## Errors
 * **InvalidPrice** — Price must be greater than zero.
@@ -52,13 +50,10 @@ DefinePrice() -> Defined (initial price set from model)
 * **ContractReferenceMustExist** — Invariant: must reference a contract.
 
 ## Domain Services
-* **PricingService** — Reserved for cross-aggregate coordination within pricing context.
-
-## Lifecycle Pattern
-TERMINAL — Price definitions are immutable records; adjustments create new price events.
+* **PricingCalculationService** — Reserved for cross-aggregate pricing coordination within the pricing context. Empty placeholder in E1; expansion deferred to E2+.
 
 ## Boundary Statement
-This domain defines pricing structure only and contains no price calculation logic.
+This domain defines pricing structure only and contains no price calculation logic. The `PricingCalculationService` placeholder reserves the slot for E2+ calculation work; it intentionally exposes no methods today.
 
 ## Status
 **S4 — Invariants + Specifications Complete**

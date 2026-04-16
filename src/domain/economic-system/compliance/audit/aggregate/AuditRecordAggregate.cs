@@ -64,5 +64,9 @@ public sealed class AuditRecordAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
+        Guard.Against(SourceAggregateId.Value == Guid.Empty, AuditErrors.MissingSourceReference);
+        Guard.Against(SourceEventId.Value == Guid.Empty, AuditErrors.MissingSourceReference);
+        Guard.Against(string.IsNullOrWhiteSpace(SourceDomain.Value), AuditErrors.MissingSourceReference);
+        Guard.Against(string.IsNullOrWhiteSpace(EvidenceSummary.Value), AuditErrors.MissingEvidenceSummary);
     }
 }

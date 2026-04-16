@@ -6,6 +6,14 @@ namespace Whycespace.Projections.Economic.Ledger.Ledger.Reducer;
 
 public static class LedgerProjectionReducer
 {
+    public static LedgerReadModel Apply(LedgerReadModel state, LedgerOpenedEventSchema e) =>
+        state with
+        {
+            LedgerId = e.AggregateId,
+            Currency = e.Currency,
+            Status = "Open"
+        };
+
     public static LedgerReadModel Apply(LedgerReadModel state, LedgerUpdatedEventSchema e)
     {
         var journals = new List<Guid>(state.PostedJournalIds);

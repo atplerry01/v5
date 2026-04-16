@@ -1,5 +1,5 @@
-using Whyce.Shared.Contracts.Engine;
-using Whyce.Shared.Contracts.Runtime;
+using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Tests.Integration.Setup;
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.EconomicSystem.Capital.Reserve;
 
 public readonly record struct ReserveId
@@ -6,9 +8,7 @@ public readonly record struct ReserveId
 
     public ReserveId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ReserveId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ReserveId cannot be empty.");
         Value = value;
     }
 

@@ -1,17 +1,17 @@
-using Whyce.Platform.Host.Composition.Orchestration.Workflow;
-using Whyce.Projections.Orchestration.Workflow;
-using Whyce.Runtime.EventFabric;
-using FabricEventSchemaRegistry = Whyce.Runtime.EventFabric.EventSchemaRegistry;
-using Whyce.Shared.Contracts.Events.Orchestration.Workflow;
-using Whyce.Shared.Contracts.Runtime;
-using Whyce.Shared.Kernel.Domain;
+using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
+using Whycespace.Projections.Orchestration.Workflow;
+using Whycespace.Runtime.EventFabric;
+using FabricEventSchemaRegistry = Whycespace.Runtime.EventFabric.EventSchemaRegistry;
+using Whycespace.Shared.Contracts.Events.Orchestration.Workflow;
+using Whycespace.Shared.Contracts.Runtime;
+using Whycespace.Shared.Kernel.Domain;
 using Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Tests.Integration.Setup;
 using Whycespace.Tests.Shared;
-using Whyce.Platform.Host.Adapters;
-using Whyce.Engines.T0U.WhyceChain.Engine;
-using Whyce.Shared.Contracts.Infrastructure.Admission;
+using Whycespace.Platform.Host.Adapters;
+using Whycespace.Engines.T0U.WhyceChain.Engine;
+using Whycespace.Shared.Contracts.Infrastructure.Admission;
 
 namespace Whycespace.Tests.Integration.Orchestration.Workflow.Execution;
 
@@ -149,7 +149,7 @@ public sealed class WorkflowResumedEventFabricRoundTripTest
         // RegisterProjections through the real bootstrap. The registry must
         // contain a handler for "WorkflowExecutionResumedEvent". This is the
         // static half of ACT-FABRIC-ROUNDTRIP-TEST-01.
-        var projectionRegistry = new Whyce.Runtime.Projection.ProjectionRegistry();
+        var projectionRegistry = new Whycespace.Runtime.Projection.ProjectionRegistry();
         var bootstrap = new WorkflowExecutionBootstrap();
         var store = new InMemoryWorkflowExecutionProjectionStore();
         var handler = new WorkflowExecutionProjectionHandler(store);

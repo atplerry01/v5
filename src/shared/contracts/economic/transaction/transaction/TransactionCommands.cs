@@ -1,3 +1,5 @@
+using Whycespace.Shared.Contracts.Runtime;
+
 namespace Whycespace.Shared.Contracts.Economic.Transaction.Transaction;
 
 public sealed record TransactionReferenceDto(string Kind, Guid Id);
@@ -6,13 +8,22 @@ public sealed record InitiateTransactionCommand(
     Guid TransactionId,
     string Kind,
     IReadOnlyList<TransactionReferenceDto> References,
-    DateTimeOffset InitiatedAt);
+    DateTimeOffset InitiatedAt) : IHasAggregateId
+{
+    public Guid AggregateId => TransactionId;
+}
 
 public sealed record CommitTransactionCommand(
     Guid TransactionId,
-    DateTimeOffset CommittedAt);
+    DateTimeOffset CommittedAt) : IHasAggregateId
+{
+    public Guid AggregateId => TransactionId;
+}
 
 public sealed record FailTransactionCommand(
     Guid TransactionId,
     string Reason,
-    DateTimeOffset FailedAt);
+    DateTimeOffset FailedAt) : IHasAggregateId
+{
+    public Guid AggregateId => TransactionId;
+}

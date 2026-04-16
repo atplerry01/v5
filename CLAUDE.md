@@ -69,6 +69,19 @@ S0=system-breaking, S1=architectural, S2=structural, S3=formatting.
 ## Priority ($15)
 WHYCEPOLICY > WBSM v3 Architecture > This Rule Set > Prompt Instructions.
 
+## Phase 2-4 Pipeline Execution ($17) — LOCKED 2026-04-15, rule PIPELINE-EXEC-01
+All Phase 2, Phase 3, and Phase 4 prompt executions run from `/pipeline/**`. This is the canonical execution pipeline for these phases and is non-negotiable.
+
+**Canonical pipeline contract:**
+0. **Guard Pre-Load (MANDATORY)** — Before executing ANY file under `/pipeline/**`, load and read every `*.guard.md` file under `/claude/guards/**` per $1a. If any instruction in the pipeline file (context, prompt, audit, or fix) contradicts a guard rule, **PAUSE immediately and ask the user for correction** — do not attempt to reconcile silently, do not proceed, do not pick a side. Resume only after the user resolves the contradiction.
+1. **Input** — Read execution input from `/pipeline/execution_context.md`. This is the authoritative input; never substitute another source.
+2. **Execute** — Run the generic execution prompt at `/pipeline/generic-prompt.md` against that context.
+3. **Pipeline Audit** — After execution completes, run the audit defined in `/pipeline/generic-audit.md` against the output and modified files.
+4. **Pipeline Fix** — For every pipeline audit finding, run `/pipeline/generic-audit-fix-prompt.md` inline until the pipeline audit is clean.
+5. **System Audit Sweep (MANDATORY)** — Once the pipeline audit is clean, run the full system audit sweep at `/claude/audits/**` per $1b against the output and modified files. Any drift or violation from the system sweep MUST also be fixed inline before the execution is considered complete.
+
+Any deviation (skipping a stage, swapping prompt files, partial audit, unresolved findings, skipping guard pre-load, skipping the post-fix system audit) = halt per $12. This pipeline is additive to $1/$1a/$1b — guard loading ($1a) and the global audit sweep ($1b) are mandatory entry and exit points of every pipeline run.
+
 ---
 
 # Project Architecture

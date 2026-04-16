@@ -23,11 +23,12 @@ public sealed class OutboxService
     // calls honor cancellation.
     public async Task EnqueueAsync(
         Guid correlationId,
+        Guid aggregateId,
         IReadOnlyList<object> domainEvents,
         string topic,
         CancellationToken cancellationToken = default)
     {
         if (domainEvents.Count == 0) return;
-        await _outbox.EnqueueAsync(correlationId, domainEvents, topic, cancellationToken);
+        await _outbox.EnqueueAsync(correlationId, aggregateId, domainEvents, topic, cancellationToken);
     }
 }
