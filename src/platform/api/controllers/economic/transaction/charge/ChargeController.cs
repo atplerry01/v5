@@ -15,6 +15,13 @@ public sealed class ChargeController : ControllerBase
 {
     private static readonly DomainRoute ChargeRoute = new("economic", "transaction", "charge");
 
+    // Domain enum ChargeType mirror — validate at boundary so invalid values return 400
+    // instead of surfacing an ArgumentException through the global exception handler.
+    private static readonly HashSet<string> ValidChargeTypes = new(StringComparer.Ordinal)
+    {
+        "Fixed", "Percentage",
+    };
+
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
@@ -38,6 +45,12 @@ public sealed class ChargeController : ControllerBase
     {
         var p = request.Data;
         var now = _clock.UtcNow;
+        if (!ValidChargeTypes.Contains(p.Type))
+            return BadRequest(ApiResponse.Fail(
+                "economic.charge.invalid_type",
+                $"Unknown charge type: '{p.Type}'. Valid values: {string.Join(", ", ValidChargeTypes)}.",
+                now));
+
         var chargeId = _idGenerator.Generate(
             $"economic:transaction:charge:{p.TransactionId}:{p.Type}:{p.BaseAmount}:{p.ChargeAmount}:{p.Currency}");
 

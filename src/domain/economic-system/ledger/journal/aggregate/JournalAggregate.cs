@@ -3,6 +3,26 @@ using Whycespace.Domain.SharedKernel.Primitive.Money;
 
 namespace Whycespace.Domain.EconomicSystem.Ledger.Journal;
 
+/// <summary>
+/// Journal aggregate.
+///
+/// Phase 7 T7.4 — extended with <see cref="JournalKind"/> +
+/// <see cref="CompensationReference"/> so compensating journals carry
+/// their provable link back to the original they reverse on the
+/// aggregate's own event stream. The ledger is append-only: original
+/// journals are never mutated; a reversal is a fresh, balanced journal
+/// whose net effect cancels the original.
+///
+/// Kind/Compensation coupling invariants (EnsureInvariants):
+/// - Kind=Compensating ↔ Compensation non-null
+/// - Kind=Standard     ↔ Compensation null
+/// - OriginalJournalId != JournalId (factory-time check)
+///
+/// Kind is set at creation by selecting the factory
+/// (<see cref="Create"/> → Standard; <see cref="CreateCompensating"/> →
+/// Compensating). Once set, Kind is immutable for the lifetime of the
+/// aggregate.
+/// </summary>
 public sealed class JournalAggregate : AggregateRoot
 {
     public JournalId JournalId { get; private set; }
@@ -10,6 +30,12 @@ public sealed class JournalAggregate : AggregateRoot
     public JournalStatus Status { get; private set; }
     public Timestamp CreatedAt { get; private set; }
     public Timestamp? PostedAt { get; private set; }
+
+    // Phase 7 T7.4 — compensation state. Defaults to Standard; switched to
+    // Compensating exactly once by CreateCompensating via
+    // JournalCompensationCreatedEvent.
+    public JournalKind Kind { get; private set; } = JournalKind.Standard;
+    public CompensationReference? Compensation { get; private set; }
 
     private readonly List<JournalEntry> _entries = new();
     public IReadOnlyList<JournalEntry> Entries => _entries.AsReadOnly();
@@ -25,12 +51,40 @@ public sealed class JournalAggregate : AggregateRoot
         return aggregate;
     }
 
+    /// <summary>
+    /// Phase 7 T7.4 — creates a Kind=Compensating journal bound to the
+    /// original it reverses. Factory-level checks reject an empty or
+    /// self-referential compensation reference up front; the emitted
+    /// <see cref="JournalCompensationCreatedEvent"/> stamps the link onto
+    /// the aggregate stream so the ledger-level referential integrity is
+    /// replay-safe and audit-reconstructable.
+    /// </summary>
+    public static JournalAggregate CreateCompensating(
+        JournalId journalId,
+        CompensationReference compensation,
+        Timestamp createdAt)
+    {
+        if (compensation is null)
+            throw JournalErrors.CompensationReferenceRequired();
+
+        if (compensation.OriginalJournalId == journalId.Value)
+            throw JournalErrors.CompensatingJournalCannotReferenceSelf();
+
+        var aggregate = new JournalAggregate();
+
+        aggregate.RaiseDomainEvent(new JournalCompensationCreatedEvent(journalId, compensation, createdAt));
+
+        return aggregate;
+    }
+
     public void AddEntry(
         Guid entryId,
         Guid accountId,
         Amount amount,
         Currency currency,
-        BookingDirection direction)
+        BookingDirection direction,
+        Guid? fxRateId = null,
+        decimal? fxRate = null)
     {
         Guard.Against(Status == JournalStatus.Posted, JournalErrors.JournalAlreadyPosted().Message);
         Guard.Against(amount.Value <= 0, JournalErrors.InvalidAmount().Message);
@@ -47,13 +101,26 @@ public sealed class JournalAggregate : AggregateRoot
                 JournalErrors.CurrencyMismatch(Currency, currency).Message);
         }
 
+        // Phase 6 T6.1 — FX rate snapshot must arrive as a paired
+        // (RateId, Rate) tuple. Enforcing both-or-neither keeps the ledger
+        // read path unambiguous: either there is a full deterministic
+        // snapshot or there is none.
+        Guard.Against(
+            fxRateId.HasValue != fxRate.HasValue,
+            "FX rate snapshot must carry both FxRateId and FxRate, or neither.");
+        Guard.Against(
+            fxRate.HasValue && fxRate.Value <= 0m,
+            "FxRate must be positive when provided.");
+
         RaiseDomainEvent(new JournalEntryAddedEvent(
             JournalId,
             entryId,
             accountId,
             amount,
             currency,
-            direction));
+            direction,
+            fxRateId,
+            fxRate));
     }
 
     public void Post(Timestamp postedAt)
@@ -79,6 +146,17 @@ public sealed class JournalAggregate : AggregateRoot
                 JournalId = e.JournalId;
                 Status = JournalStatus.Open;
                 CreatedAt = e.CreatedAt;
+                // Kind stays at its initial Standard default; Compensation
+                // remains null. The invariant check in EnsureInvariants
+                // guarantees this coupling holds after Apply.
+                break;
+
+            case JournalCompensationCreatedEvent e:
+                JournalId = e.JournalId;
+                Status = JournalStatus.Open;
+                CreatedAt = e.CreatedAt;
+                Kind = JournalKind.Compensating;
+                Compensation = e.Compensation;
                 break;
 
             case JournalEntryAddedEvent e:
@@ -87,7 +165,9 @@ public sealed class JournalAggregate : AggregateRoot
                     e.AccountId,
                     e.Amount,
                     e.Currency,
-                    e.Direction);
+                    e.Direction,
+                    e.FxRateId,
+                    e.FxRate);
                 _entries.Add(entry);
 
                 if (_entries.Count == 1)
@@ -109,6 +189,14 @@ public sealed class JournalAggregate : AggregateRoot
         {
             Guard.Against(entry.Amount.Value <= 0, JournalErrors.NegativeEntryAmount().Message);
         }
+
+        // Phase 7 T7.4 — Kind/Compensation coupling. Runs after every
+        // Apply so any bypass path that attempts to set one without the
+        // other is rejected before the event is appended.
+        if (Kind == JournalKind.Compensating && Compensation is null)
+            throw JournalErrors.CompensationMissingForCompensatingKind();
+        if (Kind == JournalKind.Standard && Compensation is not null)
+            throw JournalErrors.CompensationSetForStandardKind();
 
         if (Status == JournalStatus.Posted)
         {

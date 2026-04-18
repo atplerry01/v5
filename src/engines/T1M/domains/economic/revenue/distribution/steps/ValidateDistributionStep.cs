@@ -21,6 +21,9 @@ public sealed class ValidateDistributionStep : IWorkflowStep
         if (intent.DistributionId == Guid.Empty)
             return Task.FromResult(WorkflowStepResult.Failure("DistributionId is required."));
 
+        if (intent.ContractId == Guid.Empty)
+            return Task.FromResult(WorkflowStepResult.Failure("ContractId is required."));
+
         if (string.IsNullOrWhiteSpace(intent.SpvId))
             return Task.FromResult(WorkflowStepResult.Failure("SpvId is required."));
 
@@ -48,6 +51,7 @@ public sealed class ValidateDistributionStep : IWorkflowStep
         var state = new DistributionWorkflowState
         {
             DistributionId = intent.DistributionId,
+            ContractId = intent.ContractId,
             SpvId = intent.SpvId,
             TotalAmount = intent.TotalAmount,
             Allocations = intent.Allocations,

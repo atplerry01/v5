@@ -1,0 +1,1 @@
+{"success":false,"data":null,"meta":{"correlationId":"00000000-0000-0000-0000-000000000000","timestamp":"2026-04-18T21:43:20.7971182+00:00","requestId":null,"version":null},"error":{"code":"economic.risk.exposure.create_failed","message":"OPA policy denied: Policy denied by OPA. No bypass allowed."}}

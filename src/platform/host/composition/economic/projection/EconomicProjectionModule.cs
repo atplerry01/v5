@@ -18,6 +18,7 @@ using Whycespace.Projections.Economic.Enforcement.Violation;
 using Whycespace.Projections.Economic.Exchange.Fx;
 using Whycespace.Projections.Economic.Exchange.Rate;
 using Whycespace.Projections.Economic.Ledger.Entry;
+using Whycespace.Projections.Economic.Ledger.Journal;
 using Whycespace.Projections.Economic.Ledger.Ledger;
 using Whycespace.Projections.Economic.Ledger.Obligation;
 using Whycespace.Projections.Economic.Ledger.Treasury;
@@ -58,6 +59,7 @@ using Whycespace.Shared.Contracts.Economic.Enforcement.Violation;
 using Whycespace.Shared.Contracts.Economic.Exchange.Fx;
 using Whycespace.Shared.Contracts.Economic.Exchange.Rate;
 using Whycespace.Shared.Contracts.Economic.Ledger.Entry;
+using Whycespace.Shared.Contracts.Economic.Ledger.Journal;
 using Whycespace.Shared.Contracts.Economic.Ledger.Ledger;
 using Whycespace.Shared.Contracts.Economic.Ledger.Obligation;
 using Whycespace.Shared.Contracts.Economic.Ledger.Treasury;
@@ -120,6 +122,10 @@ public static class EconomicProjectionModule
         services.AddSingleton(sp =>
             new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
                 .Create<TreasuryReadModel>("projection_economic_ledger_treasury", "treasury_read_model", "Treasury"));
+        // Phase 8 B2 — compensation-scoped journal projection.
+        services.AddSingleton(sp =>
+            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+                .Create<JournalReadModel>("projection_economic_ledger_journal", "journal_read_model", "Journal"));
 
         // Capital projection stores (Phase 2 capital wiring — Option C)
         services.AddSingleton(sp =>
@@ -234,6 +240,31 @@ public static class EconomicProjectionModule
             sp.GetRequiredService<PostgresProjectionStore<DistributionReadModel>>()));
         services.AddSingleton(sp => new PayoutExecutedProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<PayoutReadModel>>()));
+
+        // Phase 3.5 T3.5.2 — read-side resolvers backing the Phase 3 pipeline
+        // (IContractStatusGate / IContractAllocationsResolver /
+        // IPayoutVaultLayoutResolver). All three read directly from the
+        // NpgsqlDataSource backing this projection ring; no event-store load.
+        services.AddSingleton<Whycespace.Shared.Contracts.Economic.Revenue.Contract.IContractStatusGate>(sp =>
+            new Whycespace.Projections.Economic.Revenue.Contract.ContractStatusGate(
+                sp.GetRequiredService<ProjectionsDataSource>().Inner));
+        services.AddSingleton<Whycespace.Shared.Contracts.Economic.Revenue.Contract.IContractAllocationsResolver>(sp =>
+            new Whycespace.Projections.Economic.Revenue.Contract.ContractAllocationsResolver(
+                sp.GetRequiredService<ProjectionsDataSource>().Inner));
+        services.AddSingleton<Whycespace.Shared.Contracts.Economic.Revenue.Contract.IPayoutVaultLayoutResolver>(sp =>
+            new Whycespace.Projections.Economic.Capital.Vault.PayoutVaultLayoutResolver(
+                sp.GetRequiredService<ProjectionsDataSource>().Inner));
+
+        // Phase 4 T4.1 / T4.4 — read-side resolvers backing the transaction
+        // control plane (CheckLimitStep / FxLockStep). Both query JSONB state
+        // on existing projection tables; CQRS-clean (read-side only).
+        services.AddSingleton<Whycespace.Shared.Contracts.Economic.Transaction.Limit.ILimitResolver>(sp =>
+            new Whycespace.Projections.Economic.Transaction.Limit.LimitResolver(
+                sp.GetRequiredService<ProjectionsDataSource>().Inner));
+        services.AddSingleton<Whycespace.Shared.Contracts.Economic.Exchange.Rate.IExchangeRateResolver>(sp =>
+            new Whycespace.Projections.Economic.Exchange.Rate.ExchangeRateResolver(
+                sp.GetRequiredService<ProjectionsDataSource>().Inner));
+
         services.AddSingleton(sp => new VaultAccountProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<VaultAccountReadModel>>()));
         services.AddSingleton(sp => new EntryProjectionHandler(
@@ -244,6 +275,9 @@ public static class EconomicProjectionModule
             sp.GetRequiredService<PostgresProjectionStore<ObligationReadModel>>()));
         services.AddSingleton(sp => new TreasuryProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<TreasuryReadModel>>()));
+        // Phase 8 B2 — compensation-scoped journal projection handler.
+        services.AddSingleton(sp => new JournalProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<JournalReadModel>>()));
 
         // Capital projection handlers (Phase 2 capital wiring — Option C)
         services.AddSingleton(sp => new CapitalAccountProjectionHandler(
@@ -603,9 +637,21 @@ public static class EconomicProjectionModule
 
         var distributionHandler = provider.GetRequiredService<DistributionCreatedProjectionHandler>();
         projection.Register("DistributionCreatedEvent", distributionHandler);
+        // Phase 8 B2 — distribution compensation events.
+        projection.Register("DistributionCompensationRequestedEvent", distributionHandler);
+        projection.Register("DistributionCompensatedEvent", distributionHandler);
 
         var payoutHandler = provider.GetRequiredService<PayoutExecutedProjectionHandler>();
+        projection.Register("PayoutRequestedEvent", payoutHandler);
         projection.Register("PayoutExecutedEvent", payoutHandler);
+        projection.Register("PayoutFailedEvent", payoutHandler);
+        // Phase 8 B2 — payout compensation events.
+        projection.Register("PayoutCompensationRequestedEvent", payoutHandler);
+        projection.Register("PayoutCompensatedEvent", payoutHandler);
+
+        // Phase 8 B2 — compensation-scoped journal projection.
+        var journalHandler = provider.GetRequiredService<JournalProjectionHandler>();
+        projection.Register("JournalCompensationCreatedEvent", journalHandler);
 
         var vaultHandler = provider.GetRequiredService<VaultAccountProjectionHandler>();
         projection.Register("VaultFundedEvent", vaultHandler);
@@ -701,10 +747,17 @@ public static class EconomicProjectionModule
         projection.Register("RestrictionAppliedEvent", restrictionHandler);
         projection.Register("RestrictionUpdatedEvent", restrictionHandler);
         projection.Register("RestrictionRemovedEvent", restrictionHandler);
+        // Phase 8 B2 — restriction suspend / resume lifecycle.
+        projection.Register("RestrictionSuspendedEvent", restrictionHandler);
+        projection.Register("RestrictionResumedEvent", restrictionHandler);
 
         var lockHandler = provider.GetRequiredService<LockProjectionHandler>();
         projection.Register("SystemLockedEvent", lockHandler);
         projection.Register("SystemUnlockedEvent", lockHandler);
+        // Phase 8 B2 — lock suspend / resume / expire lifecycle.
+        projection.Register("SystemLockSuspendedEvent", lockHandler);
+        projection.Register("SystemLockResumedEvent", lockHandler);
+        projection.Register("SystemLockExpiredEvent", lockHandler);
 
         // Risk projection registrations (exposure)
         var riskExposureHandler = provider.GetRequiredService<RiskExposureProjectionHandler>();

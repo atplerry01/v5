@@ -1,20 +1,17 @@
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-WORKDIR /src
+# Runtime-only Dockerfile. The dotnet publish is performed on the host (where
+# NuGet connectivity works) and the published output is copied into a minimal
+# aspnet:10.0 runtime image. This avoids issuing `dotnet restore` from inside
+# a build container that may not have access to api.nuget.org (corporate
+# network, offline builds, etc.).
+#
+# Expected publish path (relative to the build context, which is the repo
+# root per docker-compose.validation.yml): artifacts/host-publish/
+#
+# Classification: phase5-operational-activation / economic-system
 
-COPY src/platform/host/Whycespace.Host.csproj src/platform/host/
-COPY src/shared/ src/shared/
-COPY src/infrastructure/ src/infrastructure/
-COPY src/runtime/ src/runtime/
-COPY src/platform/api/ src/platform/api/
-
-RUN dotnet restore src/platform/host/Whycespace.Host.csproj
-
-COPY src/ src/
-RUN dotnet publish src/platform/host/Whycespace.Host.csproj -c Release -o /app
-
-FROM mcr.microsoft.com/dotnet/aspnet:9.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
-COPY --from=build /app .
+COPY artifacts/host-publish/ .
 ENV ASPNETCORE_URLS=http://+:5000
 EXPOSE 5000
 ENTRYPOINT ["dotnet", "Whycespace.Host.dll"]

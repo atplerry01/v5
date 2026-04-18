@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Whycespace.Platform.Host.Adapters;
+using Whycespace.Runtime.Middleware.Policy;
+using Whycespace.Runtime.Middleware.Policy.Loaders;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Shared.Contracts.Infrastructure.Policy;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -48,6 +51,32 @@ public static class PolicyInfrastructureModule
                 sp.GetRequiredService<OpaOptions>(),
                 sp.GetRequiredService<IClock>()));
         services.AddSingleton<IPolicyEvaluator>(sp => sp.GetRequiredService<OpaPolicyEvaluator>());
+
+        // Phase 11 B3 — CompositeAggregateStateLoader replaces the
+        // Phase 8 B6 NullAggregateStateLoader default. Routes per-command
+        // to the appropriate per-aggregate loader; unregistered command
+        // types still fall through to null, so the backward-compat
+        // behaviour (pre-Phase 11 allow/deny) is preserved for every
+        // aggregate without a loader.
+        //
+        // Event-store fidelity per POLICY-STATE-SOURCE-EVENT-STORE-01:
+        // each per-aggregate loader receives the same IEventStore the
+        // engine uses — never a projection.
+        services.AddSingleton<IAggregateStateLoader>(sp =>
+        {
+            var eventStore = sp.GetRequiredService<IEventStore>();
+
+            return new CompositeAggregateStateLoader(new[]
+            {
+                new CompositeAggregateStateLoader.Route(
+                    ObligationStateLoader.Handles,
+                    new ObligationStateLoader(eventStore)),
+
+                new CompositeAggregateStateLoader.Route(
+                    TreasuryStateLoader.Handles,
+                    new TreasuryStateLoader(eventStore)),
+            });
+        });
 
         // Phase 2.6 hardening: fire a single best-effort warm-up ping at
         // OPA during host startup so the first real policy evaluation

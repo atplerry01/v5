@@ -33,6 +33,18 @@ public sealed record CommandContext
     public bool RuntimeOrigin { get; set; }
 
     /// <summary>
+    /// Phase 2.5 — system-origin bypass flag. When true, <see cref="EnforcementGuard"/>
+    /// allows the command past the restriction gate so workflow-driven
+    /// compensation / settlement / recovery commands can complete against
+    /// a subject that has become restricted mid-flight. Default false;
+    /// set to true ONLY by <see cref="ISystemIntentDispatcher.DispatchSystemAsync"/>.
+    /// The flag is init-only (write-once at context construction) — no
+    /// setter is exposed so middleware, handlers, and the API surface
+    /// cannot promote a user command to system after the fact.
+    /// </summary>
+    public bool IsSystem { get; init; }
+
+    /// <summary>
     /// Enforcement constraint applied by <c>ExecutionGuardMiddleware</c>
     /// after consulting the active-violation projection for
     /// <see cref="IdentityId"/>. Null when no active non-blocking

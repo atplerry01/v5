@@ -1074,6 +1074,47 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // Phase 2.5 — SYSTEM-ORIGIN bypass is dispatcher-scoped only
+    // ─────────────────────────────────────────────────────────────────────
+    //
+    // CommandContext.IsSystem bypasses the EnforcementGuard restriction
+    // hard-reject. Only the dispatcher is allowed to stamp it. No
+    // controller, middleware, or adapter may set IsSystem=true — the
+    // stamping site must be exactly SystemIntentDispatcher.cs.
+
+    [Fact]
+    public void IsSystem_flag_is_only_set_by_SystemIntentDispatcher()
+    {
+        var hits = ScanCode(
+                SrcRoot,
+                new Regex(@"\bIsSystem\s*=\s*true\b"))
+            .Where(line => !line.Contains("SystemIntentDispatcher.cs",
+                System.StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(hits.Count == 0,
+            "Phase 2.5: IsSystem=true may be stamped ONLY by " +
+            "SystemIntentDispatcher.DispatchSystemAsync. No controller, " +
+            "middleware, or adapter may promote a user command to system " +
+            "after the fact. Hits:\n" + string.Join("\n", hits));
+    }
+
+    [Fact]
+    public void Api_controllers_do_not_reference_IsSystem()
+    {
+        // Belt-and-braces check: the API surface must not read or write
+        // IsSystem at all. Only the runtime dispatcher and domain-guard
+        // code may reference the flag.
+        var hits = ScanCode(
+            Path.Combine(SrcRoot, "platform", "api"),
+            new Regex(@"\bIsSystem\b"));
+
+        Assert.True(hits.Count == 0,
+            "Phase 2.5: API controllers must not reference IsSystem — " +
+            "the flag is runtime-internal. Hits:\n" + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────
 

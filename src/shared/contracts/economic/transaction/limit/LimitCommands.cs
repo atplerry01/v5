@@ -17,7 +17,8 @@ public sealed record CheckLimitCommand(
     Guid LimitId,
     Guid TransactionId,
     decimal TransactionAmount,
-    DateTimeOffset CheckedAt) : IHasAggregateId
+    DateTimeOffset CheckedAt,
+    int ExpectedVersion = -1) : IHasAggregateId
 {
     public Guid AggregateId => LimitId;
 }

@@ -1,0 +1,90 @@
+# docker-compose.validation.yml — real-infrastructure certification stack.
+#
+# Classification : phase5-operational-activation + phase6-hardening / economic-system
+# Purpose        : spin up the full Whycespace event fabric + runtime host so the
+#                  Category=Certification suite and failure-injection / DLQ /
+#                  observability probes execute against a live containerised
+#                  stack (Postgres, Kafka, Redis, OPA, Prometheus, Grafana) —
+#                  not against the in-memory TestHost harness.
+#
+# Config-safety:
+#   - No literal credentials (R-CFG-R1 / R-CFG-DC1). All secrets are ${VAR}
+#     substitutions. Operator sources them from a gitignored .env.local
+#     colocated with this file (see .env.example).
+#   - Host-network clients bootstrap Kafka via localhost:29092 (EXTERNAL
+#     listener) per R-K-27.
+#
+# Invoke via:
+#   docker compose -f infrastructure/docker/docker-compose.validation.yml up -d
+#   docker compose -f infrastructure/docker/docker-compose.validation.yml down
+#
+# Or through the validate.sh --real-infra stage (scripts/validate.sh).
+
+include:
+  - ../deployment/docker-compose.yml
+
+services:
+
+  # ── Economic system runtime (the thing under certification) ──
+  economic-system:
+    build:
+      context: ../..
+      dockerfile: src/platform/host/Dockerfile
+    image: whyce/economic-system:validation
+    container_name: whyce-economic-system
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-projections:
+        condition: service_healthy
+      whycechain-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Validation
+      ASPNETCORE_URLS: http://+:5000
+
+      # Kafka — INTERNAL listener: host is reachable on the compose network.
+      Kafka__BootstrapServers: kafka:9092
+
+      # Postgres pools (event-store, projections, chain).
+      Postgres__ConnectionString: "Host=postgres;Port=5432;Database=whyce_eventstore;Username=whyce;Password=${POSTGRES_PASSWORD}"
+      Postgres__ChainConnectionString: "Host=whycechain-db;Port=5432;Database=whycechain;Username=whyce;Password=${POSTGRES_PASSWORD}"
+      Postgres__ProjectionsConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=${POSTGRES_PASSWORD}"
+      Projections__ConnectionString: "Host=postgres-projections;Port=5432;Database=whyce_projections;Username=whyce;Password=${POSTGRES_PASSWORD}"
+
+      Redis__ConnectionString: "redis:6379"
+      Opa__Endpoint: "http://opa:8181"
+
+      MinIO__Endpoint: "minio:9000"
+      MinIO__AccessKey: "${MINIO_ROOT_USER}"
+      MinIO__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      MinIO__UseSsl: "false"
+
+      Jwt__SigningKey: "${JWT_SIGNING_KEY}"
+      WhycePolicy__Version: "v1"
+      Auth__DevMode: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: "no"
+    networks:
+      - whyce-network

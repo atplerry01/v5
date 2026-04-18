@@ -380,6 +380,7 @@ public sealed class TransactionSchemaModule : ISchemaModule
             var evt = (WalletDomain.TransactionRequestedEvent)e;
             return new WalletSchema.TransactionRequestedEventSchema(
                 evt.WalletId.Value,
+                evt.RequestId,
                 evt.AccountId,
                 evt.DestinationAccountId,
                 evt.Amount.Value,

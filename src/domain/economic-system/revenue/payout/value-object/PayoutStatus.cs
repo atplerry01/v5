@@ -2,5 +2,9 @@ namespace Whycespace.Domain.EconomicSystem.Revenue.Payout;
 
 public enum PayoutStatus
 {
-    Completed
+    Requested,
+    Executed,
+    Failed,
+    CompensationRequested,
+    Compensated
 }

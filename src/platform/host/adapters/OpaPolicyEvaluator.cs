@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
+using Whycespace.Runtime.Middleware.Policy;
 using Whycespace.Shared.Contracts.Infrastructure.Policy;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -166,25 +167,43 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
             }
         }
 
-        var requestBody = new
+        // Phase 8 B6 — build the OPA `input` document uniformly for every
+        // command. `command`, `resource.state`, and `now` / `now_ns` are
+        // populated exactly when PolicyContext carries them (PolicyMiddleware
+        // sets them on every call post-B6); absence is preserved as explicit
+        // JSON null for `resource.state` (rego needs the "no aggregate yet"
+        // signal) and field omission for the command / now keys (both are
+        // always populated by the middleware under normal operation — a null
+        // indicates a test double or legacy caller, not a real dispatch).
+        var inputMap = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            input = new
-            {
-                policy_id = policyId,
-                action,
-                subject,
-                resource = new
-                {
-                    classification = policyContext.Classification,
-                    context = policyContext.Context,
-                    domain = policyContext.Domain
-                },
-                correlation_id = policyContext.CorrelationId.ToString(),
-                tenant_id = policyContext.TenantId,
-                actor_id = policyContext.ActorId
-            }
+            ["policy_id"] = policyId,
+            ["action"] = action,
+            ["subject"] = subject,
+            ["resource"] = BuildResource(policyContext),
+            ["correlation_id"] = policyContext.CorrelationId.ToString(),
+            ["tenant_id"] = policyContext.TenantId,
+            ["actor_id"] = policyContext.ActorId
         };
-        var json = JsonSerializer.Serialize(requestBody);
+
+        if (policyContext.Command is not null)
+        {
+            inputMap["command"] = policyContext.Command;
+            inputMap["command_type"] = policyContext.CommandType;
+        }
+
+        if (policyContext.Now is { } now)
+        {
+            // `now_ns` is epoch-nanoseconds (rego's time.now_ns shape) so
+            // comparisons against `input.now_ns > <threshold>` work without
+            // date parsing inside rego. `now` keeps the human-readable ISO
+            // 8601 form for log correlation and rego string rules.
+            inputMap["now"] = now.ToString("O");
+            inputMap["now_ns"] = now.UtcTicks * 100L; // DateTimeOffset.UtcTicks is in 100-ns units; *100 → ns
+        }
+
+        var requestBody = new { input = inputMap };
+        var json = JsonSerializer.Serialize(requestBody, PolicyInputBuilder.SerializerOptions);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
         var stopwatch = Stopwatch.StartNew();
@@ -219,7 +238,7 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
 
             var isAllowed = opaResult?.Result?.Allow ?? false;
             var decisionHash = ComputeDecisionHash(policyId, policyContext, isAllowed);
-            var denialReason = isAllowed ? null : (opaResult?.Result?.DenialReason ?? "Policy denied by OPA");
+            var denialReason = isAllowed ? null : ExtractDenyReason(opaResult?.Result);
             return new PolicyDecision(isAllowed, policyId, decisionHash, denialReason);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -386,6 +405,110 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         return $"{domain}.{verb}";
     }
 
+    /// <summary>
+    /// Phase 8 B6 — shape the OPA <c>input.resource</c> block. Carries the
+    /// route (classification / context / domain) as before PLUS, when
+    /// <see cref="PolicyContext.AggregateId"/> and
+    /// <see cref="PolicyContext.ResourceState"/> are populated, the
+    /// aggregate id and the policy-visible state snapshot.
+    ///
+    /// <para>
+    /// <b>Explicit null state.</b> When <c>ResourceState</c> is <c>null</c>
+    /// (no per-command loader registered, or factory-style command with
+    /// no prior aggregate) the <c>state</c> key is emitted as JSON
+    /// <c>null</c> — NOT omitted. Rego rules use
+    /// <c>not input.resource.state</c> as the "no state" branch; omitting
+    /// the key would break the backward-compat contract in the already-
+    /// shipped ledger policies.
+    /// </para>
+    /// </summary>
+    private static Dictionary<string, object?> BuildResource(PolicyContext policyContext)
+    {
+        var resource = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["classification"] = policyContext.Classification,
+            ["context"] = policyContext.Context,
+            ["domain"] = policyContext.Domain
+        };
+
+        if (policyContext.AggregateId is { } aggregateId)
+            resource["aggregate_id"] = aggregateId.ToString();
+
+        // Only populate `state` when the middleware has supplied (or
+        // explicitly nulled) it. A PolicyContext constructed by a pre-B6
+        // caller / test double leaves ResourceState null AND Command null;
+        // the guard checks BOTH because ResourceState = null is a valid
+        // post-B6 value ("aggregate does not exist yet").
+        if (policyContext.Command is not null)
+            resource["state"] = policyContext.ResourceState;
+
+        return resource;
+    }
+
+    /// <summary>
+    /// Phase 8 B6 — tolerantly extract the deny reason from an OPA result.
+    ///
+    /// Priority order:
+    ///   1. <c>deny_reason</c> as JSON array/set (rego partial set emitted
+    ///      via <c>deny_reason contains "..."</c> — the canonical shape in
+    ///      the shipped ledger policies);
+    ///   2. <c>deny_reason</c> as single string (alternative rego shape);
+    ///   3. <c>reasons</c> array (policy files that aggregate multiple
+    ///      causes);
+    ///   4. <c>reason</c> single string;
+    ///   5. Legacy <c>denial_reason</c> single string (pre-B6 adapter
+    ///      contract — retained for backward compat).
+    ///   6. Generic fallback message so the CommandResult.Error remains
+    ///      human-readable when a denied decision carries no structured
+    ///      reason field.
+    ///
+    /// Array values are joined with <c>, </c> so the caller sees a single
+    /// string it can persist on <see cref="CommandResult.PolicyDenyReason"/>
+    /// and embed in the free-form <see cref="CommandResult.Error"/>.
+    /// </summary>
+    private static string ExtractDenyReason(OpaResultPayload? payload)
+    {
+        if (payload is null) return "Policy denied by OPA";
+
+        if (TryJoin(payload.DenyReason, out var fromSet)) return fromSet;
+        if (TryJoin(payload.Reasons, out var fromReasons)) return fromReasons;
+        if (!string.IsNullOrWhiteSpace(payload.Reason)) return payload.Reason!;
+        if (!string.IsNullOrWhiteSpace(payload.DenialReason)) return payload.DenialReason!;
+        return "Policy denied by OPA";
+    }
+
+    private static bool TryJoin(JsonElement element, out string joined)
+    {
+        joined = string.Empty;
+        if (element.ValueKind == JsonValueKind.Undefined ||
+            element.ValueKind == JsonValueKind.Null)
+            return false;
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var s = element.GetString();
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            joined = s!;
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>(element.GetArrayLength());
+            foreach (var item in element.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) continue;
+                var s = item.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) parts.Add(s!);
+            }
+            if (parts.Count == 0) return false;
+            joined = string.Join(", ", parts);
+            return true;
+        }
+
+        return false;
+    }
+
     private sealed class OpaResponse
     {
         [System.Text.Json.Serialization.JsonPropertyName("result")]
@@ -400,6 +523,23 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         [System.Text.Json.Serialization.JsonPropertyName("deny")]
         public bool Deny { get; set; }
 
+        // Phase 8 B6 — tolerant deny reason decoding. rego `contains`
+        // partial sets serialise as JSON arrays; older policies emit a
+        // single string or an array named `reasons`. Using JsonElement
+        // lets ExtractDenyReason inspect the ValueKind without pre-
+        // committing to string vs array for any of the three legacy keys.
+
+        [System.Text.Json.Serialization.JsonPropertyName("deny_reason")]
+        public JsonElement DenyReason { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("reasons")]
+        public JsonElement Reasons { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("reason")]
+        public string? Reason { get; set; }
+
+        // Legacy single-string shape (pre-B6). Preserved for backward
+        // compatibility with rego files that emit `denial_reason = "..."`.
         [System.Text.Json.Serialization.JsonPropertyName("denial_reason")]
         public string? DenialReason { get; set; }
     }

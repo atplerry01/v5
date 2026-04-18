@@ -851,3 +851,72 @@ No other exact duplicates were detected. All rule text from all four source file
 ## Semantic Conflicts
 
 None observed. Several rules reinforce one another across sections (e.g., `R-K-01` — no direct Kafka in systems/platform — and `R-SYS-09` — no infrastructure imports in systems — are mutually reinforcing, not conflicting). `R-PLAT-06` (API dispatches through `ISystemIntentDispatcher`) aligns with `R-SYS-14` (systems access runtime through shared-contract surfaces including `ISystemIntentDispatcher`); both describe the canonical entry-path and are complementary.
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-18)
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-18. Rule IDs are indexed in `claude/audits/infrastructure.audit.md`.
+
+### INFRA-EVENT-FABRIC-01 — Kafka Publish Whitelist
+
+Definition:
+Direct Kafka publishes outside `KafkaOutboxPublisher` are forbidden. Sanctioned exceptions MUST be explicitly listed in a sub-clause with cross-classification justification. Current whitelist: `KafkaOutboxPublisher`, `GenericKafkaProjectionConsumerWorker`, `InfrastructureComposition`. Any new direct `IProducer<>` usage elsewhere = violation unless added to this whitelist with reasoning.
+
+Severity:
+S1
+
+References:
+- R-K-01 (Kafka used only through runtime)
+- R-K-06 (outbox pattern mandatory)
+- R-K-28 (integration-bridge outbox)
+- Source: `claude/new-rules/20260417-103000-audits.md`
+
+### BACKFILL-PORTABILITY-01 — Cross-Database Backfill Portability
+
+Definition:
+Cross-database backfill scripts MUST either (a) avoid extensions that may be locked down in hardened environments (`dblink`, `postgres_fdw`), OR (b) emit a clear failure message naming the alternative procedure (e.g., `\copy`-based two-step) when the extension is unavailable. CI lints backfill SQL for this convention.
+
+Severity:
+S3
+
+References:
+- Source: `claude/new-rules/20260417-120050-economic-system-phase3-6-final-residual.md` (Finding 10)
+
+### OPS-VAL-001 — Kafka-Init Race on Host Startup
+
+Definition:
+Host services MUST NOT start publishing/consuming before the topic-provisioning bootstrap (`kafka-init` or equivalent) completes. Either (a) add `kafka-init` as a `service_completed_successfully` dependency for every host service in all compose files where a host is defined, OR (b) replace the serial `kafka-topics.sh --create` loop with a batched pass that completes in seconds. R-K-20 startup-time topic-coverage guard MUST fail fast on broker-side mismatch; silent publish-and-retry = violation.
+
+Severity:
+S1
+
+References:
+- R-K-17 (topic declarations in create-topics.sh)
+- R-K-20 (K-TOPIC-COVERAGE-01, S0 startup guard)
+- Source: `claude/new-rules/20260418-214500-audits.md`
+
+### OPS-VAL-002 — Controller Parse/Conversion Error Boundary
+
+Definition:
+Request DTO-to-command conversion that raises domain parse exceptions MUST be caught at the controller boundary and returned as `400 BadRequest(ApiResponse.Fail(code, message, ...))`. Unhandled `System.ArgumentException` / `System.InvalidOperationException` from parse/conversion escaping into the global exception handler (returning generic `500 ProblemDetails`) is a structural drift signal.
+
+Severity:
+S2
+
+References:
+- R-PLAT-06 (API dispatches through `ISystemIntentDispatcher`)
+- R-PLAT-12 (`CommandResult` envelope)
+- Source: `claude/new-rules/20260418-214500-audits.md`
+
+### OPS-VAL-004 — OpenAPI Schema Availability
+
+Definition:
+Either (a) Swagger JSON endpoint (`/swagger/v1/swagger.json` with `AddSwaggerGen` / `UseSwagger()` wiring) MUST be operational, OR (b) the alternate schema endpoint MUST be documented and functional. All registered controllers MUST be discoverable by external tooling; a Swagger UI shell serving with no populated schema = violation.
+
+Severity:
+S2
+
+References:
+- R-PLAT-01 (API layer purity — Swagger/OpenAPI config permitted)
+- Source: `claude/new-rules/20260418-214500-audits.md`

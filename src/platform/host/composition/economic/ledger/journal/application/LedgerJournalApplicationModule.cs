@@ -10,11 +10,13 @@ public static class LedgerJournalApplicationModule
     public static IServiceCollection AddLedgerJournalApplication(this IServiceCollection services)
     {
         services.AddTransient<PostJournalEntriesHandler>();
+        services.AddTransient<PostCompensatingJournalHandler>();
         return services;
     }
 
     public static void RegisterEngines(IEngineRegistry engine)
     {
         engine.Register<PostJournalEntriesCommand, PostJournalEntriesHandler>();
+        engine.Register<PostCompensatingJournalCommand, PostCompensatingJournalHandler>();
     }
 }

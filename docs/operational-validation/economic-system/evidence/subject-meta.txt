@@ -1,0 +1,1 @@
+ctx=subject method=POST path=/api/economic/subject/register http=500 body_size=201

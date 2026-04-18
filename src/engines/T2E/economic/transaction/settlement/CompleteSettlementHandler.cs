@@ -1,4 +1,5 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Settlement;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Settlement;
 using Whycespace.Shared.Contracts.Engine;
 
@@ -10,6 +11,8 @@ public sealed class CompleteSettlementHandler : IEngine
     {
         if (context.Command is not CompleteSettlementCommand cmd)
             return;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var aggregate = (SettlementAggregate)await context.LoadAggregateAsync(typeof(SettlementAggregate));
 

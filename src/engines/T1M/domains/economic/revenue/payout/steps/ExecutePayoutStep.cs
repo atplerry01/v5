@@ -1,6 +1,7 @@
 using Whycespace.Engines.T1M.Domains.Economic.Revenue.Payout.State;
 using Whycespace.Shared.Contracts.Economic.Vault.Account;
 using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Observability;
 using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Engines.T1M.Domains.Economic.Revenue.Payout.Steps;
@@ -14,10 +15,12 @@ namespace Whycespace.Engines.T1M.Domains.Economic.Revenue.Payout.Steps;
 public sealed class ExecutePayoutStep : IWorkflowStep
 {
     private readonly ISystemIntentDispatcher _dispatcher;
+    private readonly IEconomicMetrics _metrics;
 
-    public ExecutePayoutStep(ISystemIntentDispatcher dispatcher)
+    public ExecutePayoutStep(ISystemIntentDispatcher dispatcher, IEconomicMetrics metrics)
     {
         _dispatcher = dispatcher;
+        _metrics = metrics;
     }
 
     public string Name => PayoutExecutionSteps.ExecutePayout;
@@ -43,7 +46,7 @@ public sealed class ExecutePayoutStep : IWorkflowStep
                 VaultSliceType.Slice1,
                 share.Amount);
 
-            var debitResult = await _dispatcher.DispatchAsync(debit, VaultRoute, cancellationToken);
+            var debitResult = await _dispatcher.DispatchSystemAsync(debit, VaultRoute, cancellationToken);
             if (!debitResult.IsSuccess)
                 return WorkflowStepResult.Failure(
                     debitResult.Error ?? $"Debit failed for participant {share.ParticipantId}.");
@@ -56,7 +59,7 @@ public sealed class ExecutePayoutStep : IWorkflowStep
                 VaultSliceType.Slice1,
                 share.Amount);
 
-            var creditResult = await _dispatcher.DispatchAsync(credit, VaultRoute, cancellationToken);
+            var creditResult = await _dispatcher.DispatchSystemAsync(credit, VaultRoute, cancellationToken);
             if (!creditResult.IsSuccess)
                 return WorkflowStepResult.Failure(
                     creditResult.Error ?? $"Credit failed for participant {share.ParticipantId}.");
@@ -68,6 +71,8 @@ public sealed class ExecutePayoutStep : IWorkflowStep
         if (totalDebit != totalCredit)
             return WorkflowStepResult.Failure(
                 $"Payout conservation violated: debit={totalDebit}, credit={totalCredit}.");
+
+        _metrics.RecordPayoutExecuted(state.SpvId, totalCredit, state.Shares.Count);
 
         state.CurrentStep = PayoutExecutionSteps.ExecutePayout;
         context.SetState(state);

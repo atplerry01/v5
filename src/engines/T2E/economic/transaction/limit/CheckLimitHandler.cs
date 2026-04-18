@@ -15,7 +15,11 @@ public sealed class CheckLimitHandler : IEngine
 
         var aggregate = (LimitAggregate)await context.LoadAggregateAsync(typeof(LimitAggregate));
 
-        aggregate.Check(cmd.TransactionId, new Amount(cmd.TransactionAmount), new Timestamp(cmd.CheckedAt));
+        aggregate.Check(
+            cmd.TransactionId,
+            new Amount(cmd.TransactionAmount),
+            new Timestamp(cmd.CheckedAt),
+            cmd.ExpectedVersion);
 
         context.EmitEvents(aggregate.DomainEvents);
     }

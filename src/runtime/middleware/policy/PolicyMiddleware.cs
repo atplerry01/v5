@@ -32,6 +32,8 @@ public sealed class PolicyMiddleware : IMiddleware
     private readonly IIdGenerator _idGenerator;
     private readonly IPolicyDecisionEventFactory _decisionEventFactory;
     private readonly ICallerIdentityAccessor _callerIdentity;
+    private readonly IClock _clock;
+    private readonly IAggregateStateLoader _aggregateStateLoader;
 
     public PolicyMiddleware(
         WhyceIdEngine whyceIdEngine,
@@ -39,7 +41,9 @@ public sealed class PolicyMiddleware : IMiddleware
         IPolicyEvaluator policyEvaluator,
         IIdGenerator idGenerator,
         IPolicyDecisionEventFactory decisionEventFactory,
-        ICallerIdentityAccessor callerIdentity)
+        ICallerIdentityAccessor callerIdentity,
+        IClock clock,
+        IAggregateStateLoader aggregateStateLoader)
     {
         _whyceIdEngine = whyceIdEngine;
         _whycePolicyEngine = whycePolicyEngine;
@@ -47,6 +51,8 @@ public sealed class PolicyMiddleware : IMiddleware
         _idGenerator = idGenerator;
         _decisionEventFactory = decisionEventFactory;
         _callerIdentity = callerIdentity;
+        _clock = clock;
+        _aggregateStateLoader = aggregateStateLoader;
     }
 
     public async Task<CommandResult> ExecuteAsync(
@@ -92,12 +98,38 @@ public sealed class PolicyMiddleware : IMiddleware
         context.TrustScore = authResult.Identity.TrustScore;
 
         // Step 3: Evaluate external policy via OPA (IPolicyEvaluator).
-        // Pass the canonical per-command policy id (e.g.
-        // "whyce.economic.capital.account.open") so the rego rules that gate
-        // on `input.policy_id == "..."` can match. The OPA evaluator derives
-        // both the data-path URL and the `input.policy_id` field from this
-        // value (via BuildOpaPackagePath / direct echo).
-        var opaContext = new PolicyContext(
+        //
+        // Phase 8 B6 — input enrichment. Every evaluation carries:
+        //   * input.command            — the typed command record, serialised with
+        //                                the canonical snake-case policy so rego
+        //                                can dereference input.command.counterparty_id
+        //                                etc. uniformly;
+        //   * input.resource.state     — the aggregate snapshot hydrated via
+        //                                IAggregateStateLoader (null when no loader
+        //                                is registered for this command type, which
+        //                                is the pre-B6 behaviour);
+        //   * input.now / input.now_ns — a single IClock.UtcNow read stamped here,
+        //                                forwarded through PolicyContext so the OPA
+        //                                adapter does not re-read the clock.
+        //
+        // Passing `now` explicitly (rather than letting the adapter source it)
+        // keeps replay-determinism at the middleware boundary: reruns of the
+        // same command with the same upstream state produce the same OPA input.
+        var now = _clock.UtcNow;
+
+        object? resourceState = null;
+        var aggregateId = PolicyInputBuilder.TryResolveAggregateId(command);
+        if (aggregateId is { } aid)
+        {
+            // The loader is responsible for hydrating from the same
+            // authoritative source the engine would use (IEventStore replay,
+            // not a projection read) so policy sees what the system will
+            // act on — not a projection-lag-skewed view.
+            resourceState = await _aggregateStateLoader.LoadSnapshotAsync(
+                command.GetType(), aid, cancellationToken);
+        }
+
+        var baseContext = new PolicyContext(
             context.CorrelationId,
             context.TenantId,
             context.ActorId,
@@ -107,6 +139,8 @@ public sealed class PolicyMiddleware : IMiddleware
             context.Context,
             context.Domain,
             subjectAttributes);
+
+        var opaContext = PolicyInputBuilder.Enrich(baseContext, command, resourceState, now);
 
         var opaDecision = await _policyEvaluator.EvaluateAsync(context.PolicyId, command, opaContext);
         if (!opaDecision.IsAllowed)
@@ -131,9 +165,17 @@ public sealed class PolicyMiddleware : IMiddleware
                 correlationId: context.CorrelationId,
                 causationId: context.CausationId);
 
+            // Phase 8 B6 — structured deny reason propagation. The Error
+            // string keeps its free-form caller-facing shape; PolicyDenyReason
+            // carries the same token(s) as a dedicated machine-readable field
+            // for audit correlation and downstream rego rule attribution.
             return CommandResult.Failure(
                 $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.")
-                with { AuditEmission = opaDenyEmission };
+                with
+                {
+                    AuditEmission = opaDenyEmission,
+                    PolicyDenyReason = opaDecision.DenialReason
+                };
         }
 
         // Step 4: Evaluate constitutional policy via WhycePolicyEngine (T0U)
@@ -177,9 +219,16 @@ public sealed class PolicyMiddleware : IMiddleware
                 correlationId: context.CorrelationId,
                 causationId: context.CausationId);
 
+            // Phase 8 B6 — structured deny reason propagation mirrors the
+            // OPA-deny branch: Error stays free-form, PolicyDenyReason
+            // carries the same token for audit correlation.
             return CommandResult.Failure(
                 $"WHYCEPOLICY denied: {policyResult.DenialReason ?? "execution not permitted"}. No bypass allowed.")
-                with { AuditEmission = denyEmission };
+                with
+                {
+                    AuditEmission = denyEmission,
+                    PolicyDenyReason = policyResult.DenialReason
+                };
         }
 
         // Step 7: ALLOW path. Build the AuditEmission BEFORE dispatching the

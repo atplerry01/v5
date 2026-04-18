@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Whycespace.Shared.Contracts.Economic.Ledger.Journal;
 using Whycespace.Shared.Contracts.Economic.Ledger.Ledger;
 using Whycespace.Shared.Contracts.Economic.Ledger.Obligation;
 using Whycespace.Shared.Contracts.Economic.Ledger.Treasury;
@@ -15,7 +16,7 @@ namespace Whycespace.Platform.Host.Composition.Economic.Ledger;
 /// dispatch of a ledger command stamps the correct policy id onto
 /// <c>CommandContext.PolicyId</c> for evaluation by <c>PolicyMiddleware</c>.
 ///
-/// Coverage: ledger (1) + obligation (3) + treasury (3) = 7 bindings.
+/// Coverage: journal (1) + ledger (1) + obligation (3) + treasury (3) = 8 bindings.
 /// Entry is intentionally excluded — entries are created only through journal
 /// posting, so no standalone command surface exists.
 /// </summary>
@@ -23,6 +24,12 @@ public static class LedgerPolicyModule
 {
     public static IServiceCollection AddLedgerPolicyBindings(this IServiceCollection services)
     {
+        // ── journal (1) ───────────────────────────────────────────
+        // PostJournalEntries is dispatched by the transaction lifecycle
+        // workflow via ISystemIntentDispatcher and MUST have a policy
+        // binding — it flows through the full runtime pipeline.
+        services.AddSingleton(new CommandPolicyBinding(typeof(PostJournalEntriesCommand), JournalPolicyIds.PostEntries));
+
         // ── ledger (1) ────────────────────────────────────────────
         services.AddSingleton(new CommandPolicyBinding(typeof(OpenLedgerCommand), LedgerPolicyIds.Open));
 

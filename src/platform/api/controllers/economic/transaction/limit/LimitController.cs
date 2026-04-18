@@ -66,7 +66,8 @@ public sealed class LimitController : ControllerBase
     {
         var p = request.Data;
         var now = _clock.UtcNow;
-        var command = new CheckLimitCommand(limitId, p.TransactionId, p.TransactionAmount, now);
+        var command = new CheckLimitCommand(
+            limitId, p.TransactionId, p.TransactionAmount, now, p.ExpectedVersion);
 
         var result = await _dispatcher.DispatchAsync(command, LimitRoute, cancellationToken);
 
@@ -86,4 +87,5 @@ public sealed record DefineLimitRequestModel(
 
 public sealed record CheckLimitRequestModel(
     Guid TransactionId,
-    decimal TransactionAmount);
+    decimal TransactionAmount,
+    int ExpectedVersion = -1);

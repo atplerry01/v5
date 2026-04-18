@@ -1,6 +1,7 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Charge;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Charge;
+
 using Whycespace.Shared.Contracts.Engine;
 
 namespace Whycespace.Engines.T2E.Economic.Transaction.Charge;
@@ -11,6 +12,8 @@ public sealed class ApplyChargeHandler : IEngine
     {
         if (context.Command is not ApplyChargeCommand cmd)
             return;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var aggregate = (ChargeAggregate)await context.LoadAggregateAsync(typeof(ChargeAggregate));
 

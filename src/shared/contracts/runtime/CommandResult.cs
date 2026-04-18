@@ -26,6 +26,18 @@ public sealed record CommandResult
     /// </summary>
     public AuditEmission? AuditEmission { get; init; }
 
+    /// <summary>
+    /// Phase 8 B6 — structured deny reason surfaced by the policy evaluator
+    /// (OPA rego <c>deny_reason</c> set, <c>reasons[]</c> array, or legacy
+    /// single-string <c>reason</c> / <c>denial_reason</c>). Populated ONLY
+    /// on the policy-denied branch; <c>null</c> on allow-path and on
+    /// non-policy failures. Coexists with <see cref="Error"/> — the Error
+    /// string remains the free-form, caller-facing message; this field
+    /// carries the machine-readable token(s) for audit correlation and
+    /// downstream rego rule attribution.
+    /// </summary>
+    public string? PolicyDenyReason { get; init; }
+
     public static CommandResult Success(IReadOnlyList<object> events, object? output = null, bool eventsRequirePersistence = true) =>
         new() { IsSuccess = true, EmittedEvents = events, Output = output, EventsRequirePersistence = eventsRequirePersistence };
 

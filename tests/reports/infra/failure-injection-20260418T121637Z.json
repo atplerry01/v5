@@ -1,0 +1,9 @@
+{
+  "mode": "restart",
+  "target": "whyce-economic-system",
+  "downtime_seconds": 3,
+  "started_utc": "2026-04-18T12:16:37Z",
+  "finished_utc": "2026-04-18T12:16:40Z",
+  "status": "PASS",
+  "message": "injection completed; target recovered"
+}

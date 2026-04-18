@@ -13,6 +13,7 @@ public sealed record CreateWalletCommand(
 
 public sealed record RequestWalletTransactionCommand(
     Guid WalletId,
+    Guid RequestId,
     Guid DestinationAccountId,
     decimal Amount,
     string Currency,

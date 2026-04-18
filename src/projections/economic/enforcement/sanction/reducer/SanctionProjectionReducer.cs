@@ -22,7 +22,7 @@ public static class SanctionProjectionReducer
             RevokedAt = null,
             ExpiredAt = null,
             RevocationReason = string.Empty,
-            LastUpdatedAt = e.IssuedAt
+            LastUpdatedAt = e.IssuedAt,
         };
 
     public static SanctionReadModel Apply(SanctionReadModel state, SanctionActivatedEventSchema e) =>
@@ -32,7 +32,13 @@ public static class SanctionProjectionReducer
             Status = "Active",
             IsActive = true,
             ActivatedAt = e.ActivatedAt,
-            LastUpdatedAt = e.ActivatedAt
+            LastUpdatedAt = e.ActivatedAt,
+            // Phase 7 B5 / T7.10 — authoritative enforcement linkage.
+            // V1 events carry Enforcement=null; the aggregate synthesises
+            // a Legacy ref on replay but does not re-stamp the event, so
+            // the projection mirrors with empty fields when absent.
+            EnforcementKind = e.Enforcement?.Kind ?? string.Empty,
+            EnforcementId = e.Enforcement?.EnforcementId,
         };
 
     public static SanctionReadModel Apply(SanctionReadModel state, SanctionExpiredEventSchema e) =>
@@ -42,7 +48,9 @@ public static class SanctionProjectionReducer
             Status = "Expired",
             IsActive = false,
             ExpiredAt = e.ExpiredAt,
-            LastUpdatedAt = e.ExpiredAt
+            // Phase 7 B5 / T7.11 — unified ClearedAt mirrors the aggregate.
+            ClearedAt = e.ExpiredAt,
+            LastUpdatedAt = e.ExpiredAt,
         };
 
     public static SanctionReadModel Apply(SanctionReadModel state, SanctionRevokedEventSchema e) =>
@@ -53,6 +61,7 @@ public static class SanctionProjectionReducer
             IsActive = false,
             RevokedAt = e.RevokedAt,
             RevocationReason = e.RevocationReason,
-            LastUpdatedAt = e.RevokedAt
+            ClearedAt = e.RevokedAt,
+            LastUpdatedAt = e.RevokedAt,
         };
 }

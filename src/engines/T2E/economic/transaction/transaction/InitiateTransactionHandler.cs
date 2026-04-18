@@ -1,6 +1,7 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Transaction;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Transaction;
+
 using Whycespace.Shared.Contracts.Engine;
 
 namespace Whycespace.Engines.T2E.Economic.Transaction.Transaction;
@@ -11,6 +12,8 @@ public sealed class InitiateTransactionHandler : IEngine
     {
         if (context.Command is not InitiateTransactionCommand cmd)
             return Task.CompletedTask;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var references = new List<TransactionReference>(cmd.References.Count);
         foreach (var r in cmd.References)

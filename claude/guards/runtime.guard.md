@@ -141,6 +141,49 @@ Verified by:
 The runtime pipeline must include a policy evaluation middleware step that runs before command dispatch to engines. Every command must pass through policy evaluation. The policy middleware checks that a valid `PolicyDecision` exists for the command. Commands without policy decisions are rejected. No engine receives an unauthorized command.
 **Source:** runtime.guard.md rule 12
 
+#### POLICY-INPUT-ENVELOPE-01 — Canonical OPA Input Envelope (S1)
+Every `IPolicyEvaluator` implementation must post, and every rego policy file under `infrastructure/policy/**` must consume, the SAME canonical OPA `input` envelope:
+
+```
+input:
+  policy_id        — canonical dotted id
+  action           — "<domain>.<verb>"
+  subject          — { role, ...attrs }
+  resource         — { classification, context, domain, aggregate_id?, state | null }
+  command          — typed command record, snake-case serialised (optional — omitted by pre-B6 callers)
+  command_type     — command class name (populated together with `command`; never one without the other)
+  correlation_id, tenant_id, actor_id
+  now              — ISO 8601 UTC (optional; populated together with `now_ns`)
+  now_ns           — epoch nanoseconds (rego-friendly numeric comparison)
+```
+
+Discipline:
+
+1. **Field names are snake-case only** (`JsonNamingPolicy.SnakeCaseLower`).
+2. **`command` and `command_type`** are populated together or both omitted — never one without the other.
+3. **`resource.state`** is populated with an explicit JSON `null` when no per-command loader is registered or the aggregate does not yet exist. NEVER omit the `state` key when `command` is populated — rego needs the explicit `not input.resource.state` branch to distinguish "no aggregate" from "aggregate with no attributes".
+4. **`now` and `now_ns`** are populated together, both from the SAME `IClock.UtcNow` read; never from `DateTime.UtcNow`, never from a DB `NOW()`, never re-read inside the evaluator.
+5. **`aggregate_id`** is emitted iff the command implements `IHasAggregateId` — `Guid.Empty` is never emitted.
+
+A drift in any field name / shape silently mis-evaluates policies because rego key lookups return `undefined` (which defaults to the deny-branch skip, i.e. silent allow for the backward-compat `not input.x` guards).
+
+**Source:** new-rules 2026-04-17 (Phase 8 B6 — policy middleware input enrichment).
+**Severity:** S1
+
+#### POLICY-STATE-SOURCE-EVENT-STORE-01 — Aggregate State Loader Must Source From Event Store (S1)
+`IAggregateStateLoader` implementations that hydrate `input.resource.state` for policy evaluation MUST source the snapshot from the authoritative write-side: `IEventStore.LoadEventsAsync` → aggregate-type-specific reducer → policy-visible DTO. They MUST NOT read from projection stores, read models, or any Kafka-driven view.
+
+**Rationale:** Projection lag is the exact drift B6 closes. A projection-backed loader can deny based on a stale "Sanction is Active" row after the engine has already processed a Revoke, producing audit disagreement with committed state.
+
+**Null contract:** If the aggregate does not exist yet (factory-style commands), implementations MUST return `null`. They MUST NOT return a default-initialised DTO — rego's backward-compat branch (`not input.resource.state`) keys on the null signal to skip state-aware deny rules.
+
+**Registration precedence:** The default registration is `NullAggregateStateLoader` (returns null for every input). Per-aggregate implementations register later in composition and override the default. Only one implementation may be resolved at runtime; multiple registrations must throw at startup.
+
+**Audit probe:** Grep every `IAggregateStateLoader` implementation under `src/platform/host/adapters/**` and `src/runtime/**`; its constructor dependency graph MUST include `IEventStore` (direct or transitive). Presence of a dependency on `I*ProjectionStore`, `I*ReadModel`, or a Postgres projection connection string = S1 fail.
+
+**Source:** new-rules 2026-04-17 (Phase 8 B6 — policy middleware input enrichment).
+**Severity:** S1
+
 #### R13 — RUNTIME MUST ANCHOR EVENTS TO CHAIN
 After successful command execution, runtime must anchor the resulting domain events to the WhyceChain immutable ledger. Each event batch produces a `ChainBlock` linking: correlation ID, event hashes, policy decision hash, and actor. Events that are not chain-anchored are not governance-compliant.
 **Source:** runtime.guard.md rule 13
@@ -168,6 +211,37 @@ EventStore.Append -> ChainAnchor -> Outbox in RuntimeCommandDispatcher.ExecuteEn
 #### R-WORKFLOW-PIPE-01 — Workflow Pipeline
 ExecuteWorkflowAsync MUST explicitly invoke persist->chain->outbox for accumulated workflow events, matching the engine path.
 **Source:** runtime.guard.md NEW RULES 2026-04-07
+
+#### EVENT-STORE-HOLDS-MAPPED-PAYLOAD-01 — Event Store Persists the Schema-Registry Mapping Output (S1)
+**Scope:** every `IEventStore` implementation under `src/**` and `tests/**`, every test that inspects `IEventStore.AllEvents(...)` (or equivalent write-side getters), and the single canonical write path in `src/runtime/event-fabric/EventFabric.cs`.
+
+**Rule:**
+
+1. **Write side (canonical).** `EventFabric.ProcessAsync` MUST set `EventEnvelope.Payload = _schemaRegistry.MapPayload(eventTypeName, domainEvent)`. No other payload transformation is permitted on the write path. The mapper's output is the authoritative on-disk / in-memory payload shape.
+
+2. **Mapper semantics.** `EventSchemaRegistry.MapPayload` returns:
+   - the **schema type** produced by the registered mapper when one exists for `eventTypeName`;
+   - the **domain event unchanged** when no mapper is registered.
+   The choice between schema and domain is schema-registry-driven, not a per-adapter decision.
+
+3. **In-memory adapters.** `InMemoryEventStore` and any equivalent test double MUST store `envelope.Payload` as-is and return it unchanged from `AllEvents` / `LoadEventsAsync`. A test double that deserialises, re-maps, or otherwise transforms the payload silently violates the canonical contract and is rejected.
+
+4. **Postgres / durable adapters.** The write side serialises `envelope.Payload` to JSON via its declared CLR type. The read side (`LoadEventsAsync`) MUST deserialise using `EventSchemaRegistry.Resolve(eventType).StoredEventType` (the domain type), restoring the pre-mapping form so aggregate `Apply(object)` pattern-matches on domain types at replay. This asymmetry is intentional — it lets aggregates remain ignorant of schema types without forcing the write side to carry both representations.
+
+5. **Test assertions.** Any test that inspects write-side store contents (`AllEvents`, `Versions`, or equivalent) MUST assert on the mapper's output type:
+   - **If a mapper is wired** for the event type in the active `EventSchemaRegistry` → assert on the schema type.
+   - **If no mapper is wired** → assert on the domain type.
+   - Tests that exercise the replay path (`LoadEventsAsync` → aggregate reconstruction) MUST assert on domain types; replay is the read-side transformation covered by rule (4).
+
+**Audit probes:**
+- Static check 1: grep every assertion on `Assert.IsType<*Event>` / `Assert.IsType<*EventSchema>` near an `IEventStore` getter call (`AllEvents`, `Stream`, `Versions`). For each, determine whether a mapper is registered for that event type in the active schema module. Mismatch = S1 fail.
+- Static check 2: grep every `IEventStore` implementation's `AppendEventsAsync` / `AllEvents` / `LoadEventsAsync`. Confirm it does not transform `Payload`. Any transformation = S1 fail.
+- Static check 3: confirm `EventFabric.ProcessAsync` is the SOLE call site of `EventSchemaRegistry.MapPayload` on the write path.
+
+**Rationale:** pre-promotion, the `WorkflowResumedEventFabricRoundTripTest` survived for multiple cycles in two contradictory states — line 108 asserted `MapPayload` produces a schema, while lines 131–134 asserted the event store holds domain types. The contradiction persisted because the "event store holds the mapper's output" contract was implicit in `EventFabric.cs:117` but never canonicalised. This rule makes the contract explicit so the same drift cannot re-surface silently.
+
+**Source:** Phase 10 B1 decision (`claude/certification/phase10-b1-decision.md`); captured under `claude/new-rules/_archives/20260417-150000-guards.md`; promoted 2026-04-17.
+**Severity:** S1
 
 #### R-DOM-LEAK-01 — Runtime Projection Bridges Event-Type-Agnostic
 (sub-clause of R11): Runtime projection bridges MUST be event-type-agnostic (dispatch by string event-type key against a registry). No "using" of concrete Whycespace.Domain.* types in src/runtime/projection/**. Allowlist: dispatcher infrastructure only.
@@ -284,6 +358,28 @@ Any code path that invokes `ISystemIntentDispatcher.DispatchAsync` (or any contr
 
 Static check: enumerate every `BackgroundService` / `IHostedService` under `src/platform/host/adapters/**`; for each, confirm any runtime-entry-point invocation is dominated by a `using (SystemIdentityScope.Begin(...))` on the call path. Bare dispatch without scope = S1 fail. Complements constitutional WP-1 (HTTP fail-closed) and INV-202 (No Anonymous Execution).
 **Source:** new-rules 2026-04-16 (revenue-domain validation D11).
+**Severity:** S1
+
+#### RT-POLL-SCHEDULER-DET-01 — Deterministic Polling-Scheduler Contract (S1)
+Every timer-driven `BackgroundService` in `src/platform/host/adapters/**` that dispatches commands via `ISystemIntentDispatcher` MUST:
+
+1. **Clock discipline.** Source `now` exclusively from injected `IClock.UtcNow`; pass `now` as an explicit parameter into every read-side query so the DB's `NOW()` / `CURRENT_TIMESTAMP` is never consulted. A single `now` read per iteration seeds both the scan and every idempotency key derived from that iteration's candidates.
+
+2. **Deterministic idempotency key shape.** The scheduler-side `IIdempotencyStore` key for each dispatched candidate MUST be `{worker-prefix}:{aggregate-id:N}:{schedule-timestamp.UtcTicks}` — a pure function of (aggregate, scheduled time). Restart-replay and multi-replica concurrent scans MUST produce byte-identical keys for the same logical candidate so the atomic claim picks exactly one winner.
+
+3. **Two-layer idempotency.** The scheduler-side claim (layer 1) MUST be paired with an aggregate-level state guard (layer 2, e.g. `Status != Active` → error) so a stale or bypassed claim table still cannot produce duplicate terminal transitions.
+
+4. **Failure-release contract (KC-2 parity).** A dispatch that throws MUST `ReleaseAsync` the claim so the next tick can retry. A dispatch that returns a failed `CommandResult` MUST leave the claim in place (terminal resolution — no retry).
+
+5. **Identity scope (RT-BACKGROUND-IDENTITY-EXPLICIT-01 extension).** Each per-candidate dispatch MUST be dominated by `using (SystemIdentityScope.Begin("system/<worker-name>", "system", "system"))`, identical to the Kafka-subscriber variant.
+
+6. **Worker liveness (HC-5 extension).** The worker MUST stamp `IWorkerLivenessRegistry.RecordSuccess(<worker-name>, _clock.UtcNow)` on the **success path only** — never inside a catch block. A persistently-failing projection scan MUST age the scheduler out of Ready on the configured `MaxSilenceSeconds`.
+
+7. **Fail-safe query posture.** The query abstraction consumed by the scheduler MUST return an empty candidate list on transport / query failure (NOT throw, NOT return a sentinel). Missed scheduler ticks are bounded-delay, not safety-critical — this is deliberately opposite to `ILockStateQuery`'s fail-closed posture.
+
+Static check: enumerate every `BackgroundService` in `src/platform/host/adapters/**` whose `ExecuteAsync` contains `PeriodicTimer` or `Task.Delay(TimeSpan.From...)` but no Kafka `consumer.Subscribe(...)` — treat each as a polling scheduler and verify items (1)–(7) against its source. Pair with existing `RT-BACKGROUND-IDENTITY-EXPLICIT-01`, `R-PLAT-11 / PLAT-DET-01`, `HC-5 / WORKER-LIVENESS-01`, `KC-2 / IDEMPOTENCY-COALESCE-01` which cover subsets of this rule for the Kafka-subscriber variant.
+
+**Source:** new-rules 2026-04-17 (Phase 8 B5 — sanction / system-lock expiry schedulers; first timer-driven polling scheduler pattern to ship in the repo).
 **Severity:** S1
 
 #### RO-LOCKED-ORDER — Canonical Execution Stage List
@@ -2407,3 +2503,111 @@ All sections are canonical and non-regressible. Any future workstream that needs
 2. Reference the specific rule being amended.
 3. Include a regression-coverage test that locks the new behavior.
 4. Update this file in the same patch as the amendment.
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-18)
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-18. Rule IDs are indexed in `claude/audits/runtime.audit.md`.
+
+### RUNTIME-LAYER-PURITY-01 — Engine → Runtime Namespace Isolation
+
+Definition:
+Files under `src/engines/**` MUST NOT reference the `Whycespace.Runtime.*` namespace. Metrics, tracing, logging, and persistence are runtime concerns invoked *by* the host around engine execution, never *from* inside engine code. Strengthens E7 (no cross-tier engine imports) by forbidding engine → runtime specifically.
+
+Enforcement:
+`dotnet build src/engines/Whycespace.Engines.csproj` MUST succeed without any `Whycespace.Runtime.*` project reference or `using` directive present under `src/engines/**`.
+
+Severity:
+S0
+
+References:
+- E7 (no cross-tier engine imports)
+- DG-R2 (engine isolation edge)
+- Source: `claude/new-rules/20260417-100926-audits.md`
+
+### SYSTEM-ORIGIN-BYPASS-01 — System-Origin Bypass Flag for Compensation
+
+Definition:
+`CommandContext.IsSystem` is an init-only flag set exclusively by `ISystemIntentDispatcher.DispatchSystemAsync`. `EnforcementGuard.RequireNotRestricted` bypasses restriction checks when `isSystem=true`. Both forward-progress and compensation commands route through this path. Two architecture tests pin the invariant: `IsSystem_flag_is_only_set_by_SystemIntentDispatcher` and `Api_controllers_do_not_reference_IsSystem`.
+
+Severity:
+S2
+
+References:
+- R-SYS-14 (`ISystemIntentDispatcher` entry point)
+- Source: `claude/new-rules/20260417-105914-audits.md`
+
+### STEP-EXCEPTION-CONTRACT-01 — Workflow Step Exception Uniformity
+
+Definition:
+Either (a) `IWorkflowStep.ExecuteAsync` callers MUST explicitly `try`/`catch` known infrastructure exceptions (resolver/store failures) and translate them to `WorkflowStepResult.Failure` with the original message, OR (b) the workflow runtime MUST guarantee uniform translation of unhandled step exceptions to `WorkflowStepResult.Failure` with the exception message preserved. Either contract is acceptable; current state assumes (b) without a test proving it.
+
+Severity:
+S3
+
+References:
+- E-STEP-01 / E-STEP-02 (engine step constraints)
+- Source: `claude/new-rules/20260417-120050-economic-system-phase3-6-final-residual.md` (Finding 11)
+
+### ESCAPE-HATCH-COMMITMENT-01 — Escape-Hatch Shelf-Life Deadline
+
+Definition:
+Code retained as an "escape-hatch shell" MUST carry a tracked decision deadline (e.g., `// ESCAPE-HATCH-DEADLINE: 2026-Q3 — remove or extend dispatcher contract`). Without a deadline, escape-hatch code accumulates as dead-code rot.
+
+Severity:
+S3
+
+References:
+- Dead Code R1..R4 (reference check / registration / consumption / single-pattern)
+- STUB-R5 (stub registry discipline)
+- Source: `claude/new-rules/20260417-122320-economic-system-phase4-5-final-residual.md`
+
+### R-RT-USING-RUNTIME-01 — Runtime Contract Using Requirement
+
+Definition:
+Step and handler files under `src/engines/**/steps/` and `tests/**/*Step*Tests.cs` that reference `IWorkflowStep`, `WorkflowExecutionContext`, `WorkflowStepResult`, `IHasAggregateId`, or `CommandResult` MUST carry `using Whycespace.Shared.Contracts.Runtime;`. CI grep enforcement required.
+
+Severity:
+S2
+
+References:
+- G-CONTRACTS-01..06 (contracts boundary)
+- Source: `claude/new-rules/20260417-123910-audits.md`
+
+### R-TEST-PATH-01 — Absolute Path Literals Forbidden in Tests
+
+Definition:
+Test files MUST resolve repo-relative paths via `AppContext.BaseDirectory` / git-root discovery. No absolute path literals (`C:\…`, `/home/…`, `/Users/…`) anywhere under `tests/**`. CI grep pattern: `["']([A-Z]:\\|/home/|/Users/)` in `.cs` under `tests/**` = S2 fail.
+
+Severity:
+S2
+
+References:
+- Test Architecture rules 1–5 (isolation, determinism)
+- Source: `claude/new-rules/20260417-125532-audits.md`
+
+### R-TEST-PROJREF-01 — Test ProjectReference Alignment
+
+Definition:
+Any `.cs` under `tests/<project>/**` that transitively uses a top-level project MUST have the matching `ProjectReference` in `tests/<project>/Whycespace.Tests.<Project>.csproj`. CI roslyn analyzer: build MUST succeed without relying on `<Compile Remove>` shims.
+
+Severity:
+S2
+
+References:
+- T-BUILD-01 (build gate)
+- Source: `claude/new-rules/20260417-125532-audits.md`
+
+### PIPELINE-CANONICAL-ANCHOR-01 — Pipeline File Presence Gate
+
+Definition:
+Any prompt invoking `/pipeline/*` integration MUST first verify presence of referenced files. If a referenced file is missing, execution halts per CLAUDE.md $12 with `ACTION_REQUIRED = (a) restore pipeline files, OR (b) declare §pipeline clause superseded in an updated prompt`. Partial execution is forbidden.
+
+Severity:
+S0
+
+References:
+- CLAUDE.md $12 (failure semantics)
+- GUARD-PIPELINE-TEMPLATE-01 (`/pipeline/*.md` templates)
+- Source: `claude/new-rules/20260418-093419-audits.md`

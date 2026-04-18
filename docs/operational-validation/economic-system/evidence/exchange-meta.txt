@@ -1,0 +1,1 @@
+ctx=exchange method=POST path=/api/exchange/fx/register http=500 body_size=201

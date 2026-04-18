@@ -324,7 +324,9 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
                 }
 
                 return aggregate;
-            });
+            },
+            enforcementConstraint: context.EnforcementConstraint,
+            isSystem: context.IsSystem);
 
         await engine.ExecuteAsync(engineContext);
 

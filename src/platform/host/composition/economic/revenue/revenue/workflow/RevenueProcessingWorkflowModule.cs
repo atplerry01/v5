@@ -8,14 +8,23 @@ namespace Whycespace.Platform.Host.Composition.Economic.Revenue.Revenue.Workflow
 /// <summary>
 /// Revenue processing workflow module — T1M step DI registrations and
 /// workflow registry binding for "economic.revenue.process".
+///
+/// Phase 3 (LOCKED): the canonical chain is
+///   EnsureContractActive → Validate → RecordRevenue → ApplyRevenue
+///   → TriggerDistribution.
+/// TriggerDistributionStep auto-dispatches CreateDistributionCommand via
+/// DispatchSystemAsync — no manual API call. Idempotent on retry because
+/// the derived DistributionId is deterministic in the RevenueId.
 /// </summary>
 public static class RevenueProcessingWorkflowModule
 {
     public static IServiceCollection AddRevenueProcessingWorkflow(this IServiceCollection services)
     {
+        services.AddTransient<EnsureContractActiveStep>();
         services.AddTransient<ValidateRevenueStep>();
         services.AddTransient<RecordRevenueStep>();
         services.AddTransient<ApplyRevenueStep>();
+        services.AddTransient<TriggerDistributionStep>();
         return services;
     }
 
@@ -23,9 +32,11 @@ public static class RevenueProcessingWorkflowModule
     {
         workflow.Register(RevenueProcessingWorkflowNames.Process, new[]
         {
+            typeof(EnsureContractActiveStep),
             typeof(ValidateRevenueStep),
             typeof(RecordRevenueStep),
-            typeof(ApplyRevenueStep)
+            typeof(ApplyRevenueStep),
+            typeof(TriggerDistributionStep)
         });
     }
 }

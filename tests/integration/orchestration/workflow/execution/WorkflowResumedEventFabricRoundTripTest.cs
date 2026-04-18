@@ -126,12 +126,20 @@ public sealed class WorkflowResumedEventFabricRoundTripTest
 
         // 7. Durability proof: every event landed in the event store, chain
         //    anchor, and outbox in order.
+        //
+        //    Payload shape: the store holds the OUTPUT of
+        //    EventSchemaRegistry.MapPayload (per EventFabric.ProcessAsync).
+        //    Because WorkflowExecutionBootstrap registers payload mappers for
+        //    each workflow lifecycle event (asserted at line 108 above), the
+        //    in-memory store contains the mapped schema types, not the raw
+        //    domain events. See claude/certification/phase10-b1-decision.md
+        //    for the canonical contract.
         var stored = eventStore.AllEvents(ExecutionId);
         Assert.Equal(4, stored.Count);
-        Assert.IsType<WorkflowExecutionStartedEvent>(stored[0]);
-        Assert.IsType<WorkflowStepCompletedEvent>(stored[1]);
-        Assert.IsType<WorkflowExecutionFailedEvent>(stored[2]);
-        Assert.IsType<WorkflowExecutionResumedEvent>(stored[3]);
+        Assert.IsType<WorkflowExecutionStartedEventSchema>(stored[0]);
+        Assert.IsType<WorkflowStepCompletedEventSchema>(stored[1]);
+        Assert.IsType<WorkflowExecutionFailedEventSchema>(stored[2]);
+        Assert.IsType<WorkflowExecutionResumedEventSchema>(stored[3]);
         Assert.Equal(4, chainAnchor.Blocks.Count);
         Assert.Equal(4, outbox.Batches.Count);
 

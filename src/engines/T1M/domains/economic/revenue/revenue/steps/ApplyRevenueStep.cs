@@ -32,7 +32,7 @@ public sealed class ApplyRevenueStep : IWorkflowStep
             state.Amount,
             state.Currency);
 
-        var result = await _dispatcher.DispatchAsync(command, VaultRoute, cancellationToken);
+        var result = await _dispatcher.DispatchSystemAsync(command, VaultRoute, cancellationToken);
 
         if (!result.IsSuccess)
             return WorkflowStepResult.Failure(result.Error ?? "ApplyRevenue dispatch failed.");

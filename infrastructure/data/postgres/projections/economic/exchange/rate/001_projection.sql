@@ -18,4 +18,9 @@ CREATE INDEX idx_eer_correlation_id     ON projection_economic_exchange_rate.exc
 CREATE INDEX idx_eer_projected_at       ON projection_economic_exchange_rate.exchange_rate_read_model (projected_at);
 CREATE INDEX idx_eer_currency_pair      ON projection_economic_exchange_rate.exchange_rate_read_model ((state->>'baseCurrency'), (state->>'quoteCurrency'));
 CREATE INDEX idx_eer_status             ON projection_economic_exchange_rate.exchange_rate_read_model ((state->>'status'));
-CREATE INDEX idx_eer_effective_at       ON projection_economic_exchange_rate.exchange_rate_read_model (((state->>'effectiveAt')::timestamptz));
+-- Indexed as text — the ::timestamptz cast is not IMMUTABLE (depends on session
+-- TimeZone/DateStyle) and Postgres rejects STABLE expressions in index predicates.
+-- ISO-8601 UTC-suffixed timestamps sort identically under text and timestamptz
+-- comparison, and the WBSM v3 clock contract ($9 / GE-01) emits deterministic
+-- ISO-8601-Z payloads, so the runtime ordering guarantee is preserved.
+CREATE INDEX idx_eer_effective_at       ON projection_economic_exchange_rate.exchange_rate_read_model ((state->>'effectiveAt'));

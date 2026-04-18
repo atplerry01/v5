@@ -13,6 +13,7 @@ public static class RiskExposureApplicationModule
         services.AddTransient<IncreaseRiskExposureHandler>();
         services.AddTransient<ReduceRiskExposureHandler>();
         services.AddTransient<CloseRiskExposureHandler>();
+        services.AddTransient<DetectRiskExposureBreachHandler>();
         return services;
     }
 
@@ -22,5 +23,6 @@ public static class RiskExposureApplicationModule
         engine.Register<IncreaseRiskExposureCommand, IncreaseRiskExposureHandler>();
         engine.Register<ReduceRiskExposureCommand, ReduceRiskExposureHandler>();
         engine.Register<CloseRiskExposureCommand, CloseRiskExposureHandler>();
+        engine.Register<DetectRiskExposureBreachCommand, DetectRiskExposureBreachHandler>();
     }
 }

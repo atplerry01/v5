@@ -22,4 +22,8 @@ public static class LimitErrors
 
     public static DomainInvariantViolationException NegativeUtilization() =>
         new("Invariant violated: limit utilization cannot be negative.");
+
+    public static DomainException ConcurrencyConflict(int expectedVersion, int actualVersion) =>
+        new($"Limit concurrency conflict: expected version {expectedVersion}, actual version {actualVersion}. " +
+            "Another check has already been applied to this limit; reload and retry.");
 }

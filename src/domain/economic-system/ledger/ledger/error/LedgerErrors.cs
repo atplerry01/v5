@@ -15,4 +15,14 @@ public static class LedgerErrors
 
     public static DomainException DirectBalanceMutationForbidden() =>
         new("Ledger balances cannot be set directly. They must be reconstructed from journal entries.");
+
+    public static DomainException UnbalancedJournal(Guid journalId, decimal totalDebit, decimal totalCredit) =>
+        new($"Journal '{journalId}' is unbalanced: debits {totalDebit:F2} != credits {totalCredit:F2}.");
+
+    public static DomainException NegativeJournalTotal() =>
+        new("Journal totals (debit, credit) cannot be negative.");
+
+    public static DomainInvariantViolationException LedgerBalanceInvariantViolation(decimal totalDebit, decimal totalCredit) =>
+        new($"Invariant violated: ledger-level balance broken. " +
+            $"Cumulative debits {totalDebit:F2} != cumulative credits {totalCredit:F2} across all appended journals.");
 }

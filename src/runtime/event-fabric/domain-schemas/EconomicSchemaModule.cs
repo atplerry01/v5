@@ -109,7 +109,56 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 evt.TotalAmount);
         });
 
+        // Phase 7 B1 — distribution compensation events.
+        sink.RegisterSchema(
+            "DistributionCompensationRequestedEvent",
+            EventVersion.Default,
+            typeof(DistributionDomain.DistributionCompensationRequestedEvent),
+            typeof(DistributionCompensationRequestedEventSchema));
+
+        sink.RegisterPayloadMapper("DistributionCompensationRequestedEvent", e =>
+        {
+            var evt = (DistributionDomain.DistributionCompensationRequestedEvent)e;
+            return new DistributionCompensationRequestedEventSchema(
+                Guid.Parse(evt.DistributionId),
+                evt.OriginalPayoutId,
+                evt.Reason,
+                evt.RequestedAt.Value);
+        });
+
+        sink.RegisterSchema(
+            "DistributionCompensatedEvent",
+            EventVersion.Default,
+            typeof(DistributionDomain.DistributionCompensatedEvent),
+            typeof(DistributionCompensatedEventSchema));
+
+        sink.RegisterPayloadMapper("DistributionCompensatedEvent", e =>
+        {
+            var evt = (DistributionDomain.DistributionCompensatedEvent)e;
+            return new DistributionCompensatedEventSchema(
+                Guid.Parse(evt.DistributionId),
+                evt.OriginalPayoutId,
+                evt.CompensatingJournalId,
+                evt.CompensatedAt.Value);
+        });
+
         // ── Payout ───────────────────────────────────────────────
+        sink.RegisterSchema(
+            "PayoutRequestedEvent",
+            EventVersion.Default,
+            typeof(PayoutDomain.PayoutRequestedEvent),
+            typeof(PayoutRequestedEventSchema));
+
+        sink.RegisterPayloadMapper("PayoutRequestedEvent", e =>
+        {
+            var evt = (PayoutDomain.PayoutRequestedEvent)e;
+            return new PayoutRequestedEventSchema(
+                Guid.Parse(evt.PayoutId),
+                Guid.Parse(evt.DistributionId),
+                evt.IdempotencyKey,
+                evt.RequestedAt.Value);
+        });
+
         sink.RegisterSchema(
             "PayoutExecutedEvent",
             EventVersion.Default,
@@ -121,7 +170,62 @@ public sealed class EconomicSchemaModule : ISchemaModule
             var evt = (PayoutDomain.PayoutExecutedEvent)e;
             return new PayoutExecutedEventSchema(
                 Guid.Parse(evt.PayoutId),
-                Guid.Parse(evt.DistributionId));
+                Guid.Parse(evt.DistributionId))
+            {
+                IdempotencyKey = evt.IdempotencyKey,
+                ExecutedAt = evt.ExecutedAt.Value
+            };
+        });
+
+        sink.RegisterSchema(
+            "PayoutFailedEvent",
+            EventVersion.Default,
+            typeof(PayoutDomain.PayoutFailedEvent),
+            typeof(PayoutFailedEventSchema));
+
+        sink.RegisterPayloadMapper("PayoutFailedEvent", e =>
+        {
+            var evt = (PayoutDomain.PayoutFailedEvent)e;
+            return new PayoutFailedEventSchema(
+                Guid.Parse(evt.PayoutId),
+                Guid.Parse(evt.DistributionId),
+                evt.Reason,
+                evt.FailedAt.Value);
+        });
+
+        // Phase 7 B2 — payout compensation events.
+        sink.RegisterSchema(
+            "PayoutCompensationRequestedEvent",
+            EventVersion.Default,
+            typeof(PayoutDomain.PayoutCompensationRequestedEvent),
+            typeof(PayoutCompensationRequestedEventSchema));
+
+        sink.RegisterPayloadMapper("PayoutCompensationRequestedEvent", e =>
+        {
+            var evt = (PayoutDomain.PayoutCompensationRequestedEvent)e;
+            return new PayoutCompensationRequestedEventSchema(
+                Guid.Parse(evt.PayoutId),
+                Guid.Parse(evt.DistributionId),
+                evt.IdempotencyKey,
+                evt.Reason,
+                evt.RequestedAt.Value);
+        });
+
+        sink.RegisterSchema(
+            "PayoutCompensatedEvent",
+            EventVersion.Default,
+            typeof(PayoutDomain.PayoutCompensatedEvent),
+            typeof(PayoutCompensatedEventSchema));
+
+        sink.RegisterPayloadMapper("PayoutCompensatedEvent", e =>
+        {
+            var evt = (PayoutDomain.PayoutCompensatedEvent)e;
+            return new PayoutCompensatedEventSchema(
+                Guid.Parse(evt.PayoutId),
+                Guid.Parse(evt.DistributionId),
+                evt.IdempotencyKey,
+                evt.CompensatingJournalId,
+                evt.CompensatedAt.Value);
         });
 
         // ── Vault / Account ──────────────────────────────────────
@@ -252,6 +356,26 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 string.Empty);
         });
 
+        // Phase 7 B3 / T7.4 — compensating-journal creation. Carries
+        // the CompensationReference onto the journal's own event stream
+        // so the reversal linkage is provable from replay alone.
+        sink.RegisterSchema(
+            "JournalCompensationCreatedEvent",
+            EventVersion.Default,
+            typeof(JournalDomain.JournalCompensationCreatedEvent),
+            typeof(JournalCompensationCreatedEventSchema));
+
+        sink.RegisterPayloadMapper("JournalCompensationCreatedEvent", e =>
+        {
+            var evt = (JournalDomain.JournalCompensationCreatedEvent)e;
+            return new JournalCompensationCreatedEventSchema(
+                evt.JournalId.Value,
+                new CompensationReferenceDto(
+                    evt.Compensation.OriginalJournalId,
+                    evt.Compensation.Reason),
+                evt.CreatedAt.Value);
+        });
+
         // ── Ledger / Ledger ──────────────────────────────────────
         sink.RegisterSchema(
             "LedgerOpenedEvent",
@@ -294,6 +418,8 @@ public sealed class EconomicSchemaModule : ISchemaModule
             return new JournalAppendedToLedgerEventSchema(
                 evt.LedgerId.Value,
                 evt.JournalId,
+                evt.TotalDebit.Value,
+                evt.TotalCredit.Value,
                 evt.AppendedAt.Value);
         });
 
@@ -689,6 +815,28 @@ public sealed class EconomicSchemaModule : ISchemaModule
             var evt = (RiskExposureDomain.ExposureClosedEvent)e;
             return new RiskExposureSchema.RiskExposureClosedEventSchema(evt.ExposureId.Value);
         });
+
+        // Phase 6 Final Patch — ExposureBreachedEvent. Uses the historical
+        // "RiskExposure…" naming prefix (like the four events above) so the
+        // inbound deserialization path is symmetric with the rest of the
+        // risk/exposure schema catalog. Consumed end-to-end by
+        // RiskExposureEnforcementWorker → RiskExposureEnforcementHandler →
+        // DetectViolationCommand.
+        sink.RegisterSchema(
+            "ExposureBreachedEvent",
+            EventVersion.Default,
+            typeof(RiskExposureDomain.ExposureBreachedEvent),
+            typeof(RiskExposureSchema.RiskExposureBreachedEventSchema));
+        sink.RegisterPayloadMapper("ExposureBreachedEvent", e =>
+        {
+            var evt = (RiskExposureDomain.ExposureBreachedEvent)e;
+            return new RiskExposureSchema.RiskExposureBreachedEventSchema(
+                evt.ExposureId.Value,
+                evt.TotalExposure.Value,
+                evt.Threshold.Value,
+                evt.Currency.Code,
+                evt.DetectedAt.Value);
+        });
     }
 
     private static void RegisterEnforcementRule(ISchemaSink sink)
@@ -890,10 +1038,21 @@ public sealed class EconomicSchemaModule : ISchemaModule
         sink.RegisterPayloadMapper("SanctionActivatedEvent", e =>
         {
             var evt = (EnforcementSanctionDomain.SanctionActivatedEvent)e;
+            // Phase 7 B5 / T7.10 — Enforcement ref is V2 init-only
+            // nullable; populated for post-T7.10 emissions and null on
+            // legacy paths. The downstream enforcement saga consumes
+            // this field to dispatch the linked Apply/Lock command.
             return new EnforcementSanctionSchema.SanctionActivatedEventSchema(
                 evt.SanctionId.Value,
                 evt.SubjectId.Value,
-                evt.ActivatedAt.Value);
+                evt.ActivatedAt.Value)
+            {
+                Enforcement = evt.Enforcement is null
+                    ? null
+                    : new EnforcementSanctionSchema.SanctionEnforcementRefDto(
+                        evt.Enforcement.Kind.ToString(),
+                        evt.Enforcement.EnforcementId),
+            };
         });
 
         sink.RegisterSchema(
@@ -936,12 +1095,23 @@ public sealed class EconomicSchemaModule : ISchemaModule
         sink.RegisterPayloadMapper("RestrictionAppliedEvent", e =>
         {
             var evt = (EnforcementRestrictionDomain.RestrictionAppliedEvent)e;
+            // Phase 7 B4 / T7.6 — Cause is init-only nullable on the wire;
+            // populated on V2 emissions and left null on legacy paths. V1
+            // readers that ignore the field still deserialize cleanly.
             return new EnforcementRestrictionSchema.RestrictionAppliedEventSchema(
                 evt.RestrictionId.Value,
                 evt.SubjectId.Value,
                 evt.Scope.ToString(),
                 evt.Reason.Value,
-                evt.AppliedAt.Value);
+                evt.AppliedAt.Value)
+            {
+                Cause = evt.Cause is null
+                    ? null
+                    : new EnforcementRestrictionSchema.RestrictionEnforcementCauseDto(
+                        evt.Cause.Kind.ToString(),
+                        evt.Cause.CauseReferenceId,
+                        evt.Cause.Detail),
+            };
         });
 
         sink.RegisterSchema(
@@ -974,6 +1144,39 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 evt.RemovalReason.Value,
                 evt.RemovedAt.Value);
         });
+
+        // Phase 7 B4 / T7.7 — suspend / resume lifecycle.
+        sink.RegisterSchema(
+            "RestrictionSuspendedEvent",
+            EventVersion.Default,
+            typeof(EnforcementRestrictionDomain.RestrictionSuspendedEvent),
+            typeof(EnforcementRestrictionSchema.RestrictionSuspendedEventSchema));
+        sink.RegisterPayloadMapper("RestrictionSuspendedEvent", e =>
+        {
+            var evt = (EnforcementRestrictionDomain.RestrictionSuspendedEvent)e;
+            return new EnforcementRestrictionSchema.RestrictionSuspendedEventSchema(
+                evt.RestrictionId.Value,
+                evt.SubjectId.Value,
+                new EnforcementRestrictionSchema.RestrictionEnforcementCauseDto(
+                    evt.SuspensionCause.Kind.ToString(),
+                    evt.SuspensionCause.CauseReferenceId,
+                    evt.SuspensionCause.Detail),
+                evt.SuspendedAt.Value);
+        });
+
+        sink.RegisterSchema(
+            "RestrictionResumedEvent",
+            EventVersion.Default,
+            typeof(EnforcementRestrictionDomain.RestrictionResumedEvent),
+            typeof(EnforcementRestrictionSchema.RestrictionResumedEventSchema));
+        sink.RegisterPayloadMapper("RestrictionResumedEvent", e =>
+        {
+            var evt = (EnforcementRestrictionDomain.RestrictionResumedEvent)e;
+            return new EnforcementRestrictionSchema.RestrictionResumedEventSchema(
+                evt.RestrictionId.Value,
+                evt.SubjectId.Value,
+                evt.ResumedAt.Value);
+        });
     }
 
     private static void RegisterEnforcementLock(ISchemaSink sink)
@@ -986,12 +1189,24 @@ public sealed class EconomicSchemaModule : ISchemaModule
         sink.RegisterPayloadMapper("SystemLockedEvent", e =>
         {
             var evt = (EnforcementLockDomain.SystemLockedEvent)e;
+            // Phase 7 B4 / T7.6 + T7.9 — Cause and ExpiresAt are V2
+            // init-only nullable; populated when the domain event carries
+            // them, omitted (null) on V1 legacy paths.
             return new EnforcementLockSchema.SystemLockedEventSchema(
                 evt.LockId.Value,
                 evt.SubjectId.Value,
                 evt.Scope.ToString(),
                 evt.Reason.Value,
-                evt.LockedAt.Value);
+                evt.LockedAt.Value)
+            {
+                Cause = evt.Cause is null
+                    ? null
+                    : new EnforcementLockSchema.LockEnforcementCauseDto(
+                        evt.Cause.Kind.ToString(),
+                        evt.Cause.CauseReferenceId,
+                        evt.Cause.Detail),
+                ExpiresAt = evt.ExpiresAt?.Value,
+            };
         });
 
         sink.RegisterSchema(
@@ -1007,6 +1222,54 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 evt.SubjectId.Value,
                 evt.UnlockReason.Value,
                 evt.UnlockedAt.Value);
+        });
+
+        // Phase 7 B4 / T7.8 — suspend / resume lifecycle.
+        sink.RegisterSchema(
+            "SystemLockSuspendedEvent",
+            EventVersion.Default,
+            typeof(EnforcementLockDomain.SystemLockSuspendedEvent),
+            typeof(EnforcementLockSchema.SystemLockSuspendedEventSchema));
+        sink.RegisterPayloadMapper("SystemLockSuspendedEvent", e =>
+        {
+            var evt = (EnforcementLockDomain.SystemLockSuspendedEvent)e;
+            return new EnforcementLockSchema.SystemLockSuspendedEventSchema(
+                evt.LockId.Value,
+                evt.SubjectId.Value,
+                new EnforcementLockSchema.LockEnforcementCauseDto(
+                    evt.SuspensionCause.Kind.ToString(),
+                    evt.SuspensionCause.CauseReferenceId,
+                    evt.SuspensionCause.Detail),
+                evt.SuspendedAt.Value);
+        });
+
+        sink.RegisterSchema(
+            "SystemLockResumedEvent",
+            EventVersion.Default,
+            typeof(EnforcementLockDomain.SystemLockResumedEvent),
+            typeof(EnforcementLockSchema.SystemLockResumedEventSchema));
+        sink.RegisterPayloadMapper("SystemLockResumedEvent", e =>
+        {
+            var evt = (EnforcementLockDomain.SystemLockResumedEvent)e;
+            return new EnforcementLockSchema.SystemLockResumedEventSchema(
+                evt.LockId.Value,
+                evt.SubjectId.Value,
+                evt.ResumedAt.Value);
+        });
+
+        // Phase 7 B4 / T7.9 — natural terminal expiry.
+        sink.RegisterSchema(
+            "SystemLockExpiredEvent",
+            EventVersion.Default,
+            typeof(EnforcementLockDomain.SystemLockExpiredEvent),
+            typeof(EnforcementLockSchema.SystemLockExpiredEventSchema));
+        sink.RegisterPayloadMapper("SystemLockExpiredEvent", e =>
+        {
+            var evt = (EnforcementLockDomain.SystemLockExpiredEvent)e;
+            return new EnforcementLockSchema.SystemLockExpiredEventSchema(
+                evt.LockId.Value,
+                evt.SubjectId.Value,
+                evt.ExpiredAt.Value);
         });
     }
 

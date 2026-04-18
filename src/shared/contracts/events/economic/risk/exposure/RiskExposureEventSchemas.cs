@@ -20,3 +20,18 @@ public sealed record RiskExposureReducedEventSchema(
 
 public sealed record RiskExposureClosedEventSchema(
     Guid AggregateId);
+
+/// <summary>
+/// Phase 6 Final Patch — on-wire shape of
+/// <c>Whycespace.Domain.EconomicSystem.Risk.Exposure.ExposureBreachedEvent</c>.
+/// Primitives only so the deserialization path stays symmetric with every
+/// other domain event in the economic schema catalog. Consumed by
+/// <c>RiskExposureEnforcementHandler</c> via the Kafka event fabric to
+/// dispatch a <c>DetectViolationCommand</c> into the enforcement pipeline.
+/// </summary>
+public sealed record RiskExposureBreachedEventSchema(
+    Guid AggregateId,
+    decimal TotalExposure,
+    decimal Threshold,
+    string Currency,
+    DateTimeOffset DetectedAt);

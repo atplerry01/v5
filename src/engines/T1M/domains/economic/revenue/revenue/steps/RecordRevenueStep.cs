@@ -1,6 +1,7 @@
 using Whycespace.Engines.T1M.Domains.Economic.Revenue.Revenue.State;
 using Whycespace.Shared.Contracts.Economic.Revenue.Revenue;
 using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Observability;
 using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Engines.T1M.Domains.Economic.Revenue.Revenue.Steps;
@@ -8,10 +9,12 @@ namespace Whycespace.Engines.T1M.Domains.Economic.Revenue.Revenue.Steps;
 public sealed class RecordRevenueStep : IWorkflowStep
 {
     private readonly ISystemIntentDispatcher _dispatcher;
+    private readonly IEconomicMetrics _metrics;
 
-    public RecordRevenueStep(ISystemIntentDispatcher dispatcher)
+    public RecordRevenueStep(ISystemIntentDispatcher dispatcher, IEconomicMetrics metrics)
     {
         _dispatcher = dispatcher;
+        _metrics = metrics;
     }
 
     public string Name => RevenueProcessingSteps.RecordRevenue;
@@ -33,10 +36,12 @@ public sealed class RecordRevenueStep : IWorkflowStep
             state.Currency,
             state.SourceRef);
 
-        var result = await _dispatcher.DispatchAsync(command, RevenueRoute, cancellationToken);
+        var result = await _dispatcher.DispatchSystemAsync(command, RevenueRoute, cancellationToken);
 
         if (!result.IsSuccess)
             return WorkflowStepResult.Failure(result.Error ?? "RecordRevenue dispatch failed.");
+
+        _metrics.RecordRevenueRecorded(state.Currency, state.Amount);
 
         state.CurrentStep = RevenueProcessingSteps.RecordRevenue;
         context.SetState(state);

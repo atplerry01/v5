@@ -8,6 +8,19 @@ public interface ISystemIntentDispatcher
     // IRuntimeControlPlane.ExecuteAsync so the entire pipeline
     // becomes cancelable from the controller signature inward.
     Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 2.5 — internal-only dispatch path for system-originated
+    /// commands (workflow compensation, settlement completion, recovery
+    /// work). Sets <c>CommandContext.IsSystem = true</c> so the
+    /// <c>EnforcementGuard</c> bypasses the restriction gate — the
+    /// enforcement middleware still evaluates locks and Critical+Block
+    /// violations because those are hard-stop financial safety rails,
+    /// but restrictions (which target user-initiated actions) do not
+    /// block system work. ONLY workflow / recovery code should call
+    /// this overload; controllers must use <see cref="DispatchAsync"/>.
+    /// </summary>
+    Task<CommandResult> DispatchSystemAsync(object command, DomainRoute route, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

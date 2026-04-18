@@ -18,6 +18,15 @@ public sealed class AuditController : ControllerBase
 {
     private static readonly DomainRoute AuditRoute = new("economic", "compliance", "audit");
 
+    // Domain enum AuditType (Whycespace.Domain.EconomicSystem.Compliance.Audit.AuditType).
+    // Mirrored here as a string whitelist to keep the API layer free of a domain reference
+    // while still rejecting invalid enum values with 400 BadRequest at the controller boundary
+    // rather than letting InvalidOperationException surface to the global exception handler.
+    private static readonly HashSet<string> ValidAuditTypes = new(StringComparer.Ordinal)
+    {
+        "Financial", "Control", "Violation", "Reconciliation", "Settlement",
+    };
+
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
@@ -43,6 +52,12 @@ public sealed class AuditController : ControllerBase
     public Task<IActionResult> CreateAudit([FromBody] ApiRequest<CreateAuditRecordRequestModel> request, CancellationToken ct)
     {
         var p = request.Data;
+        if (!ValidAuditTypes.Contains(p.AuditType))
+            return Task.FromResult<IActionResult>(BadRequest(ApiResponse.Fail(
+                "economic.compliance.audit.invalid_audit_type",
+                $"Unknown audit type: '{p.AuditType}'. Valid values: {string.Join(", ", ValidAuditTypes)}.",
+                _clock.UtcNow)));
+
         var auditRecordId = _idGenerator.Generate(
             $"economic:compliance:audit:{p.SourceDomain}:{p.SourceAggregateId}:{p.SourceEventId}");
         var cmd = new CreateAuditRecordCommand(

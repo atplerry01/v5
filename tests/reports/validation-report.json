@@ -1,0 +1,573 @@
+{
+  "schema_version": 2,
+  "classification": "phase3-resilience",
+  "context": "economic-system",
+  "run_tag": "20260418T085852Z",
+  "started_utc": "2026-04-18T08:58:52Z",
+  "finished_utc": "2026-04-18T09:00:00Z",
+  "overall": "PASS",
+  "totals": {
+    "total_tests": 81,
+    "failed_tests": 0,
+    "error_rate": 0.0
+  },
+  "latency": {
+    "avg_ms": 182.145,
+    "p95_ms": 989.446,
+    "p99_ms": 989.446,
+    "max_ms": 1300.022
+  },
+  "criteria": {
+    "error_rate_under_1pct": true,
+    "avg_latency_under_500ms": true,
+    "all_suites_pass_or_skip": true
+  },
+  "phase3": {
+    "phase3_present": true,
+    "failure_safety": true,
+    "adversarial_correctness": true,
+    "observability": true,
+    "soak_status": "SKIP",
+    "phase3_overall": "PASS",
+    "phase3_latency_p95_under_1000ms": true,
+    "phase3_error_rate_under_1pct": true,
+    "soak": null
+  },
+  "certification": {
+    "certification_present": true,
+    "certification_status": "PASS",
+    "certification_total": 17,
+    "certification_failed": 0,
+    "error_rate_under_0_1pct": true,
+    "latency_p95_under_1000ms": true,
+    "phase3_regression_free": true,
+    "verdict": "GO"
+  },
+  "infrastructure": {
+    "real_infra_stage_status": "SKIP",
+    "failure_injections": [],
+    "dlq_probe": null,
+    "observability_probe": null,
+    "deficiencies": [
+      {
+        "id": "CERT-INFRA-01",
+        "description": "Category=Certification tests bind to the in-memory TestHost harness (InMemoryEventStore / InMemoryOutbox / InMemoryChainAnchor). Certification PASS therefore proves suite-level correctness but not real-infrastructure correctness. Promoting the harness to Postgres/Kafka/Redis requires a follow-up wiring pass.",
+        "severity": "S2",
+        "blocking": false
+      }
+    ]
+  },
+  "time_series": {
+    "sample_count": 81,
+    "samples": [
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 1300.022
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 17.02
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 19.05
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 91.662
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 88.827
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 74.66
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 4.525
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 989.446
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 23.3
+      },
+      {
+        "suite": "phase2-validation",
+        "latency_ms": 84.275
+      },
+      {
+        "suite": "phase3-failure",
+        "latency_ms": 8.459
+      },
+      {
+        "suite": "phase3-failure",
+        "latency_ms": 13.242
+      },
+      {
+        "suite": "phase3-failure",
+        "latency_ms": 474.068
+      },
+      {
+        "suite": "phase3-failure",
+        "latency_ms": 9.576
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 522.845
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 9.445
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 648.179
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 315.099
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 3.916
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 17.724
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 31.891
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 28.605
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 525.747
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 5.887
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 146.284
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 1219.664
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 4.369
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 521.819
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 507.807
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 464.715
+      },
+      {
+        "suite": "certification",
+        "latency_ms": 5.784
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 79.145
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 23.981
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 64.854
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 396.186
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 89.712
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 68.669
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 14.563
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 7.608
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 29.232
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 54.022
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 29.504
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 529.393
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 9.759
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 103.823
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 9.642
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 4.954
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 4.0
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 4.554
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 3.892
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 4.235
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 376.081
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 31.901
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 103.02
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 14.174
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 5.52
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 87.103
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 51.747
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 7.971
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 447.254
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 402.062
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 21.921
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 66.577
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 1075.131
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 3.371
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 3.38
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 32.867
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 568.862
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 543.83
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 23.176
+      },
+      {
+        "suite": "economic-system",
+        "latency_ms": 190.951
+      },
+      {
+        "suite": "phase3-adversarial",
+        "latency_ms": 9.647
+      },
+      {
+        "suite": "phase3-adversarial",
+        "latency_ms": 66.802
+      },
+      {
+        "suite": "phase3-adversarial",
+        "latency_ms": 23.641
+      },
+      {
+        "suite": "phase3-adversarial",
+        "latency_ms": 610.019
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 36.922
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 423.316
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 19.446
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 18.285
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 1.999
+      },
+      {
+        "suite": "phase3-observability",
+        "latency_ms": 22.526
+      }
+    ]
+  },
+  "anomalies": [
+    {
+      "kind": "latency_p95_warning",
+      "value_ms": 989.446,
+      "threshold_ms": 500
+    }
+  ],
+  "suites": {
+    "phase2-validation": {
+      "status": "PASS",
+      "message": "concurrency/determinism/consistency/seeding green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/30-phase2-validation.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\30-phase2-validation.trx",
+      "trx_present": true,
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 269.279,
+        "p50_ms": 74.66,
+        "p95_ms": 989.446,
+        "p99_ms": 989.446,
+        "max_ms": 1300.022,
+        "sample_count": 10
+      }
+    },
+    "phase3-soak": {
+      "status": "SKIP",
+      "message": "soak opt-in (--soak / Phase3Soak__Enabled not set)",
+      "log": "",
+      "trx_path": null,
+      "trx_present": false,
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": null
+    },
+    "phase3-failure": {
+      "status": "PASS",
+      "message": "idempotency/retry-safety/partial-execution green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/50-phase3-failure.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\50-phase3-failure.trx",
+      "trx_present": true,
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 126.336,
+        "p50_ms": 9.576,
+        "p95_ms": 13.242,
+        "p99_ms": 13.242,
+        "max_ms": 474.068,
+        "sample_count": 4
+      }
+    },
+    "real-infra": {
+      "status": "SKIP",
+      "message": "--real-infra not set",
+      "log": "",
+      "trx_path": null,
+      "trx_present": false,
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": null
+    },
+    "certification": {
+      "status": "PASS",
+      "message": "domain-integrity/failure-injection/compensation/dlq-replay/concurrency green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/75-certification.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\75-certification.trx",
+      "trx_present": true,
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 292.928,
+        "p50_ms": 31.891,
+        "p95_ms": 648.179,
+        "p99_ms": 648.179,
+        "max_ms": 1219.664,
+        "sample_count": 17
+      }
+    },
+    "static-checks": {
+      "status": "SKIP",
+      "message": "skipped via --skip-static",
+      "log": "",
+      "trx_path": null,
+      "trx_present": false,
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": null
+    },
+    "economic-system": {
+      "status": "PASS",
+      "message": "existing economic-system suite green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/20-economic-system.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\20-economic-system.trx",
+      "trx_present": true,
+      "total": 40,
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 139.716,
+        "p50_ms": 31.901,
+        "p95_ms": 543.83,
+        "p99_ms": 568.862,
+        "max_ms": 1075.131,
+        "sample_count": 40
+      }
+    },
+    "build": {
+      "status": "PASS",
+      "message": "dotnet build exited 0",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/00-build.log",
+      "trx_path": null,
+      "trx_present": false,
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": null
+    },
+    "phase3-adversarial": {
+      "status": "PASS",
+      "message": "concurrency/edge-values/ordering green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/60-phase3-adversarial.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\60-phase3-adversarial.trx",
+      "trx_present": true,
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 177.527,
+        "p50_ms": 23.641,
+        "p95_ms": 66.802,
+        "p99_ms": 66.802,
+        "max_ms": 610.019,
+        "sample_count": 4
+      }
+    },
+    "load": {
+      "status": "SKIP",
+      "message": "skipped via --skip-load",
+      "log": "",
+      "trx_path": null,
+      "trx_present": false,
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": null
+    },
+    "phase3-observability": {
+      "status": "PASS",
+      "message": "metrics/tracing/anomaly-detection green",
+      "log": "/c/projects/dev/v5/tests/reports/logs/20260418T085852Z/70-phase3-observability.log",
+      "trx_path": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z\\70-phase3-observability.trx",
+      "trx_present": true,
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "latency_ms": {
+        "avg_ms": 87.082,
+        "p50_ms": 19.446,
+        "p95_ms": 36.922,
+        "p99_ms": 36.922,
+        "max_ms": 423.316,
+        "sample_count": 6
+      }
+    }
+  },
+  "log_dir": "C:\\projects\\dev\\v5\\tests\\reports\\logs\\20260418T085852Z"
+}

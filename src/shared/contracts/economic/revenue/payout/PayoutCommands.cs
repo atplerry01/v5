@@ -10,7 +10,35 @@ public sealed record PayoutShareEntry(
 public sealed record ExecutePayoutCommand(
     Guid PayoutId,
     Guid DistributionId,
+    string IdempotencyKey,
     IReadOnlyList<PayoutShareEntry> Shares) : IHasAggregateId
+{
+    public Guid AggregateId => PayoutId;
+}
+
+public sealed record MarkPayoutExecutedCommand(
+    Guid PayoutId) : IHasAggregateId
+{
+    public Guid AggregateId => PayoutId;
+}
+
+public sealed record MarkPayoutFailedCommand(
+    Guid PayoutId,
+    string Reason) : IHasAggregateId
+{
+    public Guid AggregateId => PayoutId;
+}
+
+public sealed record RequestPayoutCompensationCommand(
+    Guid PayoutId,
+    string Reason) : IHasAggregateId
+{
+    public Guid AggregateId => PayoutId;
+}
+
+public sealed record MarkPayoutCompensatedCommand(
+    Guid PayoutId,
+    string CompensatingJournalId) : IHasAggregateId
 {
     public Guid AggregateId => PayoutId;
 }

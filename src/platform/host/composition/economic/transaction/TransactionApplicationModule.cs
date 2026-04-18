@@ -47,6 +47,7 @@ public static class TransactionApplicationModule
         services.AddTransient<InitiateSettlementHandler>();
         services.AddTransient<CompleteSettlementHandler>();
         services.AddTransient<FailSettlementHandler>();
+        services.AddTransient<ConfirmSettlementFinalityHandler>();
 
         // Transaction envelope
         services.AddTransient<InitiateTransactionHandler>();
@@ -77,6 +78,7 @@ public static class TransactionApplicationModule
         engine.Register<InitiateSettlementCommand, InitiateSettlementHandler>();
         engine.Register<CompleteSettlementCommand, CompleteSettlementHandler>();
         engine.Register<FailSettlementCommand, FailSettlementHandler>();
+        engine.Register<ConfirmSettlementFinalityCommand, ConfirmSettlementFinalityHandler>();
 
         engine.Register<InitiateTransactionCommand, InitiateTransactionHandler>();
         engine.Register<CommitTransactionCommand, CommitTransactionHandler>();

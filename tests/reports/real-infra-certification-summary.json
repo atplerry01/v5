@@ -1,0 +1,71 @@
+{
+  "run_utc": "2026-04-18T12:22:30Z",
+  "mode": "real",
+  "infrastructure": {
+    "postgres_event_store": {"host": "localhost", "port": 5432, "database": "whyce_eventstore", "healthy": true, "auto_migrations_applied": true},
+    "postgres_chain": {"host": "localhost", "port": 5433, "database": "whycechain", "healthy": true, "auto_migrations_applied": true},
+    "postgres_projections": {"host": "localhost", "port": 5434, "database": "whyce_projections", "healthy": true, "schemas_applied": 40},
+    "kafka": {"bootstrap_external": "localhost:29092", "healthy": true, "topics_created": true},
+    "redis": {"endpoint": "localhost:6379", "healthy": true},
+    "opa": {"endpoint": "http://localhost:8181", "healthy": true},
+    "prometheus": {"endpoint": "http://localhost:9090", "healthy": true},
+    "grafana": {"endpoint": "http://localhost:3000", "healthy": true},
+    "economic_system_host": {"endpoint": "http://localhost:5000", "healthy": true, "subsystems": ["postgres", "kafka", "redis", "opa", "minio", "runtime", "workers"]}
+  },
+  "fixes_applied_to_reach_go": [
+    {"file": "src/platform/host/Dockerfile", "change": "rewrote as runtime-only image consuming pre-published artifacts/host-publish/ (avoids NuGet-restore-in-container SSL failure), upgraded base images to .NET 10.0"},
+    {"file": "infrastructure/data/postgres/init-runner.sh", "change": "new script: walks /docker-entrypoint-initdb.d/ subdirectories recursively, applies every *.sql (skipping backfill/ one-shots that require runtime psql variables)"},
+    {"file": "infrastructure/deployment/docker-compose.yml", "change": "replaced single-dir event-store migrations mount with fan-out of all canonical trees (event-store + outbox + idempotency + hsid) plus the runner script; added matching fan-out to postgres-projections and whycechain-db"},
+    {"file": "infrastructure/data/postgres/projections/economic/exchange/rate/001_projection.sql", "change": "dropped the ::timestamptz cast in idx_eer_effective_at (cast is STABLE not IMMUTABLE; Postgres rejects it in an index predicate). Index now indexes the ISO-8601 UTC-suffixed text directly — same sort order per $9/GE-01 deterministic clock contract"},
+    {"file": "infrastructure/event-fabric/kafka/create-topics.sh", "change": "stripped CRLF line endings so bash-on-Linux containers parse the script (pre-existing Windows-host checkout artifact)"},
+    {"file": "infrastructure/data/postgres/init-runner.sh", "change": "stripped CRLF line endings"}
+  ],
+  "certification_suite": {
+    "mode": "REAL_INFRA=true (via RealInfraTestHost)",
+    "filter": "FullyQualifiedName~Tests.Integration.EconomicSystem.Certification",
+    "total": 17,
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "duration_s": 71,
+    "status": "PASS",
+    "real_db_evidence": {
+      "events_rows": 3000,
+      "events_distinct_aggregates": 3000,
+      "outbox_rows": 3000,
+      "outbox_distinct_aggregates": 3000,
+      "idempotency_claims": 1500,
+      "chain_blocks": 3000
+    },
+    "covers": [
+      "DomainIntegrityTests (DI1..DI6): every command emits exactly one durable effect; outbox/event-store cardinality agree; version monotonicity holds; 10k deterministic seed reproducible",
+      "FailureInjectionTests (FI1..FI3): failure before/during/after persistence preserves atomicity and idempotency",
+      "CompensationTests: compensation reverses forward effects while preserving invariants",
+      "ConcurrencyCertificationTests: concurrent commands on same aggregate serialize correctly",
+      "DLQReplayTests: DLQ drains to zero via replay; no duplicates"
+    ]
+  },
+  "failure_injection": [
+    {"target": "whyce-kafka", "mode": "restart", "downtime_s": 5, "status": "PASS", "message": "kafka restarted, stack recovered"},
+    {"target": "whyce-postgres", "mode": "restart", "downtime_s": 5, "status": "PASS", "message": "postgres restarted, stack recovered"},
+    {"target": "whyce-economic-system", "mode": "restart", "downtime_s": 3, "status": "PASS", "message": "host restarted and re-entered Healthy state; /health returned runtimeState=Healthy across all 7 subsystems"}
+  ],
+  "dlq_probe": {
+    "status": "PASS",
+    "total_messages_on_dlq": 0,
+    "topics_checked": 41,
+    "interpretation": "certification suite ran clean; no poisoned messages reached the DLQ (DLQReplayTests verified the replay code path). Zero messages across all 41 economic-system deadletter topics."
+  },
+  "observability_probe": {
+    "status": "PASS",
+    "prometheus_healthy": true,
+    "grafana_healthy": true,
+    "host_healthy": true,
+    "host_metrics_exposed": true,
+    "canonical_metric_families_seen": 4,
+    "families_matched": ["whyce_*", "http_request*", "outbox_*", "dotnet_*"]
+  },
+  "blocking_deficiencies": [],
+  "verdict": "GO",
+  "verdict_basis": "All gates observed in live execution: certification suite 17/17 on real Postgres+Kafka+Redis+OPA with 9,500+ verifiable DB rows; 3 failure-injection targets recovered; DLQ clean; Prometheus + Grafana + host /metrics all reachable with canonical metric families present. No blocking deficiencies."
+}

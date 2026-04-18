@@ -32,6 +32,7 @@ using Whycespace.Platform.Host.Composition.Economic.Reconciliation;
 using Whycespace.Platform.Host.Composition.Economic.Reconciliation.Process.Application;
 using Whycespace.Platform.Host.Composition.Economic.Reconciliation.Discrepancy.Application;
 using Whycespace.Platform.Host.Composition.Economic.Reconciliation.Workflow;
+using Whycespace.Platform.Host.Composition.Economic.Revenue;
 using Whycespace.Platform.Host.Composition.Economic.Revenue.Distribution.Workflow;
 using Whycespace.Platform.Host.Composition.Economic.Routing;
 using Whycespace.Platform.Host.Composition.Economic.Routing.Execution.Application;
@@ -39,6 +40,9 @@ using Whycespace.Platform.Host.Composition.Economic.Routing.Path.Application;
 using Whycespace.Platform.Host.Composition.Economic.Subject;
 using Whycespace.Platform.Host.Composition.Economic.Subject.Subject.Application;
 using Whycespace.Platform.Host.Composition.Economic.Transaction;
+using Whycespace.Platform.Host.Composition.Economic.Transaction.Workflow;
+using Whycespace.Platform.Host.Composition.Economic.Enforcement.Workflow;
+using Whycespace.Platform.Host.Composition.Economic.Revenue.Payout;
 using Whycespace.Platform.Host.Composition.Economic.Revenue.Payout.Workflow;
 using Whycespace.Platform.Host.Composition.Economic.Revenue.Revenue.Application;
 using Whycespace.Platform.Host.Composition.Economic.Revenue.Revenue.Workflow;
@@ -47,8 +51,10 @@ using Whycespace.Platform.Host.Composition.Economic.Vault.Account.Policy;
 using Whycespace.Platform.Host.Adapters;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.EventFabric.DomainSchemas;
+using Whycespace.Runtime.Observability;
 using Whycespace.Runtime.Projection;
 using Whycespace.Shared.Contracts.Engine;
+using Whycespace.Shared.Contracts.Observability;
 using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -64,12 +70,22 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
 {
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        // Phase 1.5 — RUNTIME-LAYER-PURITY-01. Engines depend on
+        // IEconomicMetrics (Shared) only; the OTel-backed implementation
+        // lives in Runtime and is wired here so the engine assembly does
+        // not take a project reference on Runtime. Singleton because the
+        // underlying Meter + Counter instruments are process-global.
+        services.AddSingleton<IEconomicMetrics, EconomicBusinessMetrics>();
+
         // Phase 2D — application + workflow DI
         services.AddVaultAccountApplication();
         services.AddRevenueRevenueApplication();
         services.AddRevenueProcessingWorkflow();
         services.AddDistributionWorkflow();
+        services.AddDistributionCompensationWorkflow();
+        services.AddPayout();
         services.AddPayoutExecutionWorkflow();
+        services.AddPayoutCompensationWorkflow();
         services.AddLedgerEntryApplication();
         services.AddLedgerJournalApplication();
         services.AddLedgerLedgerApplication();
@@ -115,6 +131,14 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
         // limit, settlement, transaction, wallet).
         services.AddTransactionApplication();
 
+        // E9 — Transaction lifecycle workflow (T1M orchestration):
+        // instruction → transaction → settlement → ledger.
+        services.AddTransactionLifecycleWorkflow();
+
+        // E9 — Enforcement lifecycle workflow (T1M orchestration):
+        // violation → escalation → sanction → restriction → lock.
+        services.AddEnforcementLifecycleWorkflow();
+
         // Exchange context application module (fx + rate).
         services.AddExchangeApplication();
 
@@ -131,6 +155,8 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
         services.AddSubjectPolicyBindings();
         services.AddExchangePolicyBindings();
         services.AddReconciliationPolicyBindings();
+        services.AddTransactionPolicyBindings();
+        services.AddRevenuePolicyBindings();
         services.AddVaultAccountPolicyBindings();
 
         // Phase 2E — projection stores + handlers + 4 per-topic consumer workers
@@ -166,6 +192,98 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<LedgerToCapitalIntegrationWorker>>()));
+
+        // Phase 8 B3 — Payout failure → compensation saga reactor.
+        // Subscribes to whyce.economic.revenue.payout.events and starts
+        // PayoutCompensationWorkflow via IWorkflowDispatcher on
+        // PayoutFailedEvent. Two-layer idempotency (envelope claim +
+        // deterministic workflow id) guarantees exactly-one workflow
+        // per qualifying failure under at-least-once delivery.
+        services.AddSingleton<PayoutFailureCompensationIntegrationHandler>();
+
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
+            new PayoutFailureCompensationWorker(
+                kafkaBootstrapServers,
+                sp.GetRequiredService<EventDeserializer>(),
+                sp.GetRequiredService<PayoutFailureCompensationIntegrationHandler>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PayoutFailureCompensationWorker>>()));
+
+        // Phase 8 B4 — Sanction activation → enforcement saga reactor.
+        // Subscribes to whyce.economic.enforcement.sanction.events and
+        // dispatches ApplyRestriction or LockSystem via
+        // ISystemIntentDispatcher.DispatchSystemAsync on
+        // SanctionActivatedEvent (V2, Enforcement ref present).
+        // Two-layer idempotency: envelope claim + downstream aggregate's
+        // IEventStore prior-event check (Phase 7 B4).
+        services.AddSingleton<SanctionActivationEnforcementHandler>();
+
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
+            new SanctionActivationEnforcementWorker(
+                kafkaBootstrapServers,
+                sp.GetRequiredService<EventDeserializer>(),
+                sp.GetRequiredService<SanctionActivationEnforcementHandler>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionActivationEnforcementWorker>>()));
+
+        // Phase 8 B5 — Expiry schedulers for sanction + system lock.
+        // Timer-driven BackgroundServices that scan the enforcement
+        // projections for naturally-expired aggregates and dispatch
+        // ExpireSanctionCommand / ExpireSystemLockCommand via
+        // ISystemIntentDispatcher.DispatchSystemAsync. Two-layer
+        // idempotency: scheduler-side deterministic key
+        // ("sanction-expiry:{id:N}:{UtcTicks}" / likewise for lock) +
+        // the aggregate's own Status != Active / Status != Locked guard.
+        //
+        // Cadence + batch sizing bound from Enforcement:Scheduler:*
+        // (defaults: 60s interval, 100 rows per scan).
+        var sanctionSchedulerIntervalSeconds = configuration.GetValue<int?>(
+            "Enforcement:Scheduler:Sanction:IntervalSeconds") ?? 60;
+        var sanctionSchedulerBatchSize = configuration.GetValue<int?>(
+            "Enforcement:Scheduler:Sanction:BatchSize") ?? 100;
+        var lockSchedulerIntervalSeconds = configuration.GetValue<int?>(
+            "Enforcement:Scheduler:Lock:IntervalSeconds") ?? 60;
+        var lockSchedulerBatchSize = configuration.GetValue<int?>(
+            "Enforcement:Scheduler:Lock:BatchSize") ?? 100;
+
+        services.AddSingleton<Whycespace.Shared.Contracts.Enforcement.IExpirableSanctionQuery>(sp =>
+            new PostgresExpirableSanctionQuery(
+                configuration.GetValue<string>("Projections:ConnectionString")
+                    ?? throw new InvalidOperationException(
+                        "Projections:ConnectionString is required for Phase 8 B5 sanction expiry scheduler."),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PostgresExpirableSanctionQuery>>()));
+
+        services.AddSingleton<Whycespace.Shared.Contracts.Enforcement.IExpirableLockQuery>(sp =>
+            new PostgresExpirableLockQuery(
+                configuration.GetValue<string>("Projections:ConnectionString")
+                    ?? throw new InvalidOperationException(
+                        "Projections:ConnectionString is required for Phase 8 B5 lock expiry scheduler."),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PostgresExpirableLockQuery>>()));
+
+        services.AddSingleton<SanctionExpirySchedulerHandler>();
+        services.AddSingleton<SystemLockExpirySchedulerHandler>();
+
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
+            new SanctionExpirySchedulerWorker(
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Enforcement.IExpirableSanctionQuery>(),
+                sp.GetRequiredService<SanctionExpirySchedulerHandler>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sanctionSchedulerIntervalSeconds,
+                sanctionSchedulerBatchSize,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionExpirySchedulerWorker>>()));
+
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
+            new SystemLockExpirySchedulerWorker(
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Enforcement.IExpirableLockQuery>(),
+                sp.GetRequiredService<SystemLockExpirySchedulerHandler>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                lockSchedulerIntervalSeconds,
+                lockSchedulerBatchSize,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SystemLockExpirySchedulerWorker>>()));
 
         // Phase 3 (enforcement) — Violation → Capital command bridge.
         // Consumes whyce.economic.enforcement.violation.events and, when the
@@ -241,6 +359,31 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 projectionsConnectionString,
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<PostgresEscalationStateQuery>>()));
 
+        // E3 — active-restriction read-side query for ExecutionGuardMiddleware.
+        // Checks the restriction projection before command dispatch to block
+        // subjects with active restrictions.
+        services.AddSingleton<Whycespace.Shared.Contracts.Enforcement.IRestrictionStateQuery>(sp =>
+            new PostgresRestrictionStateQuery(
+                projectionsConnectionString,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PostgresRestrictionStateQuery>>()));
+
+        // E3 — active-lock read-side query for ExecutionGuardMiddleware.
+        // Checks the lock projection before command dispatch to hard-stop
+        // subjects with active locks.
+        services.AddSingleton<Whycespace.Shared.Contracts.Enforcement.ILockStateQuery>(sp =>
+            new PostgresLockStateQuery(
+                projectionsConnectionString,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PostgresLockStateQuery>>()));
+
+        // PROJECTION LAG PROTECTION — in-memory enforcement decision cache.
+        // Populated directly from the event stream by enforcement handlers,
+        // consulted by ExecutionGuardMiddleware BEFORE projection queries.
+        // Closes the window between event emission and projection materialization.
+        // 30-second TTL; projections are authoritative for long-term state.
+        services.AddSingleton<Whycespace.Shared.Contracts.Enforcement.IEnforcementDecisionCache>(sp =>
+            new InMemoryEnforcementDecisionCache(
+                sp.GetRequiredService<IClock>()));
+
         // Phase 1 (escalation) — Violation → Escalation bridge.
         // Consumes whyce.economic.enforcement.violation.events and dispatches
         // AccumulateViolationCommand per violation so the per-subject
@@ -285,6 +428,26 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
                 sp.GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<ReconciliationLifecycleWorker>>()));
+
+        // Phase 6 Final Patch — Risk → Enforcement event bridge.
+        // Consumes whyce.economic.risk.exposure.events, filters to
+        // ExposureBreachedEvent only, and routes the envelope through
+        // RiskExposureEnforcementHandler which dispatches a
+        // DetectViolationCommand into the enforcement pipeline. Failure
+        // on the handler path does NOT commit the source offset so the
+        // message is redelivered (R-K-12 exactly-once via idempotent
+        // consumer; R-K-21 DLQ/retry posture preserved at the worker
+        // boundary).
+        services.AddSingleton<RiskExposureEnforcementHandler>();
+
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
+            new RiskExposureEnforcementWorker(
+                kafkaBootstrapServers,
+                sp.GetRequiredService<EventDeserializer>(),
+                sp.GetRequiredService<RiskExposureEnforcementHandler>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<RiskExposureEnforcementWorker>>()));
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)
@@ -303,6 +466,7 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
         VaultAccountApplicationModule.RegisterEngines(engine);
         RevenueRevenueApplicationModule.RegisterEngines(engine);
         DistributionWorkflowModule.RegisterEngines(engine);
+        PayoutCompositionModule.RegisterEngines(engine);
         LedgerEntryApplicationModule.RegisterEngines(engine);
         LedgerJournalApplicationModule.RegisterEngines(engine);
         LedgerLedgerApplicationModule.RegisterEngines(engine);
@@ -347,6 +511,10 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
     {
         RevenueProcessingWorkflowModule.RegisterWorkflows(workflow);
         DistributionWorkflowModule.RegisterWorkflows(workflow);
+        DistributionCompensationWorkflowModule.RegisterWorkflows(workflow);
         PayoutExecutionWorkflowModule.RegisterWorkflows(workflow);
+        PayoutCompensationWorkflowModule.RegisterWorkflows(workflow);
+        TransactionLifecycleWorkflowModule.RegisterWorkflows(workflow);
+        EnforcementLifecycleWorkflowModule.RegisterWorkflows(workflow);
     }
 }

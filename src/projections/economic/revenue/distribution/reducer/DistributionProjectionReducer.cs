@@ -11,6 +11,33 @@ public static class DistributionProjectionReducer
             DistributionId = e.AggregateId,
             SpvId = e.SpvId,
             TotalAmount = e.TotalAmount,
-            Status = "Created"
+            Status = "Created",
+        };
+
+    // Phase 7 B1 — compensation transitions. OriginalPayoutId is the
+    // correlation anchor to the sibling payout whose reversal drove
+    // this compensation; preserved from the Requested event through
+    // the terminal Compensated row.
+
+    public static DistributionReadModel Apply(DistributionReadModel state, DistributionCompensationRequestedEventSchema e) =>
+        state with
+        {
+            DistributionId = e.AggregateId,
+            Status = "CompensationRequested",
+            OriginalPayoutId = e.OriginalPayoutId,
+            CompensationReason = e.Reason,
+            CompensationRequestedAt = e.RequestedAt,
+            LastUpdatedAt = e.RequestedAt,
+        };
+
+    public static DistributionReadModel Apply(DistributionReadModel state, DistributionCompensatedEventSchema e) =>
+        state with
+        {
+            DistributionId = e.AggregateId,
+            Status = "Compensated",
+            OriginalPayoutId = e.OriginalPayoutId,
+            CompensatingJournalId = e.CompensatingJournalId,
+            CompensatedAt = e.CompensatedAt,
+            LastUpdatedAt = e.CompensatedAt,
         };
 }

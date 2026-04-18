@@ -285,6 +285,12 @@ TOPICS=(
   "whyce.economic.compliance.audit.events"
   "whyce.economic.compliance.audit.retry"
   "whyce.economic.compliance.audit.deadletter"
+
+  # economic > risk > exposure (Phase 6 Final Patch — risk breach → enforcement bridge)
+  "whyce.economic.risk.exposure.commands"
+  "whyce.economic.risk.exposure.events"
+  "whyce.economic.risk.exposure.retry"
+  "whyce.economic.risk.exposure.deadletter"
 )
 
 for TOPIC in "${TOPICS[@]}"; do

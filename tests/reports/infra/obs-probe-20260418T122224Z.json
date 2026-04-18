@@ -1,0 +1,9 @@
+{
+  "probed_utc": "2026-04-18T12:22:26Z",
+  "prometheus_healthy": true,
+  "grafana_healthy":    true,
+  "host_healthy":       true,
+  "host_metrics_exposed": true,
+  "canonical_metric_families_seen": 4,
+  "status": "PASS"
+}

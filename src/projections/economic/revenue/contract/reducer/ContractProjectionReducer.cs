@@ -5,15 +5,22 @@ namespace Whycespace.Projections.Economic.Revenue.Contract.Reducer;
 
 public static class ContractProjectionReducer
 {
-    public static ContractReadModel Apply(ContractReadModel state, RevenueContractCreatedEventSchema e) =>
-        state with
+    public static ContractReadModel Apply(ContractReadModel state, RevenueContractCreatedEventSchema e)
+    {
+        var parties = new List<ContractPartyShare>(e.ShareRules.Count);
+        foreach (var r in e.ShareRules)
+            parties.Add(new ContractPartyShare(r.PartyId, r.SharePercentage));
+
+        return state with
         {
             ContractId = e.AggregateId,
             Status = "Draft",
             TermStart = e.TermStart,
             TermEnd = e.TermEnd,
-            PartyCount = e.ShareRules.Count
+            PartyCount = e.ShareRules.Count,
+            Parties = parties
         };
+    }
 
     public static ContractReadModel Apply(ContractReadModel state, RevenueContractActivatedEventSchema _) =>
         state with { Status = "Active" };

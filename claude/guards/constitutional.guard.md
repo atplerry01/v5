@@ -1568,3 +1568,27 @@ References:
 - INV-301 (State Change ⇒ Event)
 - INV-302 (Mandatory Event Metadata)
 - `infrastructure.guard.md` kafka ordering rules
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-18)
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-18. Rule IDs are indexed in `claude/audits/constitutional.audit.md`.
+
+### OPS-VAL-003 — Outbox Row Determinism on Duplicate Command
+
+Definition:
+Either (a) HSID generation for outbox rows MUST include `(aggregate_id, event_sequence)` or equivalent invocation-unique salt such that re-issuing the same command does not collide on the outbox primary key, OR (b) the duplicate-command short-circuit MUST return BEFORE the outbox insert path runs. Collision on re-issue is a determinism violation and a GE-01 sub-clause.
+
+Enforcement:
+Regression test: re-dispatching a duplicate command MUST result in either a deterministic outbox row (if path (a)) or no second outbox insert (if path (b)). Live probe: `POST /api/exchange/fx/register` twice with identical payloads must not produce `outbox_pkey` 23505 conflicts.
+
+Severity:
+S0 (path (a) drift) / S1 (path (b) drift) — confirmed at code-read time.
+
+References:
+- GE-01 (Deterministic Execution)
+- R-K-06 (outbox mandatory)
+- R-K-11 (partition key)
+- R-K-26 (aggregate-id header non-empty)
+- Source: `claude/new-rules/20260418-214500-audits.md`

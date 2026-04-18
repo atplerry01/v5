@@ -55,7 +55,23 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         "TreasuryId"
     ];
 
-    public async Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default)
+    public Task<CommandResult> DispatchAsync(object command, DomainRoute route, CancellationToken cancellationToken = default) =>
+        DispatchInternalAsync(command, route, isSystem: false, cancellationToken);
+
+    /// <summary>
+    /// Phase 2.5 — system-origin dispatch. Identical to
+    /// <see cref="DispatchAsync"/> except <c>CommandContext.IsSystem</c>
+    /// is stamped <c>true</c> so the <c>EnforcementGuard</c> bypass path
+    /// is taken for workflow / compensation / recovery commands.
+    /// </summary>
+    public Task<CommandResult> DispatchSystemAsync(object command, DomainRoute route, CancellationToken cancellationToken = default) =>
+        DispatchInternalAsync(command, route, isSystem: true, cancellationToken);
+
+    private async Task<CommandResult> DispatchInternalAsync(
+        object command,
+        DomainRoute route,
+        bool isSystem,
+        CancellationToken cancellationToken)
     {
         var commandType = command.GetType();
 
@@ -96,7 +112,11 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             PolicyId = _policyIdRegistry.Resolve(commandType),
             Classification = route.Classification,
             Context = route.Context,
-            Domain = route.Domain
+            Domain = route.Domain,
+            // Phase 2.5 — stamped here and only here. The init-only property
+            // ensures no downstream middleware, handler, or API path can
+            // promote a user command to system after construction.
+            IsSystem = isSystem
         };
 
         // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): forward

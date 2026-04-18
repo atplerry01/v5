@@ -20,6 +20,18 @@ public sealed class PostJournalEntriesHandler : IEngine
         if (context.Command is not PostJournalEntriesCommand cmd)
             return;
 
+        // Phase 4.5 T4.5.3 — control-plane origin gate. Both legitimate
+        // ledger paths set CommandContext.IsSystem = true via
+        // ISystemIntentDispatcher.DispatchSystemAsync:
+        //   * Transaction lifecycle: PostToLedgerStep
+        //   * Revenue payout pipeline: PostLedgerJournalStep
+        // Any caller using DispatchAsync (the public, user-originated path)
+        // observes IsSystem == false and is rejected here. This closes the
+        // bypass identified in Phase 4 Finding 12 at the engine boundary,
+        // independent of any API-side restriction.
+        if (!context.IsSystem)
+            throw JournalErrors.ControlPlaneOriginRequired();
+
         var now = new Timestamp(_clock.UtcNow);
         var emitted = new List<object>();
 
@@ -35,7 +47,9 @@ public sealed class PostJournalEntriesHandler : IEngine
                 e.AccountId,
                 new Amount(e.Amount),
                 new Currency(e.Currency),
-                direction);
+                direction,
+                e.FxRateId,
+                e.FxRate);
         }
         emitted.AddRange(journal.DomainEvents);
         journal.ClearDomainEvents();
@@ -62,8 +76,18 @@ public sealed class PostJournalEntriesHandler : IEngine
             entry.ClearDomainEvents();
         }
 
+        // T1.4 — Compute balanced totals from the command's entries and pass
+        // them to the ledger so the ledger aggregate can enforce its own
+        // balance invariant (per-journal and cumulative).
+        var totalDebit = new Amount(cmd.Entries
+            .Where(e => e.Direction == "Debit")
+            .Sum(e => e.Amount));
+        var totalCredit = new Amount(cmd.Entries
+            .Where(e => e.Direction == "Credit")
+            .Sum(e => e.Amount));
+
         var ledger = (LedgerAggregate)await context.LoadAggregateAsync(typeof(LedgerAggregate));
-        ledger.AppendJournal(cmd.JournalId, now);
+        ledger.AppendJournal(cmd.JournalId, totalDebit, totalCredit, now);
         emitted.AddRange(ledger.DomainEvents);
         ledger.ClearDomainEvents();
 

@@ -12,7 +12,9 @@ public sealed class RestrictionProjectionHandler :
     IEnvelopeProjectionHandler,
     IProjectionHandler<RestrictionAppliedEventSchema>,
     IProjectionHandler<RestrictionUpdatedEventSchema>,
-    IProjectionHandler<RestrictionRemovedEventSchema>
+    IProjectionHandler<RestrictionRemovedEventSchema>,
+    IProjectionHandler<RestrictionSuspendedEventSchema>,
+    IProjectionHandler<RestrictionResumedEventSchema>
 {
     private readonly PostgresProjectionStore<RestrictionReadModel> _store;
 
@@ -24,9 +26,11 @@ public sealed class RestrictionProjectionHandler :
     {
         return envelope.Payload switch
         {
-            RestrictionAppliedEventSchema e => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionAppliedEvent", envelope, cancellationToken),
-            RestrictionUpdatedEventSchema e => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionUpdatedEvent", envelope, cancellationToken),
-            RestrictionRemovedEventSchema e => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionRemovedEvent", envelope, cancellationToken),
+            RestrictionAppliedEventSchema e  => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionAppliedEvent", envelope, cancellationToken),
+            RestrictionUpdatedEventSchema e  => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionUpdatedEvent", envelope, cancellationToken),
+            RestrictionRemovedEventSchema e  => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionRemovedEvent", envelope, cancellationToken),
+            RestrictionSuspendedEventSchema e => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionSuspendedEvent", envelope, cancellationToken),
+            RestrictionResumedEventSchema e  => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionResumedEvent", envelope, cancellationToken),
             _ => throw new InvalidOperationException(
                 $"RestrictionProjectionHandler received unmatched event: {envelope.Payload.GetType().Name}.")
         };
@@ -40,6 +44,12 @@ public sealed class RestrictionProjectionHandler :
 
     public Task HandleAsync(RestrictionRemovedEventSchema e, CancellationToken ct = default)
         => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionRemovedEvent", null, ct);
+
+    public Task HandleAsync(RestrictionSuspendedEventSchema e, CancellationToken ct = default)
+        => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionSuspendedEvent", null, ct);
+
+    public Task HandleAsync(RestrictionResumedEventSchema e, CancellationToken ct = default)
+        => Project(e.AggregateId, s => RestrictionProjectionReducer.Apply(s, e), "RestrictionResumedEvent", null, ct);
 
     private async Task Project(
         Guid aggregateId,

@@ -1,4 +1,5 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Expense;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Expense;
 using Whycespace.Shared.Contracts.Engine;
 
@@ -10,6 +11,8 @@ public sealed class RecordExpenseHandler : IEngine
     {
         if (context.Command is not RecordExpenseCommand cmd)
             return Task.CompletedTask;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var aggregate = ExpenseAggregate.Create(
             new ExpenseId(cmd.ExpenseId),

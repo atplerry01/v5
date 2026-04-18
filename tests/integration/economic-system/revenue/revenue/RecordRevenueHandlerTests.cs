@@ -106,6 +106,8 @@ public sealed class RecordRevenueHandlerTests
         }
         public object Command { get; }
         public Guid AggregateId { get; }
+        public string? EnforcementConstraint => null;
+        public bool IsSystem => false;
         public IReadOnlyList<object> EmittedEvents => _emitted;
         public Task<object> LoadAggregateAsync(Type aggregateType) =>
             throw new InvalidOperationException("RecordRevenueHandler must not call LoadAggregateAsync.");

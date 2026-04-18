@@ -33,4 +33,16 @@ public static class SanctionErrors
 
     public static DomainInvariantViolationException OrphanSanction() =>
         new("Invariant violated: sanction must reference a subject.");
+
+    // ── Phase 7 T7.10/T7.11 — enforcement linkage + lifecycle ─────────
+
+    public static DomainException EnforcementRefRequired() =>
+        new("Sanction activation requires a non-null EnforcementRef (Phase 7 T7.10).");
+
+    public static DomainException EnforcementKindMismatch(SanctionType sanctionType, SanctionType refKind) =>
+        new($"EnforcementRef.Kind ({refKind}) must match sanction Type ({sanctionType}). " +
+            "Cross-kind activation is rejected to prevent sanction/enforcement drift.");
+
+    public static DomainInvariantViolationException EnforcementMissingOnActive() =>
+        new("Invariant violated: an Active sanction must carry a non-null EnforcementRef.");
 }

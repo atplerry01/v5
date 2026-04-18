@@ -194,6 +194,10 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 - [ ] D2 BCs have full DDD + engine wiring + runtime integration
 - [ ] No activation regressions; no premature D2 claims
 
+### Section 21 — Rules Promoted from new-rules/ (2026-04-18)
+
+- [ ] **RUNBOOK-CONTROL-PLANE-COVERAGE-01** — route restriction/removal PR updates all referencing operator runbooks in the same patch
+
 ---
 
 ## Check Procedure
@@ -217,7 +221,7 @@ AUDIT:           domain
 GUARD:           claude/guards/domain.guard.md
 EXECUTED:        <ISO-8601>
 RULES_CHECKED:   ~160
-SECTIONS:        20
+SECTIONS:        21
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

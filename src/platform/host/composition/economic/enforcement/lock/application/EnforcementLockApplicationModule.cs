@@ -11,6 +11,10 @@ public static class EnforcementLockApplicationModule
     {
         services.AddTransient<LockSystemHandler>();
         services.AddTransient<UnlockSystemHandler>();
+        // Phase 7 T7.8/T7.9 — suspend / resume / expire lifecycle handlers.
+        services.AddTransient<SuspendSystemLockHandler>();
+        services.AddTransient<ResumeSystemLockHandler>();
+        services.AddTransient<ExpireSystemLockHandler>();
         return services;
     }
 
@@ -18,5 +22,8 @@ public static class EnforcementLockApplicationModule
     {
         engine.Register<LockSystemCommand, LockSystemHandler>();
         engine.Register<UnlockSystemCommand, UnlockSystemHandler>();
+        engine.Register<SuspendSystemLockCommand, SuspendSystemLockHandler>();
+        engine.Register<ResumeSystemLockCommand, ResumeSystemLockHandler>();
+        engine.Register<ExpireSystemLockCommand, ExpireSystemLockHandler>();
     }
 }

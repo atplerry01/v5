@@ -1,0 +1,9 @@
+{
+  "mode": "restart",
+  "target": "whyce-kafka",
+  "downtime_seconds": 5,
+  "started_utc": "2026-04-18T11:34:17Z",
+  "finished_utc": "2026-04-18T11:34:18Z",
+  "status": "PASS",
+  "message": "injection completed; target recovered"
+}

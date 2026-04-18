@@ -1,6 +1,7 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Transaction;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Transaction;
+
 using Whycespace.Shared.Contracts.Engine;
 
 namespace Whycespace.Engines.T2E.Economic.Transaction.Transaction;
@@ -11,6 +12,8 @@ public sealed class CommitTransactionHandler : IEngine
     {
         if (context.Command is not CommitTransactionCommand cmd)
             return;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var aggregate = (TransactionAggregate)await context.LoadAggregateAsync(typeof(TransactionAggregate));
 

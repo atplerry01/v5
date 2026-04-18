@@ -1,0 +1,9 @@
+{
+  "mode": "restart",
+  "target": "whyce-postgres",
+  "downtime_seconds": 5,
+  "started_utc": "2026-04-18T12:16:31Z",
+  "finished_utc": "2026-04-18T12:16:34Z",
+  "status": "PASS",
+  "message": "injection completed; target recovered"
+}

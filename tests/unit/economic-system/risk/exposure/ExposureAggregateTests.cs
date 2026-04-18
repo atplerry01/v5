@@ -136,6 +136,57 @@ public sealed class ExposureAggregateTests
             aggregate.ReduceExposure(new Amount(60m)));
     }
 
+    // ── Phase 6 T6.5 — DetectBreach / risk → enforcement loop entry ──
+
+    [Fact]
+    public void DetectBreach_WhenTotalExceedsThreshold_RaisesExposureBreachedEvent()
+    {
+        var aggregate = NewActive(1_000m, "Breach_Over");
+        aggregate.ClearDomainEvents();
+
+        aggregate.DetectBreach(new Amount(500m), FrozenNow);
+
+        var evt = Assert.IsType<ExposureBreachedEvent>(Assert.Single(aggregate.DomainEvents));
+        Assert.Equal(1_000m, evt.TotalExposure.Value);
+        Assert.Equal(500m, evt.Threshold.Value);
+        Assert.Equal("USD", evt.Currency.Code);
+        Assert.Equal(FrozenNow, evt.DetectedAt);
+    }
+
+    [Fact]
+    public void DetectBreach_WhenTotalBelowOrEqualThreshold_EmitsNothing()
+    {
+        var aggregate = NewActive(100m, "Breach_Under");
+        aggregate.ClearDomainEvents();
+
+        aggregate.DetectBreach(new Amount(100m), FrozenNow); // equal — not strictly greater
+        Assert.Empty(aggregate.DomainEvents);
+
+        aggregate.DetectBreach(new Amount(200m), FrozenNow);
+        Assert.Empty(aggregate.DomainEvents);
+    }
+
+    [Fact]
+    public void DetectBreach_AfterClose_Throws()
+    {
+        var aggregate = NewActive(100m, "Breach_Closed");
+        aggregate.CloseExposure();
+
+        Assert.Throws<DomainException>(() =>
+            aggregate.DetectBreach(new Amount(50m), FrozenNow));
+    }
+
+    [Fact]
+    public void DetectBreach_WithNonPositiveThreshold_Throws()
+    {
+        var aggregate = NewActive(100m, "Breach_BadThreshold");
+
+        Assert.Throws<DomainException>(() =>
+            aggregate.DetectBreach(new Amount(0m), FrozenNow));
+        Assert.Throws<DomainException>(() =>
+            aggregate.DetectBreach(new Amount(-10m), FrozenNow));
+    }
+
     [Fact]
     public void LoadFromHistory_AfterFullLifecycle_ReconstitutesFinalState()
     {

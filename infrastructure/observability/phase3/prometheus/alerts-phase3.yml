@@ -1,0 +1,78 @@
+groups:
+  - name: phase3-resilience-economic-system
+    interval: 30s
+    rules:
+      - alert: Phase3DispatchP95LatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(runtime_dispatch_latency_ms_bucket[5m]))) > 500
+        for: 5m
+        labels:
+          severity: warning
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 dispatch p95 latency exceeded warning budget (500 ms)
+          description: |
+            p95 dispatch latency has been above 500 ms for 5 minutes.
+            Phase 3 resilience budget is 2× the Phase 2 SLO (250 ms).
+            Mapped from infrastructure/observability/phase3/anomaly-config.json.
+
+      - alert: Phase3DispatchP95LatencyCritical
+        expr: histogram_quantile(0.95, sum by (le) (rate(runtime_dispatch_latency_ms_bucket[5m]))) > 1000
+        for: 2m
+        labels:
+          severity: critical
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 dispatch p95 latency critical (>1000 ms)
+          description: p95 dispatch latency has been >1000 ms for 2 minutes. Production-grade resilience budget breached.
+
+      - alert: Phase3DispatchP99LatencyHigh
+        expr: histogram_quantile(0.99, sum by (le) (rate(runtime_dispatch_latency_ms_bucket[5m]))) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 dispatch p99 latency exceeded warning budget (1000 ms)
+
+      - alert: Phase3DispatchErrorRateHigh
+        expr: sum(rate(runtime_dispatch_errors_total[5m])) / sum(rate(runtime_dispatch_total[5m])) > 0.001
+        for: 5m
+        labels:
+          severity: warning
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 dispatch error rate above 0.1 %
+
+      - alert: Phase3DispatchErrorRateCritical
+        expr: sum(rate(runtime_dispatch_errors_total[5m])) / sum(rate(runtime_dispatch_total[5m])) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 dispatch error rate above 1 % — Phase 2 SLO breached
+
+      - alert: Phase3ErrorBurst
+        expr: increase(runtime_dispatch_errors_total[1m]) >= 5
+        for: 0m
+        labels:
+          severity: critical
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 error burst — >=5 dispatch errors in 60 s
+
+      - alert: Phase3SoakMemoryGrowth
+        expr: (process_resident_memory_bytes - process_resident_memory_bytes offset 1h) / process_resident_memory_bytes offset 1h > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          classification: phase3-resilience
+          context: economic-system
+        annotations:
+          summary: Phase 3 soak memory growth >10 %/hour — possible leak

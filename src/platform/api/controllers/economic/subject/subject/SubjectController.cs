@@ -18,6 +18,22 @@ public sealed class SubjectController : ControllerBase
 {
     private static readonly DomainRoute SubjectRoute = new("economic", "subject", "subject");
 
+    // Domain enum SubjectType mirror — see AuditController for rationale.
+    private static readonly HashSet<string> ValidSubjectTypes = new(StringComparer.Ordinal)
+    {
+        "Participant", "CWG", "SPV", "Provider", "Cluster",
+    };
+
+    private static readonly HashSet<string> ValidStructuralRefTypes = new(StringComparer.Ordinal)
+    {
+        "Cluster", "Subcluster", "Spv", "Provider", "Participant",
+    };
+
+    private static readonly HashSet<string> ValidEconomicRefTypes = new(StringComparer.Ordinal)
+    {
+        "VaultAccount", "CapitalAccount",
+    };
+
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
@@ -43,6 +59,21 @@ public sealed class SubjectController : ControllerBase
         CancellationToken ct)
     {
         var p = request.Data;
+        if (!ValidSubjectTypes.Contains(p.SubjectType))
+            return BadRequest(ApiResponse.Fail(
+                "economic.subject.subject.invalid_subject_type",
+                $"Unknown SubjectType value: '{p.SubjectType}'. Valid values: {string.Join(", ", ValidSubjectTypes)}.",
+                _clock.UtcNow));
+        if (!ValidStructuralRefTypes.Contains(p.StructuralRefType))
+            return BadRequest(ApiResponse.Fail(
+                "economic.subject.subject.invalid_structural_ref_type",
+                $"Unknown StructuralRefType value: '{p.StructuralRefType}'. Valid values: {string.Join(", ", ValidStructuralRefTypes)}.",
+                _clock.UtcNow));
+        if (!ValidEconomicRefTypes.Contains(p.EconomicRefType))
+            return BadRequest(ApiResponse.Fail(
+                "economic.subject.subject.invalid_economic_ref_type",
+                $"Unknown EconomicRefType value: '{p.EconomicRefType}'. Valid values: {string.Join(", ", ValidEconomicRefTypes)}.",
+                _clock.UtcNow));
 
         var subjectId = _idGenerator.Generate(
             $"economic:subject:subject:{p.SubjectType}:{p.StructuralRefType}:{p.StructuralRefId}");

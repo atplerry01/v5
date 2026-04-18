@@ -15,6 +15,12 @@ public sealed class DiscrepancyController : ControllerBase
 {
     private static readonly DomainRoute DiscrepancyRoute = new("economic", "reconciliation", "discrepancy");
 
+    // Domain enum DiscrepancySource mirror — see AuditController for rationale.
+    private static readonly HashSet<string> ValidDiscrepancySources = new(StringComparer.Ordinal)
+    {
+        "Projection", "ExternalSystem",
+    };
+
     private readonly ISystemIntentDispatcher _dispatcher;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
@@ -35,6 +41,12 @@ public sealed class DiscrepancyController : ControllerBase
         CancellationToken cancellationToken)
     {
         var p = request.Data;
+        if (!ValidDiscrepancySources.Contains(p.Source))
+            return BadRequest(ApiResponse.Fail(
+                "economic.reconciliation.discrepancy.invalid_source",
+                $"Unknown DiscrepancySource value: '{p.Source}'. Valid values: {string.Join(", ", ValidDiscrepancySources)}.",
+                _clock.UtcNow));
+
         var discrepancyId = _idGenerator.Generate(
             $"economic:reconciliation:discrepancy:{p.ProcessReference}:{p.Source}:{p.ExpectedValue}:{p.ActualValue}");
 

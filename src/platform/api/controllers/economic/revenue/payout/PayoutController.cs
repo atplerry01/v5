@@ -41,12 +41,13 @@ public sealed class PayoutController : ControllerBase
         var payoutId = _idGenerator.Generate($"economic:payout:{p.DistributionId}:{p.SpvId}");
 
         var shares = new List<ParticipantPayoutEntryModel>(p.Shares).ConvertAll(s =>
-            new Whycespace.Shared.Contracts.Economic.Revenue.Payout.Workflow.ParticipantPayoutEntry(
+            new ParticipantPayoutEntry(
                 s.ParticipantId, s.ParticipantVaultId, s.Amount, s.Percentage));
 
         var intent = new PayoutExecutionIntent(
             payoutId,
             p.DistributionId,
+            p.ContractId,
             p.SpvId,
             p.SpvVaultId,
             shares);
@@ -67,6 +68,7 @@ public sealed class PayoutController : ControllerBase
 
 public sealed record ExecutePayoutRequestModel(
     Guid DistributionId,
+    Guid ContractId,
     string SpvId,
     Guid SpvVaultId,
     IReadOnlyList<ParticipantPayoutEntryModel> Shares);

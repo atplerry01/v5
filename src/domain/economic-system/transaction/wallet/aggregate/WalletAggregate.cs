@@ -11,6 +11,12 @@ public sealed class WalletAggregate : AggregateRoot
     public WalletStatus Status { get; private set; }
     public Timestamp CreatedAt { get; private set; }
 
+    // T1.2 — Event-sourced idempotency guard for RequestTransaction.
+    // Populated exclusively by applying TransactionRequestedEvent so replay
+    // restores the dedupe set deterministically; no reliance on projections.
+    private readonly HashSet<Guid> _processedRequestIds = new();
+    public IReadOnlyCollection<Guid> ProcessedRequestIds => _processedRequestIds;
+
     private WalletAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
@@ -32,18 +38,26 @@ public sealed class WalletAggregate : AggregateRoot
     // ── Behavior ─────────────────────────────────────────────────
 
     public void RequestTransaction(
+        Guid requestId,
         Guid destinationAccountId,
         Amount amount,
         Currency currency,
         Timestamp requestedAt)
     {
+        if (requestId == Guid.Empty) throw WalletErrors.InvalidRequestId();
         if (Status != WalletStatus.Active) throw WalletErrors.WalletNotActive();
         if (AccountId == Guid.Empty) throw WalletErrors.NoAccountMapped();
         if (destinationAccountId == Guid.Empty) throw WalletErrors.InvalidDestination();
         if (amount.Value <= 0m) throw WalletErrors.InvalidAmount();
 
+        // Deterministic idempotency: duplicate requestId is a no-op.
+        // Retries within the projection-lag window (or across restarts)
+        // yield a single ledger effect.
+        if (_processedRequestIds.Contains(requestId))
+            return;
+
         RaiseDomainEvent(new TransactionRequestedEvent(
-            WalletId, AccountId, destinationAccountId, amount, currency, requestedAt));
+            WalletId, requestId, AccountId, destinationAccountId, amount, currency, requestedAt));
     }
 
     // ── Apply ────────────────────────────────────────────────────
@@ -60,8 +74,11 @@ public sealed class WalletAggregate : AggregateRoot
                 CreatedAt = e.CreatedAt;
                 break;
 
-            case TransactionRequestedEvent:
-                // No state mutation — the request is a signal to the transaction context
+            case TransactionRequestedEvent e:
+                // State mutation is limited to recording the processed
+                // request id so replay rebuilds the dedupe set.
+                if (e.RequestId != Guid.Empty)
+                    _processedRequestIds.Add(e.RequestId);
                 break;
         }
     }

@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2dc59843-ce0f-4129-ac25-0334a3c417ac" name="HP@DESKTOP-R68A81K 2026-04-18 12:30:14" runUser="DESKTOP-R68A81K\HP" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-04-18T12:30:14.8511836+01:00" queuing="2026-04-18T12:30:14.8511840+01:00" start="2026-04-18T12:30:13.7376433+01:00" finish="2026-04-18T12:30:14.8549486+01:00" />
+  <TestSettings name="default" id="1a020afd-e37b-43ea-abdf-8a497a428b97">
+    <Deployment runDeploymentRoot="HP_DESKTOP-R68A81K_2026-04-18_12_30_14" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="8e187b20-43b1-4b1f-9005-ab5f490a8a07" testId="8d503e60-67f9-0a8c-3181-70fb5f382714" testName="Whycespace.Tests.Integration.EconomicSystem.Certification.DomainIntegrityTests.DI6_Deterministic_10k_Seed_Reproducible_Across_Runs" computerName="DESKTOP-R68A81K" duration="00:00:00.0384692" startTime="2026-04-18T12:30:14.7036473+01:00" endTime="2026-04-18T12:30:14.7036885+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8e187b20-43b1-4b1f-9005-ab5f490a8a07" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Whycespace.Tests.Integration.EconomicSystem.Certification.DomainIntegrityTests.DI6_Deterministic_10k_Seed_Reproducible_Across_Runs" storage="c:\projects\dev\v5\tests\integration\bin\debug\net10.0\whycespace.tests.integration.dll" id="8d503e60-67f9-0a8c-3181-70fb5f382714">
+      <Execution id="8e187b20-43b1-4b1f-9005-ab5f490a8a07" />
+      <TestMethod codeBase="C:\projects\dev\v5\tests\integration\bin\Debug\net10.0\Whycespace.Tests.Integration.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Whycespace.Tests.Integration.EconomicSystem.Certification.DomainIntegrityTests" name="DI6_Deterministic_10k_Seed_Reproducible_Across_Runs" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8d503e60-67f9-0a8c-3181-70fb5f382714" executionId="8e187b20-43b1-4b1f-9005-ab5f490a8a07" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.8.2+699d445a1a (64-bit .NET 10.0.3)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: Whycespace.Tests.Integration&#xD;
+[xUnit.net 00:00:00.17]   Discovered:  Whycespace.Tests.Integration&#xD;
+[xUnit.net 00:00:00.17]   Starting:    Whycespace.Tests.Integration&#xD;
+[xUnit.net 00:00:00.26]   Finished:    Whycespace.Tests.Integration&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

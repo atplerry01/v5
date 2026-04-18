@@ -12,6 +12,9 @@ public static class EnforcementRestrictionApplicationModule
         services.AddTransient<ApplyRestrictionHandler>();
         services.AddTransient<UpdateRestrictionHandler>();
         services.AddTransient<RemoveRestrictionHandler>();
+        // Phase 7 T7.7 — suspend/resume lifecycle handlers.
+        services.AddTransient<SuspendRestrictionHandler>();
+        services.AddTransient<ResumeRestrictionHandler>();
         return services;
     }
 
@@ -20,5 +23,7 @@ public static class EnforcementRestrictionApplicationModule
         engine.Register<ApplyRestrictionCommand, ApplyRestrictionHandler>();
         engine.Register<UpdateRestrictionCommand, UpdateRestrictionHandler>();
         engine.Register<RemoveRestrictionCommand, RemoveRestrictionHandler>();
+        engine.Register<SuspendRestrictionCommand, SuspendRestrictionHandler>();
+        engine.Register<ResumeRestrictionCommand, ResumeRestrictionHandler>();
     }
 }

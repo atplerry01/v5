@@ -63,7 +63,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../data/postgres/event-store/migrations:/docker-entrypoint-initdb.d
+      # Fan-out of canonical migration trees into /docker-entrypoint-initdb.d/.
+      # The 00-run-all.sh wrapper walks each subdirectory in lex order and
+      # applies every .sql file it finds, because postgres's own entrypoint
+      # only globs the top level and ignores subdirectories.
+      - ../data/postgres/init-runner.sh:/docker-entrypoint-initdb.d/00-run-all.sh:ro
+      - ../data/postgres/event-store/migrations:/docker-entrypoint-initdb.d/01-event-store:ro
+      - ../data/postgres/outbox/migrations:/docker-entrypoint-initdb.d/02-outbox:ro
+      - ../data/postgres/idempotency/migrations:/docker-entrypoint-initdb.d/03-idempotency:ro
+      - ../data/postgres/hsid/migrations:/docker-entrypoint-initdb.d/04-hsid:ro
     deploy:
       resources:
         limits:
@@ -93,7 +101,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - projections_data:/var/lib/postgresql/data
-      - ../data/postgres/projections:/docker-entrypoint-initdb.d/projections:ro
+      # Same fan-out pattern: runner script at 00-, projection trees under 01-.
+      - ../data/postgres/init-runner.sh:/docker-entrypoint-initdb.d/00-run-all.sh:ro
+      - ../data/postgres/projections:/docker-entrypoint-initdb.d/01-projections:ro
     deploy:
       resources:
         limits:
@@ -298,6 +308,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - whycechain_data:/var/lib/postgresql/data
+      # Same fan-out pattern as whyce-postgres above: mount the chain migrations
+      # tree plus the shared runner script.
+      - ../data/postgres/init-runner.sh:/docker-entrypoint-initdb.d/00-run-all.sh:ro
+      - ../data/postgres/chain/migrations:/docker-entrypoint-initdb.d/01-chain:ro
     deploy:
       resources:
         limits:

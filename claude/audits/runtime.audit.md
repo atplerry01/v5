@@ -236,6 +236,17 @@ This audit checks the rules defined in [`claude/guards/runtime.guard.md`](../../
 - [ ] **GE-04** — event-first architecture
 - [ ] **GE-05** — CQRS enforcement
 
+### Section 11 — Rules Promoted from new-rules/ (2026-04-18)
+
+- [ ] **RUNTIME-LAYER-PURITY-01** — `src/engines/**` does not reference `Whycespace.Runtime.*` namespace
+- [ ] **SYSTEM-ORIGIN-BYPASS-01** — `CommandContext.IsSystem` set only by `ISystemIntentDispatcher.DispatchSystemAsync`
+- [ ] **STEP-EXCEPTION-CONTRACT-01** — workflow step exceptions translated uniformly to `WorkflowStepResult.Failure`
+- [ ] **ESCAPE-HATCH-COMMITMENT-01** — escape-hatch code carries tracked deadline comment
+- [ ] **R-RT-USING-RUNTIME-01** — step/handler files carry `using Whycespace.Shared.Contracts.Runtime;`
+- [ ] **R-TEST-PATH-01** — no absolute path literals under `tests/**`
+- [ ] **R-TEST-PROJREF-01** — test projects' `ProjectReference` aligns with transitive source usage
+- [ ] **PIPELINE-CANONICAL-ANCHOR-01** — prompts referencing `/pipeline/*` verify file presence before execution
+
 ---
 
 ## Check Procedure
@@ -258,7 +269,7 @@ AUDIT:           runtime
 GUARD:           claude/guards/runtime.guard.md
 EXECUTED:        <ISO-8601>
 RULES_CHECKED:   ~180
-SECTIONS:        10
+SECTIONS:        11
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

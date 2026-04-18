@@ -67,6 +67,30 @@ public sealed class ExposureAggregate : AggregateRoot
         RaiseDomainEvent(new ExposureReducedEvent(ExposureId, amount, newTotal));
     }
 
+    // ── DetectBreach ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Phase 6 T6.5 — emits <see cref="ExposureBreachedEvent"/> when the
+    /// current TotalExposure is strictly greater than the supplied
+    /// threshold. No state mutation — breach detection is a pure signal
+    /// that downstream enforcement integration consumes. Replay-safe:
+    /// identical (TotalExposure, threshold) inputs emit identical events.
+    /// </summary>
+    public void DetectBreach(Amount threshold, Timestamp detectedAt)
+    {
+        if (Status == ExposureStatus.Closed)
+            throw ExposureErrors.AlreadyClosed();
+
+        if (threshold.Value <= 0)
+            throw ExposureErrors.InvalidExposureAmount();
+
+        if (TotalExposure.Value <= threshold.Value)
+            return;
+
+        RaiseDomainEvent(new ExposureBreachedEvent(
+            ExposureId, TotalExposure, threshold, Currency, detectedAt));
+    }
+
     // ── Close ────────────────────────────────────────────────────
 
     public void CloseExposure()

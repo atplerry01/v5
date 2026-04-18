@@ -160,7 +160,7 @@ public sealed class PostgresOutboxAdapter : IOutbox
                 """
                 INSERT INTO outbox (id, correlation_id, event_id, aggregate_id, event_type, payload, idempotency_key, topic, status, created_at)
                 VALUES (@id, @corrId, @eventId, @aggregateId, @evtType, @payload::jsonb, @idempKey, @topic, 'pending', NOW())
-                ON CONFLICT (idempotency_key) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """,
                 conn, tx);
 

@@ -42,6 +42,7 @@ public sealed class RevenueController : ControllerBase
 
         var intent = new RevenueProcessingIntent(
             revenueId,
+            p.ContractId,
             p.SpvId,
             p.VaultAccountId,
             p.Amount,
@@ -63,6 +64,7 @@ public sealed class RevenueController : ControllerBase
 // ── Request models ──────────────────────────────────────────────
 
 public sealed record ProcessRevenueRequestModel(
+    Guid ContractId,
     string SpvId,
     Guid VaultAccountId,
     decimal Amount,

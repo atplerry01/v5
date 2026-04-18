@@ -9,6 +9,7 @@ public sealed record ParticipantPayoutEntry(
 public sealed record PayoutExecutionIntent(
     Guid PayoutId,
     Guid DistributionId,
+    Guid ContractId,
     string SpvId,
     Guid SpvVaultId,
     IReadOnlyList<ParticipantPayoutEntry> Shares);

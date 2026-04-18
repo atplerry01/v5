@@ -119,6 +119,15 @@ public sealed class TestHost
     /// Build a TestHost for the Todo domain. Uses TestClock + TestIdGenerator
     /// by default; supply custom seams (e.g. a different frozen clock) for
     /// special-purpose tests.
+    ///
+    /// phase5-operational-activation + phase6-hardening: when the
+    /// <c>REAL_INFRA=true</c> environment flag is set, delegates to
+    /// <c>RealInfraTestHost.ForTodo</c> so the runtime pipeline runs
+    /// against Postgres + Kafka + Redis from the validation compose
+    /// stack instead of the in-memory adapters below. The returned
+    /// TestHost exposes the same inspection API (EventStore / Outbox /
+    /// ChainAnchor) backed by mirrored observers populated only after
+    /// the real adapters succeed — no fallback to in-memory state.
     /// </summary>
     public static TestHost ForTodo(
         IClock? clock = null,
@@ -127,6 +136,15 @@ public sealed class TestHost
         Whycespace.Shared.Contracts.Infrastructure.Policy.IPolicyEvaluator? policyEvaluator = null,
         Whycespace.Shared.Contracts.Infrastructure.Chain.IChainAnchor? chainAnchorOverride = null)
     {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("REAL_INFRA"),
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Whycespace.Tests.Integration.EconomicSystem.Shared.RealInfraTestHost.ForTodo(
+                clock, idGenerator, denyPolicy, policyEvaluator, chainAnchorOverride);
+        }
+
         clock ??= new TestClock();
         idGenerator ??= new TestIdGenerator();
         var recorder = new StageRecorder();
@@ -221,7 +239,9 @@ public sealed class TestHost
                 resolvedPolicyEvaluator,
                 idGenerator,
                 new Whycespace.Engines.T0U.WhycePolicy.PolicyDecisionEventFactory(),
-                new TestNoOpCallerIdentityAccessor()))
+                new TestNoOpCallerIdentityAccessor(),
+                clock,
+                new Whycespace.Runtime.Middleware.Policy.NullAggregateStateLoader()))
             .UseAuthorizationGuard(new AuthorizationGuardMiddleware())
             .UseIdempotency(new IdempotencyMiddleware(idempotencyStore))
             .UseExecutionGuard(new ExecutionGuardMiddleware());

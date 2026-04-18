@@ -7,10 +7,36 @@ using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Api.Controllers.Economic.Ledger.Journal;
 
-[Authorize]
+/// <summary>
+/// Phase 4.5 T4.5.2 — restricted operator surface for direct ledger journal
+/// posting. Originally exposed at <c>/api/ledger/post</c> as a general API;
+/// that path was a control-plane bypass (Phase 4 Finding 12) because it
+/// allowed any authenticated caller to post journals without the per-account
+/// limit gate enforced by the transaction lifecycle workflow.
+///
+/// Hardening (Phase 4.5):
+/// 1. **Route relocated** to <c>/internal/ledger/post</c> to signal non-public surface.
+/// 2. **Authorization tightened** to admin role only.
+/// 3. **Handler-level enforcement (T4.5.3)**: even an authenticated admin
+///    request is rejected by <c>PostJournalEntriesHandler</c>, which now
+///    requires <c>context.IsSystem == true</c>. Only the transaction
+///    lifecycle (<c>PostToLedgerStep</c>) and the payout pipeline
+///    (<c>PostLedgerJournalStep</c>) set that flag via
+///    <c>ISystemIntentDispatcher.DispatchSystemAsync</c>. The controller's
+///    <c>DispatchAsync</c> path observes <c>IsSystem == false</c> and is
+///    rejected at the engine boundary.
+///
+/// Net effect: this endpoint is unreachable for ledger mutation under the
+/// current dispatcher contract. It remains in the codebase as an explicit
+/// admin escape-hatch SHELL — to actually re-enable operator corrections,
+/// a future change must (a) introduce a dedicated operator-origin
+/// dispatcher path that sets a discrete flag AND (b) extend the handler
+/// gate to honor it. Both gates intentionally stay closed by default.
+/// </summary>
+[Authorize(Roles = "admin")]
 [ApiController]
-[Route("api/ledger")]
-[ApiExplorerSettings(GroupName = "economic.ledger.journal")]
+[Route("internal/ledger")]
+[ApiExplorerSettings(GroupName = "internal.economic.ledger.journal")]
 public sealed class JournalController : ControllerBase
 {
     private static readonly DomainRoute JournalRoute = new("economic", "ledger", "journal");
@@ -29,7 +55,13 @@ public sealed class JournalController : ControllerBase
         _clock = clock;
     }
 
-    // ── POST /api/ledger/post ────────────────────────────────────
+    // ── POST /internal/ledger/post ─────────────────────────────────────
+    //
+    // Direct ledger entry post. Restricted to admin role at the API layer
+    // and rejected at the handler layer because DispatchAsync does not set
+    // IsSystem. To use this endpoint for genuine operator corrections, a
+    // future change must extend the dispatcher / handler contract — see
+    // the class comment above.
 
     [HttpPost("post")]
     public async Task<IActionResult> PostJournalEntries(
@@ -60,8 +92,8 @@ public sealed class JournalController : ControllerBase
         return result.IsSuccess
             ? Ok(ApiResponse.Ok(new CommandAck("journal_entries_posted"), result.CorrelationId, _clock.UtcNow))
             : BadRequest(ApiResponse.Fail(
-                "economic.ledger.post_failed",
-                result.Error ?? "Unknown error",
+                "economic.ledger.post_rejected",
+                result.Error ?? "Direct ledger post rejected by control-plane origin gate.",
                 _clock.UtcNow));
     }
 

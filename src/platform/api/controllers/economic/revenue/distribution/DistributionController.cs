@@ -47,6 +47,7 @@ public sealed class DistributionController : ControllerBase
 
         var intent = new DistributionCreationIntent(
             distributionId,
+            p.ContractId,
             p.SpvId,
             p.TotalAmount,
             allocations);
@@ -66,6 +67,7 @@ public sealed class DistributionController : ControllerBase
 // ── Request models ──────────────────────────────────────────────
 
 public sealed record CreateDistributionRequestModel(
+    Guid ContractId,
     string SpvId,
     decimal TotalAmount,
     IReadOnlyList<AllocationRequestModel> Allocations);

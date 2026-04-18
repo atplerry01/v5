@@ -11,6 +11,10 @@ public sealed class LedgerAggregateTests
     private static readonly Timestamp OpenedAt   = new(new DateTimeOffset(2026, 4, 16, 12, 0, 0, TimeSpan.Zero));
     private static readonly Timestamp AppendedAt = new(new DateTimeOffset(2026, 4, 16, 12, 5, 0, TimeSpan.Zero));
 
+    private static readonly Amount Debit100  = new(100m);
+    private static readonly Amount Credit100 = new(100m);
+    private static readonly Amount ZeroAmt   = new(0m);
+
     private static LedgerAggregate NewLedger(string seed, string currency = "USD")
     {
         var ledgerId = new LedgerId(IdGen.Generate($"LedgerAggregateTests:{seed}:ledger"));
@@ -35,12 +39,14 @@ public sealed class LedgerAggregateTests
         ledger.ClearDomainEvents();
         var journalId = IdGen.Generate("LedgerAggregateTests:Append_Valid:journal");
 
-        ledger.AppendJournal(journalId, AppendedAt);
+        ledger.AppendJournal(journalId, Debit100, Credit100, AppendedAt);
 
         Assert.Equal(2, ledger.DomainEvents.Count);
         var appended = Assert.IsType<JournalAppendedToLedgerEvent>(ledger.DomainEvents[0]);
         Assert.Equal(ledger.LedgerId, appended.LedgerId);
         Assert.Equal(journalId, appended.JournalId);
+        Assert.Equal(100m, appended.TotalDebit.Value);
+        Assert.Equal(100m, appended.TotalCredit.Value);
         Assert.Equal(AppendedAt, appended.AppendedAt);
 
         var updated = Assert.IsType<LedgerUpdatedEvent>(ledger.DomainEvents[1]);
@@ -54,10 +60,10 @@ public sealed class LedgerAggregateTests
     {
         var ledger = NewLedger("Append_Duplicate");
         var journalId = IdGen.Generate("LedgerAggregateTests:Append_Duplicate:journal");
-        ledger.AppendJournal(journalId, AppendedAt);
+        ledger.AppendJournal(journalId, Debit100, Credit100, AppendedAt);
 
         var ex = Assert.ThrowsAny<DomainException>(() =>
-            ledger.AppendJournal(journalId, AppendedAt));
+            ledger.AppendJournal(journalId, Debit100, Credit100, AppendedAt));
         Assert.Contains(journalId.ToString(), ex.Message);
     }
 
@@ -67,7 +73,47 @@ public sealed class LedgerAggregateTests
         var ledger = NewLedger("Append_Empty");
 
         Assert.ThrowsAny<Exception>(() =>
-            ledger.AppendJournal(Guid.Empty, AppendedAt));
+            ledger.AppendJournal(Guid.Empty, Debit100, Credit100, AppendedAt));
+    }
+
+    [Fact]
+    public void AppendJournal_Unbalanced_Throws_AndEmitsNoEvent()
+    {
+        var ledger = NewLedger("Append_Unbalanced");
+        ledger.ClearDomainEvents();
+        var journalId = IdGen.Generate("LedgerAggregateTests:Append_Unbalanced:journal");
+
+        var ex = Assert.ThrowsAny<DomainException>(() =>
+            ledger.AppendJournal(journalId, new Amount(100m), new Amount(80m), AppendedAt));
+        Assert.Contains("unbalanced", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(ledger.DomainEvents);
+        Assert.Empty(ledger.Journals);
+    }
+
+    [Fact]
+    public void AppendJournal_NegativeTotal_Throws()
+    {
+        var ledger = NewLedger("Append_Negative");
+        var journalId = IdGen.Generate("LedgerAggregateTests:Append_Negative:journal");
+
+        Assert.ThrowsAny<DomainException>(() =>
+            ledger.AppendJournal(journalId, new Amount(-5m), new Amount(-5m), AppendedAt));
+    }
+
+    [Fact]
+    public void AppendJournal_MultipleBalancedJournals_CumulativeInvariantHolds()
+    {
+        var ledger = NewLedger("Append_Cumulative");
+        var j1 = IdGen.Generate("LedgerAggregateTests:Append_Cumulative:j1");
+        var j2 = IdGen.Generate("LedgerAggregateTests:Append_Cumulative:j2");
+
+        ledger.AppendJournal(j1, new Amount(100m), new Amount(100m), AppendedAt);
+        ledger.AppendJournal(j2, new Amount(50m),  new Amount(50m),  AppendedAt);
+
+        var cumulativeDebit = ledger.Journals.Sum(j => j.TotalDebit.Value);
+        var cumulativeCredit = ledger.Journals.Sum(j => j.TotalCredit.Value);
+        Assert.Equal(150m, cumulativeDebit);
+        Assert.Equal(150m, cumulativeCredit);
     }
 
     [Fact]
@@ -79,7 +125,7 @@ public sealed class LedgerAggregateTests
         var history = new object[]
         {
             new LedgerOpenedEvent(ledgerId, new Currency("USD"), OpenedAt),
-            new JournalAppendedToLedgerEvent(ledgerId, journalId, AppendedAt),
+            new JournalAppendedToLedgerEvent(ledgerId, journalId, Debit100, Credit100, AppendedAt),
             new LedgerUpdatedEvent(ledgerId, journalId, 1, AppendedAt)
         };
 
@@ -91,6 +137,8 @@ public sealed class LedgerAggregateTests
         Assert.Equal(OpenedAt, aggregate.OpenedAt);
         Assert.Single(aggregate.Journals);
         Assert.Equal(journalId, aggregate.Journals[0].JournalId);
+        Assert.Equal(100m, aggregate.Journals[0].TotalDebit.Value);
+        Assert.Equal(100m, aggregate.Journals[0].TotalCredit.Value);
         Assert.Empty(aggregate.DomainEvents);
     }
 
@@ -123,9 +171,9 @@ public sealed class LedgerAggregateTests
         var j2 = IdGen.Generate("LedgerAggregateTests:Append_Many:j2");
         var j3 = IdGen.Generate("LedgerAggregateTests:Append_Many:j3");
 
-        ledger.AppendJournal(j1, AppendedAt);
-        ledger.AppendJournal(j2, AppendedAt);
-        ledger.AppendJournal(j3, AppendedAt);
+        ledger.AppendJournal(j1, Debit100, Credit100, AppendedAt);
+        ledger.AppendJournal(j2, Debit100, Credit100, AppendedAt);
+        ledger.AppendJournal(j3, Debit100, Credit100, AppendedAt);
 
         Assert.Equal(3, ledger.Journals.Count);
         Assert.Equal(j1, ledger.Journals[0].JournalId);

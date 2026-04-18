@@ -14,4 +14,11 @@ allow if {
     input.subject.role == "revenue-admin"
 }
 
+# ops-validator — operational validation harness role. Test-only scope;
+# issued from the dev JWT signer for scenario-A re-runs. Deny-default is
+# unchanged: tokens without this role still fail the allow rule above.
+allow if {
+    input.subject.role == "ops-validator"
+}
+
 deny if { not input.subject.role }

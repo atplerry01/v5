@@ -82,3 +82,5 @@ lets execute the prompt @/validation-prompt.md
 
 
 STAGE E9 - WORKFLOW DEFFER
+Solid Cross domain use case
+FINANCIAL GRADE SYSTEM

@@ -21,6 +21,9 @@ public sealed class ValidateRevenueStep : IWorkflowStep
         if (intent.RevenueId == Guid.Empty)
             return Task.FromResult(WorkflowStepResult.Failure("RevenueId is required."));
 
+        if (intent.ContractId == Guid.Empty)
+            return Task.FromResult(WorkflowStepResult.Failure("ContractId is required."));
+
         if (string.IsNullOrWhiteSpace(intent.SpvId))
             return Task.FromResult(WorkflowStepResult.Failure("SpvId is required."));
 
@@ -36,6 +39,7 @@ public sealed class ValidateRevenueStep : IWorkflowStep
         var state = new RevenueWorkflowState
         {
             RevenueId = intent.RevenueId,
+            ContractId = intent.ContractId,
             SpvId = intent.SpvId,
             VaultAccountId = intent.VaultAccountId,
             Amount = intent.Amount,

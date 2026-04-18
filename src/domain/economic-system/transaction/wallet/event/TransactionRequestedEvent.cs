@@ -5,6 +5,7 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Wallet;
 
 public sealed record TransactionRequestedEvent(
     WalletId WalletId,
+    Guid RequestId,
     Guid AccountId,
     Guid DestinationAccountId,
     Amount Amount,

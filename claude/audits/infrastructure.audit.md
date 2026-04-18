@@ -127,6 +127,14 @@ This audit checks the rules defined in [`claude/guards/infrastructure.guard.md`]
 - [ ] **GE-04** — event-first architecture
 - [ ] **GE-05** — CQRS enforcement
 
+### Section 8 — Rules Promoted from new-rules/ (2026-04-18)
+
+- [ ] **INFRA-EVENT-FABRIC-01** — Kafka publish whitelist; direct `IProducer<>` use outside `KafkaOutboxPublisher` is sanctioned-exception-only
+- [ ] **BACKFILL-PORTABILITY-01** — backfill scripts avoid locked-down extensions (`dblink`, `postgres_fdw`) or emit clear fallback message
+- [ ] **OPS-VAL-001** — `kafka-init` completes before host services publish/consume; R-K-20 startup guard fails fast on mismatch
+- [ ] **OPS-VAL-002** — controller parse/conversion errors return `400 BadRequest`, never unhandled `500`
+- [ ] **OPS-VAL-004** — OpenAPI schema endpoint operational or alternate documented
+
 ---
 
 ## Check Procedure
@@ -150,7 +158,7 @@ AUDIT:           infrastructure
 GUARD:           claude/guards/infrastructure.guard.md
 EXECUTED:        <ISO-8601>
 RULES_CHECKED:   ~65
-SECTIONS:        7
+SECTIONS:        8
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

@@ -1518,3 +1518,24 @@ This canonical guard absorbs the following source files:
 2. **DG-R5 platform permission on domain** (cross-reference only; authoritative rule lives in `runtime.guard.md` §Dependency Graph). Prior `platform.guard.md` G-PLATFORM-07 permitted `platform/host → domain` for DI registration; `dependency-graph.guard.md` DG-R5-HOST-DOMAIN-FORBIDDEN (2026-04-08) strengthens this to a prohibition. The strengthened rule is authoritative — see `runtime.guard.md` §Dependency Graph & Layer Boundaries.
 3. **Workflow placement vs engine isolation.** `WF-PLACEMENT-01` mandates workflow execution in T1M engines while `DG-R2` forbids engines from referencing runtime. These are compatible (engines own workflow execution; runtime orchestrates around them), but the interaction warrants audit attention.
 4. **`X-RULES` prefix collision in economic guard** between Exposure (section earlier in the source) and Exchange (section later). The canonical text has been preserved verbatim; audit procedures should disambiguate by section context (Exposure X1..X5 vs Exchange X1..X5 are distinct rule sets).
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-18)
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-18. Rule IDs are indexed in `claude/audits/domain.audit.md`.
+
+### RUNBOOK-CONTROL-PLANE-COVERAGE-01 — Runbook Sync on Route Changes
+
+Definition:
+When a public route is restricted or removed, the same PR MUST update every operator runbook (`*.md` under repo root, `docs/`, and project-topic/audit references) that names the route. Static check: grep changed routes against runbook files in CI; warn on uncovered references.
+
+Enforcement:
+CI job: diff the PR's route changes against all `*.md` files under `docs/**` and `claude/project-topics/**`; any uncovered route string reference = warn (S2 fail once stabilised).
+
+Severity:
+S2
+
+References:
+- CLAUDE.md $1b (post-execution audit sweep)
+- Source: `claude/new-rules/20260417-122320-economic-system-phase4-5-final-residual.md`

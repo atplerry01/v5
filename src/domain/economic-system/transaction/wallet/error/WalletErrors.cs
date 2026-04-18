@@ -23,6 +23,9 @@ public static class WalletErrors
     public static DomainException InvalidDestination() =>
         new("Destination account must be specified.");
 
+    public static DomainException InvalidRequestId() =>
+        new("RequestId (idempotency key) cannot be empty.");
+
     public static DomainInvariantViolationException WalletMustHaveAccount() =>
         new("Invariant violated: active wallet must be mapped to an account.");
 }

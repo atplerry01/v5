@@ -34,4 +34,37 @@ public static class JournalErrors
 
     public static DomainInvariantViolationException NegativeEntryAmount()
         => new("Invariant violated: journal entry amount cannot be negative.");
+
+    public static DomainException ControlPlaneOriginRequired()
+        => new("Ledger journal posts must originate from an approved control plane " +
+               "(transaction lifecycle workflow OR revenue payout pipeline). Direct API " +
+               "or user-originated dispatches are rejected (Phase 4.5 T4.5.3).");
+
+    // ── Phase 7 T7.4 — compensation invariants ───────────────────────
+    public static DomainException CompensationReferenceRequired()
+        => new("A Kind=Compensating journal requires a non-empty CompensationReference at creation.");
+
+    public static DomainException CompensatingJournalCannotReferenceSelf()
+        => new("CompensationReference.OriginalJournalId must differ from the compensating JournalId.");
+
+    public static DomainInvariantViolationException CompensationMissingForCompensatingKind()
+        => new("Invariant violated: Kind=Compensating requires a non-null CompensationReference.");
+
+    public static DomainInvariantViolationException CompensationSetForStandardKind()
+        => new("Invariant violated: Kind=Standard must not carry a CompensationReference.");
+
+    public static DomainException OriginalJournalNotFound(Guid originalJournalId)
+        => new($"Cannot post a compensating journal: original journal {originalJournalId} has no event history.");
+
+    public static DomainException OriginalJournalNotPosted(Guid originalJournalId)
+        => new($"Cannot post a compensating journal: original journal {originalJournalId} is not in Posted status.");
+
+    public static DomainException OriginalJournalAlreadyCompensating(Guid originalJournalId)
+        => new($"Cannot post a compensating journal against {originalJournalId}: the referenced journal is itself Kind=Compensating. Reflexive compensation is forbidden.");
+
+    public static DomainException CompensationTotalsMismatch(
+        Guid originalJournalId,
+        decimal originalTotal,
+        decimal compensatingTotal)
+        => new($"Compensating journal totals {compensatingTotal} do not match original journal {originalJournalId} totals {originalTotal}. Reversal is not value-symmetric.");
 }

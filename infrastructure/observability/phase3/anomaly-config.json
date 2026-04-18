@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "classification": "phase3-resilience",
+  "context": "economic-system",
+  "thresholds": {
+    "latency_p95_ms": {
+      "warning": 500.0,
+      "critical": 1000.0
+    },
+    "latency_p99_ms": {
+      "warning": 1000.0,
+      "critical": 2000.0
+    },
+    "error_rate": {
+      "warning": 0.001,
+      "critical": 0.01
+    },
+    "latency_spike_multiplier": {
+      "warning": 3.0,
+      "critical": 5.0
+    },
+    "error_burst_window_seconds": 60,
+    "error_burst_count": {
+      "warning": 3,
+      "critical": 5
+    },
+    "soak_memory_growth_per_hour_pct": {
+      "warning": 10.0,
+      "critical": 25.0
+    },
+    "soak_latency_degradation_ratio": {
+      "warning": 1.5,
+      "critical": 2.0
+    }
+  }
+}

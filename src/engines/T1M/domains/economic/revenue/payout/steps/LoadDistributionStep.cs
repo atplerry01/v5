@@ -30,6 +30,9 @@ public sealed class LoadDistributionStep : IWorkflowStep
         if (intent.DistributionId == Guid.Empty)
             return Task.FromResult(WorkflowStepResult.Failure("DistributionId is required."));
 
+        if (intent.ContractId == Guid.Empty)
+            return Task.FromResult(WorkflowStepResult.Failure("ContractId is required."));
+
         if (string.IsNullOrWhiteSpace(intent.SpvId))
             return Task.FromResult(WorkflowStepResult.Failure("SpvId is required."));
 
@@ -53,6 +56,8 @@ public sealed class LoadDistributionStep : IWorkflowStep
         {
             PayoutId = intent.PayoutId,
             DistributionId = intent.DistributionId,
+            ContractId = intent.ContractId,
+            IdempotencyKey = $"payout|{intent.DistributionId:N}|{intent.SpvId}",
             SpvId = intent.SpvId,
             SpvVaultId = intent.SpvVaultId,
             Shares = intent.Shares,

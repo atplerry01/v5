@@ -126,10 +126,36 @@ Financial truth layer implementing a fully deterministic, append-only, double-en
   — a thin event-to-command adapter sits between the two domains to preserve
   bounded-context isolation.
 
-## E1 -> EX Execution Path (Phase 2)
-1. `LedgerController` (POST /api/ledger/post) receives `PostJournalEntriesRequestModel`.
-2. Controller derives deterministic `JournalId` and per-entry `EntryId` via `IIdGenerator`.
-3. Builds `PostJournalEntriesCommand` (Whycespace.Shared.Contracts.Economic.Ledger.Journal).
+## Execution Paths (Phase 4.5 — control-plane gated)
+
+Every `PostJournalEntriesCommand` is gated at the engine boundary:
+`PostJournalEntriesHandler` rejects any dispatch with `context.IsSystem == false`.
+Only the two paths below set that flag (via `DispatchSystemAsync`); every other
+caller fails closed with `JournalErrors.ControlPlaneOriginRequired`.
+
+### Canonical path 1 — Transaction lifecycle (Phase 4)
+1. Caller posts `TransactionLifecycleIntent` to start `economic.transaction.lifecycle`.
+2. Workflow runs: ValidateLifecycleIntent → ExecuteInstruction → InitiateTransaction
+   → CheckLimit → InitiateSettlement → FxLock → PostToLedger.
+3. `PostToLedgerStep` builds the balanced journal and dispatches
+   `PostJournalEntriesCommand` via `ISystemIntentDispatcher.DispatchSystemAsync`
+   on route `economic/ledger/journal`. `IsSystem == true` → handler accepts.
+
+### Canonical path 2 — Revenue payout (Phase 3)
+1. Revenue → Distribution → Payout pipeline produces vault movements.
+2. `PostLedgerJournalStep` dispatches `PostJournalEntriesCommand` via
+   `DispatchSystemAsync` after a successful payout. `IsSystem == true` →
+   handler accepts.
+
+### Restricted operator surface — `JournalController`
+`POST /internal/ledger/post`. `[Authorize(Roles = "admin")]`. Currently
+unreachable for ledger mutation because the controller uses `DispatchAsync`
+(not `DispatchSystemAsync`), so `context.IsSystem == false` and the handler
+rejects. Retained as a documented escape-hatch shell — to actually re-enable
+operator corrections, extend the dispatcher / handler contract with an
+explicit operator-origin flag.
+
+## Handler execution
 4. Dispatches via `ISystemIntentDispatcher` on route `economic/ledger/journal`.
 5. `PostJournalEntriesHandler` (T2E, Whycespace.Engines.T2E.Economic.Ledger.Journal):
    - Creates `JournalAggregate`, adds entries, posts (enforces debit==credit).

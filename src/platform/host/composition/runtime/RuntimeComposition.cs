@@ -113,13 +113,16 @@ public static class RuntimeComposition
                 sp.GetRequiredService<IPolicyEvaluator>(),
                 sp.GetRequiredService<IIdGenerator>(),
                 sp.GetRequiredService<IPolicyDecisionEventFactory>(),
-                sp.GetRequiredService<ICallerIdentityAccessor>());
+                sp.GetRequiredService<ICallerIdentityAccessor>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<IAggregateStateLoader>());
 
             var idempotencyMiddleware = new IdempotencyMiddleware(
                 sp.GetRequiredService<IIdempotencyStore>());
 
             return new RuntimeControlPlaneBuilder()
-                .UseTracing(new TracingMiddleware())
+                .UseTracing(new TracingMiddleware(
+                    sp.GetService<Microsoft.Extensions.Logging.ILogger<TracingMiddleware>>()))
                 .UseMetrics(new Whycespace.Runtime.Middleware.Observability.MetricsMiddleware())
                 .UseContextGuard(new ContextGuardMiddleware())
                 .UseValidation(new ValidationMiddleware())
@@ -128,7 +131,11 @@ public static class RuntimeComposition
                 .UseIdempotency(idempotencyMiddleware)
                 .UseExecutionGuard(new ExecutionGuardMiddleware(
                     sp.GetService<Whycespace.Shared.Contracts.Enforcement.IViolationStateQuery>(),
-                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IEscalationStateQuery>()))
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IEscalationStateQuery>(),
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IRestrictionStateQuery>(),
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.ILockStateQuery>(),
+                    sp.GetService<Whycespace.Shared.Contracts.Enforcement.IEnforcementDecisionCache>(),
+                    sp.GetService<Microsoft.Extensions.Logging.ILogger<ExecutionGuardMiddleware>>()))
                 .Build();
         });
 

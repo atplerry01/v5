@@ -37,9 +37,22 @@ public sealed class LimitAggregate : AggregateRoot
 
     // ── Behavior ─────────────────────────────────────────────────
 
-    public void Check(Guid transactionId, Amount transactionAmount, Timestamp checkedAt)
+    public void Check(
+        Guid transactionId,
+        Amount transactionAmount,
+        Timestamp checkedAt,
+        int expectedVersion = -1)
     {
         if (Status != LimitStatus.Active) throw LimitErrors.LimitNotActive();
+
+        // T1.3 — Aggregate-level concurrency guard. When the caller supplies
+        // an expected version (the version they observed when building the
+        // command), reject if the aggregate has advanced. Two concurrent
+        // checks cannot both pass at the limit boundary: the second command
+        // that reaches this handler sees the first's LimitCheckedEvent
+        // already applied and fails deterministically.
+        if (expectedVersion >= 0 && Version != expectedVersion)
+            throw LimitErrors.ConcurrencyConflict(expectedVersion, Version);
 
         var projectedUtilization = CurrentUtilization.Value + transactionAmount.Value;
 

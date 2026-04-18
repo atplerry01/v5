@@ -21,4 +21,21 @@ public static class RestrictionErrors
 
     public static DomainInvariantViolationException OrphanRestriction() =>
         new("Invariant violated: restriction must reference a subject.");
+
+    // ── Phase 7 T7.6/T7.7 — cause-coupling + suspend/resume lifecycle ──
+
+    public static DomainException CauseRequired() =>
+        new("Restriction requires a non-null EnforcementCause (Phase 7 T7.6).");
+
+    public static DomainException CannotUpdateSuspendedRestriction() =>
+        new("Cannot update a suspended restriction — resume it first or remove.");
+
+    public static DomainException CannotSuspendNonAppliedRestriction(RestrictionStatus current) =>
+        new($"Restriction can only be suspended from Applied state (was {current}).");
+
+    public static DomainException CannotResumeNonSuspendedRestriction(RestrictionStatus current) =>
+        new($"Restriction can only be resumed from Suspended state (was {current}).");
+
+    public static DomainInvariantViolationException CauseMissingOnActiveRestriction() =>
+        new("Invariant violated: an Applied or Suspended restriction must carry a non-null Cause.");
 }

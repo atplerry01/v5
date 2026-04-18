@@ -60,8 +60,16 @@ public sealed class WalletController : ControllerBase
     {
         var p = request.Data;
         var now = _clock.UtcNow;
+        // T1.2 — Deterministic idempotency key. Client may supply a RequestId
+        // so retries deduplicate against the aggregate's processed set; when
+        // absent we seed deterministically so same (wallet, destination,
+        // amount, currency) within a window stays idempotent.
+        var requestId = p.RequestId != Guid.Empty
+            ? p.RequestId
+            : _idGenerator.Generate(
+                $"economic:transaction:wallet:{walletId}:{p.DestinationAccountId}:{p.Amount}:{p.Currency}");
         var command = new RequestWalletTransactionCommand(
-            walletId, p.DestinationAccountId, p.Amount, p.Currency, now);
+            walletId, requestId, p.DestinationAccountId, p.Amount, p.Currency, now);
 
         var result = await _dispatcher.DispatchAsync(command, WalletRoute, cancellationToken);
 
@@ -80,4 +88,5 @@ public sealed record CreateWalletRequestModel(
 public sealed record RequestWalletTransactionRequestModel(
     Guid DestinationAccountId,
     decimal Amount,
-    string Currency);
+    string Currency,
+    Guid RequestId = default);

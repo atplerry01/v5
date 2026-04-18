@@ -1,0 +1,3 @@
+Phase 2 validation reports destination.
+
+scripts/validate.sh writes validation-report.json + logs/{run-tag}/*.log and *.trx here.

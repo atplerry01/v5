@@ -7,6 +7,11 @@ namespace Whycespace.Domain.EconomicSystem.Revenue.Distribution;
 /// computed from CapitalAllocationAggregate ownership percentages supplied
 /// by the caller — this aggregate does not mutate the vault. Invariant:
 /// Sum(Percentage) across shares must equal 100.
+///
+/// State machine:
+///   Created -> Confirmed -> Paid -> CompensationRequested -> Compensated
+///   Created -> Confirmed -> Failed -> CompensationRequested -> Compensated
+/// Compensated is terminal and irreversible (Phase 7 T7.2).
 /// </summary>
 public sealed class DistributionAggregate : AggregateRoot
 {
@@ -20,10 +25,6 @@ public sealed class DistributionAggregate : AggregateRoot
 
     private DistributionAggregate() { }
 
-    /// <summary>
-    /// Creates a distribution. Each allocation pair is (participantId, ownershipPercentage);
-    /// the share amount is computed as totalAmount * (ownershipPercentage / 100).
-    /// </summary>
     public static DistributionAggregate CreateDistribution(
         DistributionId distributionId,
         string spvId,
@@ -69,6 +70,79 @@ public sealed class DistributionAggregate : AggregateRoot
         return aggregate;
     }
 
+    public void Confirm(Timestamp confirmedAt)
+    {
+        if (Status == DistributionStatus.Confirmed)
+            throw DistributionErrors.AlreadyConfirmed();
+        if (Status != DistributionStatus.Created)
+            throw DistributionErrors.InvalidTransition(Status, DistributionStatus.Confirmed);
+
+        RaiseDomainEvent(new DistributionConfirmedEvent(
+            DistributionId.Value.ToString(),
+            confirmedAt));
+    }
+
+    public void MarkPaid(string payoutId, Timestamp paidAt)
+    {
+        if (string.IsNullOrWhiteSpace(payoutId))
+            throw DistributionErrors.PayoutIdRequired();
+        if (Status != DistributionStatus.Confirmed)
+            throw DistributionErrors.InvalidTransition(Status, DistributionStatus.Paid);
+
+        RaiseDomainEvent(new DistributionPaidEvent(
+            DistributionId.Value.ToString(),
+            payoutId,
+            paidAt));
+    }
+
+    public void MarkFailed(string reason, Timestamp failedAt)
+    {
+        if (Status == DistributionStatus.Paid || Status == DistributionStatus.Failed)
+            throw DistributionErrors.AlreadyTerminal();
+
+        RaiseDomainEvent(new DistributionFailedEvent(
+            DistributionId.Value.ToString(),
+            reason ?? string.Empty,
+            failedAt));
+    }
+
+    public void RequestCompensation(string originalPayoutId, string reason, Timestamp requestedAt)
+    {
+        if (string.IsNullOrWhiteSpace(originalPayoutId))
+            throw DistributionErrors.CompensationCorrelationRequired();
+
+        if (Status == DistributionStatus.Compensated || Status == DistributionStatus.CompensationRequested)
+            throw DistributionErrors.AlreadyCompensated();
+
+        if (Status != DistributionStatus.Paid && Status != DistributionStatus.Failed)
+            throw DistributionErrors.CompensationNotAllowed(Status);
+
+        RaiseDomainEvent(new DistributionCompensationRequestedEvent(
+            DistributionId.Value.ToString(),
+            originalPayoutId,
+            reason ?? string.Empty,
+            requestedAt));
+    }
+
+    public void MarkCompensated(string originalPayoutId, string compensatingJournalId, Timestamp compensatedAt)
+    {
+        if (string.IsNullOrWhiteSpace(originalPayoutId))
+            throw DistributionErrors.CompensationCorrelationRequired();
+        if (string.IsNullOrWhiteSpace(compensatingJournalId))
+            throw DistributionErrors.CompensatingJournalIdRequired();
+
+        if (Status == DistributionStatus.Compensated)
+            throw DistributionErrors.AlreadyCompensated();
+        if (Status != DistributionStatus.CompensationRequested)
+            throw DistributionErrors.CompensationNotRequested();
+
+        RaiseDomainEvent(new DistributionCompensatedEvent(
+            DistributionId.Value.ToString(),
+            originalPayoutId,
+            compensatingJournalId,
+            compensatedAt));
+    }
+
     protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
@@ -78,6 +152,21 @@ public sealed class DistributionAggregate : AggregateRoot
                 SpvId = e.SpvId;
                 TotalAmount = e.TotalAmount;
                 Status = DistributionStatus.Created;
+                break;
+            case DistributionConfirmedEvent:
+                Status = DistributionStatus.Confirmed;
+                break;
+            case DistributionPaidEvent:
+                Status = DistributionStatus.Paid;
+                break;
+            case DistributionFailedEvent:
+                Status = DistributionStatus.Failed;
+                break;
+            case DistributionCompensationRequestedEvent:
+                Status = DistributionStatus.CompensationRequested;
+                break;
+            case DistributionCompensatedEvent:
+                Status = DistributionStatus.Compensated;
                 break;
         }
     }

@@ -1,0 +1,1 @@
+ctx=capital method=POST path=/api/capital/account/open http=200 body_size=216

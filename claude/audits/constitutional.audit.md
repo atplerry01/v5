@@ -137,6 +137,10 @@ This audit checks rules defined in [`claude/guards/constitutional.guard.md`](../
 - [ ] **GE-04** — event-first architecture
 - [ ] **GE-05** — CQRS enforcement
 
+### Section 9 — Rules Promoted from new-rules/ (2026-04-18)
+
+- [ ] **OPS-VAL-003** — outbox row determinism on duplicate command (HSID invocation-unique salt OR duplicate short-circuit before outbox insert)
+
 ---
 
 ## Check Procedure
@@ -159,7 +163,7 @@ AUDIT:           constitutional
 GUARD:           claude/guards/constitutional.guard.md
 EXECUTED:        <ISO-8601>
 RULES_CHECKED:   ~70
-SECTIONS:        8
+SECTIONS:        9
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

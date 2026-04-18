@@ -1,6 +1,7 @@
 using Whycespace.Domain.EconomicSystem.Transaction.Instruction;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Transaction.Instruction;
+
 using Whycespace.Shared.Contracts.Engine;
 
 namespace Whycespace.Engines.T2E.Economic.Transaction.Instruction;
@@ -11,6 +12,8 @@ public sealed class ExecuteInstructionHandler : IEngine
     {
         if (context.Command is not ExecuteInstructionCommand cmd)
             return;
+
+        EnforcementGuard.RequireNotRestricted(context.EnforcementConstraint, context.IsSystem);
 
         var aggregate = (TransactionInstructionAggregate)await context.LoadAggregateAsync(typeof(TransactionInstructionAggregate));
 

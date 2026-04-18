@@ -8,6 +8,7 @@ public sealed record WalletCreatedEventSchema(
 
 public sealed record TransactionRequestedEventSchema(
     Guid AggregateId,
+    Guid RequestId,
     Guid SourceAccountId,
     Guid DestinationAccountId,
     decimal Amount,
