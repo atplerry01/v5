@@ -74,7 +74,7 @@ WHYCEPOLICY > WBSM v3 Architecture > This Rule Set > Prompt Instructions.
 # Project Architecture
 
 Source architecture under `src/`:
-- `domain/` — Pure DDD bounded contexts, three-level nesting: `{classification}/{context}/{domain}/`
+- `domain/` — Pure DDD bounded contexts, three-or-four-level nesting: `{classification}/{context}/[{domain-group}/]{domain}/` (per-context choice; see `domain.guard.md` DS-R3 / DS-R3a)
 - `engines/` — Engine layer
 - `platform/` — Platform APIs
 - `projections/` — CQRS read models (consumes events, produces read models)
@@ -90,4 +90,4 @@ Claude orchestration under `claude/`:
 - `project-topics/`, `traceability/` — Supporting tracking artifacts.
 - `agents/`, `prompts/`, `registry/`, `templates/`, `workflows/` — Supporting orchestration assets. Note: `prompts/` is a legacy supporting directory and is NOT the canonical prompt store; per $2, all new prompts go to `project-prompts/`.
 
-All domain work must respect the classification > context > domain three-level nesting. Domain layer has zero external dependencies. Projections are strictly separated from domain.
+All domain work must respect the canonical nesting `classification > context > [domain-group] > domain` — three-level by default, four-level when a context's domains require semantic grouping (per-context choice; see `domain.guard.md` DS-R3 / DS-R3a). `DomainRoute` is and remains a three-tuple `(classification, context, domain)` regardless of physical depth. Domain layer has zero external dependencies. Projections are strictly separated from domain.

@@ -39,23 +39,38 @@ public sealed class PostToLedgerStep : IWorkflowStep
     private readonly IIdGenerator _idGenerator;
     private readonly IEconomicMetrics _metrics;
     private readonly IRecoveryQueue? _recoveryQueue;
+    private readonly IRetryExecutor? _retryExecutor;
 
     public PostToLedgerStep(
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
         IEconomicMetrics metrics)
-        : this(dispatcher, idGenerator, metrics, null) { }
+        : this(dispatcher, idGenerator, metrics, null, null) { }
 
     public PostToLedgerStep(
         ISystemIntentDispatcher dispatcher,
         IIdGenerator idGenerator,
         IEconomicMetrics metrics,
         IRecoveryQueue? recoveryQueue)
+        : this(dispatcher, idGenerator, metrics, recoveryQueue, null) { }
+
+    // R2.A.2 (2026-04-19) — canonical retry executor injected. When null,
+    // the step falls back to the legacy in-line loop to preserve behavior
+    // in unit tests or hosts that haven't registered the executor yet.
+    // The host DI registration in CoreComposition makes this non-null by
+    // default.
+    public PostToLedgerStep(
+        ISystemIntentDispatcher dispatcher,
+        IIdGenerator idGenerator,
+        IEconomicMetrics metrics,
+        IRecoveryQueue? recoveryQueue,
+        IRetryExecutor? retryExecutor)
     {
         _dispatcher = dispatcher;
         _idGenerator = idGenerator;
         _metrics = metrics;
         _recoveryQueue = recoveryQueue;
+        _retryExecutor = retryExecutor;
     }
 
     public string Name => TransactionLifecycleSteps.PostToLedger;
@@ -94,34 +109,91 @@ public sealed class PostToLedgerStep : IWorkflowStep
             state.JournalId,
             entries);
 
-        // Graduated retry loop with backoff.
-        string? lastError = null;
-        for (var attempt = 1; attempt <= Retry.MaxAttempts; attempt++)
-        {
-            // Backoff delay before retry (no delay on first attempt).
-            var delayMs = Retry.GetDelayMs(attempt);
-            if (delayMs > 0)
-                await Task.Delay(delayMs, cancellationToken);
+        // R2.A.2 — canonical retry via IRetryExecutor. Replay-deterministic
+        // (clock + seeded jitter), category-driven eligibility (R-RETRY-CAT-01),
+        // bounded attempts (R-RETRY-CAP-01), full evidence trail
+        // (R-RETRY-EVIDENCE-01). Legacy fallback path preserved for hosts /
+        // tests that don't inject the executor.
+        string? lastError;
+        bool isPermanent;
 
-            var result = await _dispatcher.DispatchSystemAsync(command, LedgerRoute, cancellationToken);
-            if (result.IsSuccess)
+        if (_retryExecutor is not null)
+        {
+            var retryCtx = new RetryOperationContext
+            {
+                OperationId = $"{state.JournalId:N}:post-ledger",
+                Policy = Retry,
+                OperationName = "post-to-ledger"
+            };
+
+            var retryResult = await _retryExecutor.ExecuteAsync<CommandResult>(
+                retryCtx,
+                async (attempt, ct) =>
+                {
+                    var result = await _dispatcher.DispatchSystemAsync(command, LedgerRoute, ct);
+                    if (result.IsSuccess)
+                        return RetryStepResult<CommandResult>.Success(result);
+
+                    // Prefer the canonical category set by R1 Batch 3.5 middleware
+                    // wiring. Fall back to ExecutionFailure (retryable default)
+                    // for legacy callers that haven't been uplifted yet.
+                    var category = result.FailureCategory ?? RuntimeFailureCategory.ExecutionFailure;
+                    return RetryStepResult<CommandResult>.Failure(
+                        category,
+                        result.Error ?? "unknown");
+                },
+                cancellationToken);
+
+            if (retryResult.Outcome == RetryOutcome.Success && retryResult.Value is { IsSuccess: true } successResult)
             {
                 _metrics.RecordLedgerPostSuccess(state.Currency, state.Amount);
                 _metrics.RecordTransactionLifecycleCompleted(state.Currency);
 
                 state.CurrentStep = TransactionLifecycleSteps.PostToLedger;
                 context.SetState(state);
-                return WorkflowStepResult.Success(state.JournalId, result.EmittedEvents);
+                return WorkflowStepResult.Success(state.JournalId, successResult.EmittedEvents);
             }
 
-            lastError = result.Error;
+            lastError = retryResult.FinalError;
+            isPermanent = retryResult.Outcome == RetryOutcome.PermanentFailure;
+        }
+        else
+        {
+            // Legacy in-line retry loop — preserved for unit tests / host
+            // configurations without IRetryExecutor registered. Matches
+            // pre-R2.A.2 behavior verbatim. To be deleted once every host
+            // registers the executor.
+            lastError = null;
+            isPermanent = false;
 
-            // Short-circuit on permanent failures — retry won't help.
-            if (RetryPolicy.IsPermanentFailure(lastError))
-                break;
+            for (var attempt = 1; attempt <= Retry.MaxAttempts; attempt++)
+            {
+                var delayMs = Retry.GetDelayMs(attempt);
+                if (delayMs > 0)
+                    await Task.Delay(delayMs, cancellationToken);
 
-            if (cancellationToken.IsCancellationRequested)
-                break;
+                var result = await _dispatcher.DispatchSystemAsync(command, LedgerRoute, cancellationToken);
+                if (result.IsSuccess)
+                {
+                    _metrics.RecordLedgerPostSuccess(state.Currency, state.Amount);
+                    _metrics.RecordTransactionLifecycleCompleted(state.Currency);
+
+                    state.CurrentStep = TransactionLifecycleSteps.PostToLedger;
+                    context.SetState(state);
+                    return WorkflowStepResult.Success(state.JournalId, result.EmittedEvents);
+                }
+
+                lastError = result.Error;
+
+                if (RetryPolicy.IsPermanentFailure(lastError))
+                {
+                    isPermanent = true;
+                    break;
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+            }
         }
 
         _metrics.RecordLedgerPostFailure(state.Currency);
@@ -131,7 +203,11 @@ public sealed class PostToLedgerStep : IWorkflowStep
         // 60s, 120s) which can ride out infrastructure blips that the
         // in-line retry could not. Only compensate when recovery is not
         // available or when the failure is permanent.
-        if (_recoveryQueue is not null && !RetryPolicy.IsPermanentFailure(lastError))
+        //
+        // R2.A.2 — `isPermanent` now derives from the retry executor's
+        // Outcome (PermanentFailure when a non-retryable category short-
+        // circuits) rather than the deprecated string-based heuristic.
+        if (_recoveryQueue is not null && !isPermanent)
         {
             var entry = new RecoveryEntry(
                 EntryId: state.JournalId,

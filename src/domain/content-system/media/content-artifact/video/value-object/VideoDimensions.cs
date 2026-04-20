@@ -1,0 +1,19 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
+namespace Whycespace.Domain.ContentSystem.Media.ContentArtifact.Video;
+
+public readonly record struct VideoDimensions
+{
+    public int Width { get; }
+    public int Height { get; }
+
+    public VideoDimensions(int width, int height)
+    {
+        Guard.Against(width <= 0, "VideoDimensions width must be > 0.");
+        Guard.Against(height <= 0, "VideoDimensions height must be > 0.");
+        Width = width;
+        Height = height;
+    }
+
+    public override string ToString() => $"{Width}x{Height}";
+}

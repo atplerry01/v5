@@ -106,15 +106,19 @@ These MUST NOT exist under `src/domain/`:
 
 ## Domain Structure
 
-Enforce the canonical three-level nesting (`classification/context/domain`) across all layers, and the `-system` suffix rule that distinguishes the domain layer from all other layers.
+Enforce the canonical nesting (`classification/context/[domain-group/]domain`) across all layers, and the `-system` suffix rule that distinguishes the domain layer from all other layers.
+
+The physical topology is **three-or-four-level** beneath each layer root: a context may nest its domains directly (3-level form) OR group them under an explicit `domain-group/` segment (4-level form). The choice is per-context (see DS-R3 / DS-R3a). `DomainRoute` and all routing keys remain a strict three-tuple `(classification, context, domain)` regardless of physical depth (see DS-R8).
 
 ### DS-R1: Domain layer MUST use `{classification}-system`
 
 All top-level classification folders under `src/domain/` MUST use the `-system` suffix.
 
-**Canonical form:** `src/domain/{classification}-system/{context}/{domain}/`
+**Canonical form:** `src/domain/{classification}-system/{context}/[{domain-group}/]{domain}/`
 
-Example: `src/domain/operational-system/sandbox/todo/`
+Examples:
+- 3-level: `src/domain/operational-system/sandbox/todo/`
+- 4-level: `src/domain/content-system/media/content-artifact/asset/`
 
 Exception: `src/domain/shared-kernel/` is not a classification and is exempt.
 
@@ -139,13 +143,31 @@ Example: `src/projections/operational/sandbox/todo/`
 
 Violation: Any folder or namespace segment containing `-system` or `System` (PascalCase equivalent) in a non-domain layer. The only exception is `using` directives that reference `Whycespace.Domain.{X}System.*` — these correctly point into the domain layer.
 
-### DS-R3: All paths MUST follow `classification/context/domain`
+### DS-R3: All paths MUST follow `classification/context/[domain-group/]domain`
 
-Every domain concept must be reachable via exactly three levels of nesting below the layer root (or below an engine tier prefix like `T2E/`).
+Every domain concept must be reachable via three OR four levels of nesting below the layer root (or below an engine tier prefix like `T2E/`):
+
+- **3-level form (default):** `{classification}/{context}/{domain}/`
+- **4-level form (when grouping is required):** `{classification}/{context}/{domain-group}/{domain}/`
+
+The choice is made **per context**, not per classification — a single classification MAY contain a mix of flat-context (3-level) and grouped-context (4-level) contexts.
+
+The `domain-group/` segment is a **folder/namespace organizing concept only**. It does NOT participate in routing, policy keys, Kafka topic names, or `DomainRoute` tuples — those remain three-tuple `(classification, context, domain)` per DS-R8 and the canonical Kafka naming pattern.
 
 Violation: A domain placed directly under a classification without a context level (e.g., `src/projections/operational/todo/` — missing the `sandbox` context).
 
 If the context cannot be inferred, use `default` as a temporary context.
+
+### DS-R3a: Domain-group adoption discipline (canonical sub-clause of DS-R3, locked 2026-04-20)
+
+When a context introduces a `domain-group/` layer, the following discipline applies:
+
+1. **Per-context atomicity.** A context is either fully flat (every domain sits directly under the context) OR fully grouped (every domain sits under exactly one `domain-group/`). Mixing both shapes inside a single context is **FORBIDDEN** — `context/groupA/domainX/` cannot coexist with `context/domainY/`.
+2. **Adoption trigger.** A context SHOULD adopt the 4-level form when its domains fall into two or more semantic groups whose names carry meaning beyond mere alphabetical sorting (e.g., `content-artifact` vs `companion-artifact` vs `lifecycle` vs `descriptor`). Adoption is RECOMMENDED, not mandatory; arbitrary or unmotivated grouping is a structural drift signal.
+3. **Single-domain-group representation.** When a context conceptually has only one group with one or two domains, it SHOULD remain flat (3-level). It MAY use a single named domain-group ONLY when (a) the group represents a defined semantic category that is documented to admit future siblings (e.g., `streaming/control/access` foresees additional control domains) AND (b) the group name is meaningful in its own right.
+4. **No gratuitous nesting.** A `domain-group/` whose name is generic (`misc/`, `other/`, `default/`, `core/` used solely as a fallback) is a violation. Group names must carry domain semantics. The `default` context fallback in DS-R3 does NOT extend to domain-group naming.
+5. **Mandatory artifact placement.** The 7 mandatory artifact subfolders (`aggregate/`, `entity/`, `error/`, `event/`, `service/`, `specification/`, `value-object/`) sit on the **leaf domain folder**, never on the domain-group folder. The domain-group folder contains only domain folders (and optionally a README).
+6. **Active classifications using the 4-level form (registry):** `content-system` (every context: `document`, `media`, `streaming`). All other classifications remain 3-level. New adopters MUST update this registry in the same PR that introduces the topology.
 
 ### DS-R4: No flat domains allowed
 
@@ -155,22 +177,26 @@ Violation: `src/projections/operational/todo/` instead of `src/projections/opera
 
 ### DS-R5: Cross-layer mapping MUST be consistent
 
-For every domain that exists in `src/domain/{classification}-system/{context}/{domain}/`, the corresponding paths in other layers must use the same `{context}/{domain}` segments with the raw classification (no `-system`):
+For every domain that exists in `src/domain/{classification}-system/{context}/[{domain-group}/]{domain}/`, the corresponding paths in other layers MUST mirror the **same depth** (3-level or 4-level) with the raw classification (no `-system`):
 
-- `src/engines/T2E/{classification}/{context}/{domain}/`
-- `src/projections/{classification}/{context}/{domain}/`
-- `src/systems/downstream/{classification}/{context}/{domain}/`
-- `infrastructure/policy/domain/{classification}/{context}/{domain}/`
-- `infrastructure/event-fabric/kafka/topics/{classification}/{context}/{domain}/`
+- `src/engines/T2E/{classification}/{context}/[{domain-group}/]{domain}/`
+- `src/projections/{classification}/{context}/[{domain-group}/]{domain}/`
+- `src/systems/downstream/{classification}/{context}/[{domain-group}/]{domain}/`
+- `infrastructure/policy/domain/{classification}/{context}/[{domain-group}/]{domain}/`
+- `infrastructure/event-fabric/kafka/topics/{classification}/{context}/[{domain-group}/]{domain}/` (folder layout only — topic names remain 3-tuple per K-TOPIC-CANONICAL-01)
 - `infrastructure/data/postgres/projections/{classification}/`
 
-Violation: Mismatched classification, context, or domain segments across layers.
+A context that uses the 4-level form in `src/domain/` MUST use the 4-level form in EVERY other layer. A context that is 3-level in `src/domain/` MUST be 3-level in every other layer. Cross-layer depth drift is a violation.
+
+Violation: Mismatched classification, context, domain-group (when applicable), or domain segments across layers.
 
 ### DS-R6: Namespace consistency with folder structure
 
 C# namespaces MUST reflect the canonical folder path. Non-domain namespaces must use `Orchestration` (not `OrchestrationSystem`), `Constitutional` (not `ConstitutionalSystem`), etc.
 
 Domain namespaces correctly use the PascalCase equivalent of the `-system` suffix: `Whycespace.Domain.OrchestrationSystem.*`.
+
+When a context uses the 4-level form, the namespace MUST include the PascalCase `domain-group` segment between context and domain: `Whycespace.Domain.{Classification}System.{Context}.{DomainGroup}.{Domain}`. Hyphens in the domain-group folder name (e.g. `content-artifact`) become PascalCase joins (`ContentArtifact`).
 
 ### DS-R7: Residual `-system` suffix sweep tracking
 
@@ -196,9 +222,12 @@ Note: `src/domain/*-system` directories are CORRECT per DS-R1 and are NOT part o
 
 Violation: `DomainRoute("operational-system", "sandbox", "todo")` or `Classification = "orchestration-system"`.
 
+`DomainRoute` is and remains a **strict three-tuple** `(classification, context, domain)` even when the underlying folder layout uses the 4-level form (DS-R3a). The `domain-group` segment is intentionally absent from the routing key so that policy IDs, Kafka topic names, projection schemas, and consumer-group names remain stable when grouping evolves. A 4-level domain `content-system/media/content-artifact/asset/` routes as `DomainRoute("content", "media", "asset")` — never as `DomainRoute("content", "media.content-artifact", "asset")` and never as a four-tuple.
+
 ### Domain Structure Severity
 
 - DS-R1 through DS-R5: **S1** (architectural — structural drift)
+- DS-R3a: **S1** (architectural — half-adopted or gratuitous grouping breaks per-context atomicity)
 - DS-R6, DS-R8: **S2** (structural — naming/reference inconsistency)
 - DS-R7: **S2** (structural drift — tracked remediation backlog)
 

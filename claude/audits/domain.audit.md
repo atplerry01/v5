@@ -32,7 +32,8 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 
 ### Section 2 — Domain Structure (Classification / Context / Domain Nesting)
 
-- [ ] **DS-R1** — three-level nesting `{classification}/{context}/{domain}/`
+- [ ] **DS-R1** — canonical nesting `{classification}-system/{context}/[{domain-group}/]{domain}/` (3-level or 4-level per DS-R3a)
+- [ ] **DS-R3a** — domain-group atomicity per context (no half-adopted contexts; group names carry semantic meaning)
 - [ ] **DS-R2** — classification layer present
 - [ ] **DS-R3** — context layer present
 - [ ] **DS-R4** — domain leaf present
