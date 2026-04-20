@@ -80,6 +80,10 @@ public sealed class T1MWorkflowEngine : IWorkflowEngine
     private const string OutcomeTimeoutStep = "timeout_step";
     private const string OutcomeTimeoutExecution = "timeout_execution";
     private const string OutcomeCancelled = "cancelled";
+    // R3.A.6 / R-WF-APPROVAL-01: human-approval wait-state outcome. A
+    // step returning WorkflowStepResult.AwaitingApproval halts execution
+    // and the workflow is durably paused — neither success nor failure.
+    private const string OutcomeSuspended = "suspended";
 
     private readonly WorkflowStepExecutor _stepExecutor;
     private readonly WorkflowLifecycleEventFactory _lifecycleFactory;
@@ -276,6 +280,31 @@ public sealed class T1MWorkflowEngine : IWorkflowEngine
                     var exhaustReason = $"Step '{stepDefinition.StepName}' exhausted {_options.StepRetryMaxAttempts} attempt(s): {hardEx.GetType().Name}: {hardEx.Message}";
                     context.EmitEvent(_lifecycleFactory.Failed(context.WorkflowId, stepDefinition.StepName, exhaustReason));
                     return WorkflowExecutionResult.Failure(stepDefinition.StepName, exhaustReason);
+                }
+
+                // R3.A.6 / R-WF-APPROVAL-01: step yielded to a human-approval
+                // wait-state. Suspension is a first-class outcome (not a
+                // retry trigger): emit the Suspended lifecycle event and
+                // return immediately. ApprovalSignal carries the canonical
+                // `human_approval[:suffix]` prefix per R-WF-APPROVAL-01.
+                if (stepResult.IsAwaitingApproval)
+                {
+                    RecordStepDuration(stepStartTicks, context.WorkflowName, stepDefinition.StepName, OutcomeSuspended);
+                    RecordExecution(executionStartTicks, workflowNameTag, OutcomeSuspended);
+
+                    if (stepResult.Events.Count > 0)
+                    {
+                        context.AccumulatedEvents.AddRange(stepResult.Events);
+                    }
+
+                    var suspendStepName = stepResult.ApprovalStepName ?? stepDefinition.StepName;
+                    var suspendSignal = stepResult.ApprovalSignal ?? WorkflowApprovalErrors.HumanApprovalPrefix;
+
+                    context.EmitEvent(_lifecycleFactory.Suspended(
+                        context.WorkflowId, suspendStepName, suspendSignal));
+
+                    return WorkflowExecutionResult.Suspended(
+                        suspendStepName, suspendSignal, context.AccumulatedEvents.AsReadOnly());
                 }
 
                 // Soft failure path.

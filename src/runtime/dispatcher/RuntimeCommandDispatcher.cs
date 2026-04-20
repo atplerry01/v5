@@ -22,6 +22,13 @@ namespace Whycespace.Runtime.Dispatcher;
 /// reconstructs WorkflowExecutionAggregate from the event store inside the T1M
 /// engine layer. The dispatcher itself remains domain-agnostic per runtime.guard
 /// rule 11.R-DOM-01 — it depends only on the shared contract.
+///
+/// R3.A.6 / R-WF-APPROVAL-03..04 — ApproveWorkflowCommand and
+/// RejectWorkflowCommand reuse the same shared-contract seam
+/// (IWorkflowExecutionReplayService) to emit Resumed / Cancelled lifecycle
+/// events with canonical human_approval_granted / human_approval_rejected
+/// carriers. Authoritative approver identity is sourced from
+/// CommandContext.ActorId per R-WF-APPROVAL-07.
 /// </summary>
 public sealed class RuntimeCommandDispatcher : ICommandDispatcher
 {
@@ -76,6 +83,24 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         if (command is WorkflowResumeCommand resumeCommand)
         {
             return await ResumeWorkflowAsync(resumeCommand, context, cancellationToken);
+        }
+
+        // R3.A.6 / R-WF-APPROVAL-03: approval-granted resume. Same
+        // dispatch shape as ResumeWorkflowAsync (load → admission gate →
+        // build definition → engine re-entry) with the granted carrier
+        // composed from CommandContext.ActorId + rationale on the
+        // replay-service side.
+        if (command is ApproveWorkflowCommand approveCommand)
+        {
+            return await ApproveWorkflowAsync(approveCommand, context, cancellationToken);
+        }
+
+        // R3.A.6 / R-WF-APPROVAL-04: approval-rejected cancel. Simpler
+        // than Resume — no engine re-entry, just emit the Cancelled
+        // lifecycle event and let persist → chain → outbox propagate it.
+        if (command is RejectWorkflowCommand rejectCommand)
+        {
+            return await RejectWorkflowAsync(rejectCommand, context, cancellationToken);
         }
 
         return await ExecuteEngineAsync(command, context, cancellationToken);
@@ -229,6 +254,148 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         return result.IsSuccess
             ? CommandResult.Success(events, result.Output, eventsRequirePersistence: events.Count > 0)
             : CommandResult.Success(events, eventsRequirePersistence: events.Count > 0);
+    }
+
+    private async Task<CommandResult> ApproveWorkflowAsync(
+        ApproveWorkflowCommand command, CommandContext context, CancellationToken cancellationToken)
+    {
+        var workflowExecutionId = command.WorkflowId;
+
+        if (command.Decision is null || string.IsNullOrWhiteSpace(command.Decision.Rationale))
+        {
+            return CommandResult.Failure(
+                WorkflowApprovalErrors.ApprovalRationaleRequired,
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        var state = await _replayService.ReplayAsync(workflowExecutionId);
+        if (state is null)
+        {
+            return CommandResult.Failure(
+                $"No workflow execution events found for '{workflowExecutionId}'.",
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        // R-WF-APPROVAL-02: state-level precondition. The replay service
+        // re-validates Suspended + human_approval prefix when it composes
+        // the granted carrier; this early check short-circuits the
+        // admission-gate acquisition for non-Suspended workflows.
+        if (!string.Equals(state.Status, "Suspended", StringComparison.Ordinal))
+        {
+            return CommandResult.Failure(
+                WorkflowApprovalErrors.CannotApproveUnlessAwaitingApproval,
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        // Approve is a resume — acquire the admission lease keyed by the
+        // original workflow name, same as WorkflowResumeCommand.
+        using var admissionLease = await _workflowAdmissionGate.AcquireAsync(
+            state.WorkflowName, context.TenantId, cancellationToken);
+
+        var definition = BuildDefinition(state.WorkflowName);
+        if (definition is null)
+        {
+            return CommandResult.Failure(
+                $"No workflow registered for '{state.WorkflowName}'.",
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        if (state.NextStepIndex >= definition.Steps.Count)
+        {
+            return CommandResult.Failure(
+                $"Workflow '{workflowExecutionId}' has no remaining steps to resume (cursor {state.NextStepIndex} of {definition.Steps.Count}).",
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        var executionContext = new WorkflowExecutionContext
+        {
+            WorkflowId = workflowExecutionId,
+            CorrelationId = context.CorrelationId,
+            WorkflowName = state.WorkflowName,
+            Payload = state.Payload ?? new object(),
+            CurrentStepIndex = state.NextStepIndex,
+            ExecutionHash = state.ExecutionHash,
+            IdentityId = context.IdentityId,
+            PolicyDecision = context.PolicyDecisionHash
+        };
+
+        foreach (var kvp in state.StepOutputs)
+        {
+            executionContext.StepOutputs[kvp.Key] = kvp.Value;
+        }
+
+        // R-WF-APPROVAL-03 / R-WF-APPROVAL-07: authoritative approver
+        // identity sourced from CommandContext.ActorId. The replay
+        // service composes the granted carrier internally and validates
+        // the Suspended-with-human_approval precondition before
+        // returning the pre-baked Resumed event.
+        object resumedEvent;
+        try
+        {
+            resumedEvent = await _replayService.ResumeWithApprovalAsync(
+                workflowExecutionId, context.ActorId, command.Decision.Rationale);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return CommandResult.Failure(ex.Message, RuntimeFailureCategory.InvalidState);
+        }
+
+        executionContext.AccumulatedEvents.Add(resumedEvent);
+
+        var result = await _workflowEngine.ExecuteAsync(definition, executionContext, cancellationToken);
+
+        var events = executionContext.AccumulatedEvents.AsReadOnly();
+        return result.IsSuccess
+            ? CommandResult.Success(events, result.Output, eventsRequirePersistence: events.Count > 0)
+            : CommandResult.Success(events, eventsRequirePersistence: events.Count > 0);
+    }
+
+    private async Task<CommandResult> RejectWorkflowAsync(
+        RejectWorkflowCommand command, CommandContext context, CancellationToken cancellationToken)
+    {
+        var workflowExecutionId = command.WorkflowId;
+
+        if (command.Decision is null || string.IsNullOrWhiteSpace(command.Decision.Rationale))
+        {
+            return CommandResult.Failure(
+                WorkflowApprovalErrors.ApprovalRationaleRequired,
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        var state = await _replayService.ReplayAsync(workflowExecutionId);
+        if (state is null)
+        {
+            return CommandResult.Failure(
+                $"No workflow execution events found for '{workflowExecutionId}'.",
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        if (!string.Equals(state.Status, "Suspended", StringComparison.Ordinal))
+        {
+            return CommandResult.Failure(
+                WorkflowApprovalErrors.CannotRejectUnlessAwaitingApproval,
+                RuntimeFailureCategory.InvalidState);
+        }
+
+        // R-WF-APPROVAL-04 / R-WF-APPROVAL-07: authoritative approver
+        // identity sourced from CommandContext.ActorId. The replay
+        // service composes the rejected carrier internally.
+        object cancelledEvent;
+        try
+        {
+            cancelledEvent = await _replayService.CancelSuspendedAsync(
+                workflowExecutionId, context.ActorId, command.Decision.Rationale);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return CommandResult.Failure(ex.Message, RuntimeFailureCategory.InvalidState);
+        }
+
+        // Reject is terminal — no engine re-entry. Persist the single
+        // Cancelled lifecycle event through the canonical pipeline.
+        return CommandResult.Success(
+            new List<object> { cancelledEvent }.AsReadOnly(),
+            eventsRequirePersistence: true);
     }
 
     private WorkflowDefinition? BuildDefinition(string workflowName)

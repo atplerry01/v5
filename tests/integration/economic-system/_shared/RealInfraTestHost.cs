@@ -111,13 +111,22 @@ internal static class RealInfraTestHost
         var whycePolicyEngine = new WhycePolicyEngine();
         var whyceChainEngine = new WhyceChainEngine();
         var chainOptions = new ChainAnchorOptions();
+        // R3.A.6 incidental test-build fix: R-CHAIN-BREAKER-DELEGATION-01
+        // (commit 29e73c2f) added an ICircuitBreaker constructor parameter
+        // to WhyceChainPostgresAdapter and RedisExecutionLockProvider
+        // without updating this real-infra test harness. For integration
+        // tests we inject a no-op breaker that always executes — breaker
+        // behaviour is covered by dedicated resilience tests, not this
+        // harness.
+        var noOpBreaker = new NoOpTestCircuitBreaker("test-noop");
+
         Whycespace.Shared.Contracts.Infrastructure.Chain.IChainAnchor realChainAnchor =
-            new WhyceChainPostgresAdapter(chainDataSource, clock, chainOptions);
+            new WhyceChainPostgresAdapter(chainDataSource, clock, chainOptions, noOpBreaker);
 
         var resolvedPolicyEvaluator = policyEvaluator
             ?? new AllowAllPolicyEvaluator { ShouldDeny = denyPolicy };
 
-        var lockProvider = new RedisExecutionLockProvider(redis);
+        var lockProvider = new RedisExecutionLockProvider(redis, noOpBreaker);
 
         // --- Mirrors so tests can still inspect after real persistence ----
 

@@ -32,4 +32,16 @@ public static class WorkflowExecutionErrors
 
     public const string CannotSkipSteps = "Workflow steps must be completed in order; the next expected step index does not match.";
     public const string StepNameRequired = "Step name is required.";
+
+    /// <summary>
+    /// R3.A.6 / R-WF-APPROVAL-04 — guard failure when
+    /// <c>IWorkflowExecutionReplayService.CancelSuspendedAsync</c> is
+    /// invoked on a workflow whose status is not <c>Suspended</c>. The
+    /// approval-reject path intentionally enforces a stricter
+    /// precondition than the generic cancel path (which accepts
+    /// caller-driven cancellation from Running too) — only already-
+    /// suspended workflows may be approval-rejected.
+    /// </summary>
+    public const string CannotRejectUnlessSuspended =
+        "Workflow execution can only be approval-rejected from the Suspended state.";
 }

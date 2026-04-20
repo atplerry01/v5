@@ -81,6 +81,38 @@ public sealed class WorkflowLifecycleEventFactory
     }
 
     /// <summary>
+    /// R3.A.6 / R-WF-APPROVAL-03 — approval-granted resume. Same
+    /// precondition as the failure-resume overload (legal from Failed OR
+    /// Suspended) but allows the caller to override
+    /// <c>PreviousFailureReason</c> with a composed
+    /// <c>human_approval_granted:{signal}:{actor}</c> carrier.
+    ///
+    /// Temporary carrier per R3.A.6 D4: the <c>PreviousFailureReason</c>
+    /// field on <see cref="WorkflowExecutionResumedEvent"/> is reused as
+    /// an observability carrier for approval-granted context. It does
+    /// NOT denote failure semantics when the prefix is
+    /// <c>human_approval_granted</c>. Approval-granted is a successful
+    /// approval decision; the field name is failure-coupled for
+    /// historical reasons and will be normalized in a future pass.
+    /// </summary>
+    public WorkflowExecutionResumedEvent Resumed(
+        WorkflowExecutionAggregate aggregate, string approvalSignalOverride)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+        ArgumentException.ThrowIfNullOrEmpty(approvalSignalOverride);
+
+        Guard.Against(
+            aggregate.Status != WorkflowExecutionStatus.Failed
+                && aggregate.Status != WorkflowExecutionStatus.Suspended,
+            WorkflowExecutionErrors.CannotResumeUnlessFailedOrSuspended);
+
+        return new WorkflowExecutionResumedEvent(
+            new AggregateId(aggregate.Id.Value),
+            aggregate.FailedStepName ?? string.Empty,
+            approvalSignalOverride);
+    }
+
+    /// <summary>
     /// R3.A.4 / R-WORKFLOW-CANCELLATION-FACTORY-01 — canonical
     /// construction site for <see cref="WorkflowExecutionCancelledEvent"/>.
     /// Called by <c>T1MWorkflowEngine</c> from the caller-cancellation
@@ -132,4 +164,26 @@ public sealed class WorkflowLifecycleEventFactory
         return new WorkflowExecutionSuspendedEvent(
             new AggregateId(aggregate.Id.Value), stepName, reason);
     }
+
+    /// <summary>
+    /// R3.A.6 / R-WF-APPROVAL-01 — engine-side Suspended emission. The
+    /// T1M workflow engine does not have the aggregate in scope during
+    /// <c>ExecuteAsync</c>; it operates on an in-flight execution
+    /// context. The Running-state invariant is established by
+    /// construction — this overload is reached only when a step returned
+    /// <see cref="WorkflowStepResult.AwaitingApproval"/> inside the
+    /// main execution loop, which implies the aggregate is currently
+    /// Running. Analogous to the factory's
+    /// <see cref="Failed(Guid, string, string)"/> and
+    /// <see cref="Cancelled(Guid, string?, string)"/> overloads, which
+    /// also carry no aggregate precondition because the engine enforces
+    /// the state invariant by construction.
+    ///
+    /// Non-engine callers (operator surface, runtime direct suspend in
+    /// future phases) MUST use the aggregate-taking overload so the
+    /// precondition is checked.
+    /// </summary>
+    public WorkflowExecutionSuspendedEvent Suspended(
+        Guid workflowExecutionId, string? stepName, string reason)
+        => new(new AggregateId(workflowExecutionId), stepName, reason);
 }

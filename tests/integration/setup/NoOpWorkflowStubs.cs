@@ -27,4 +27,10 @@ public sealed class NoOpWorkflowExecutionReplayService : IWorkflowExecutionRepla
 
     public Task<object> ResumeAsync(Guid workflowExecutionId)
         => throw new InvalidOperationException("NoOpWorkflowExecutionReplayService should not be invoked in non-workflow tests.");
+
+    public Task<object> ResumeWithApprovalAsync(Guid workflowExecutionId, string approverIdentity, string? rationale = null)
+        => throw new InvalidOperationException("NoOpWorkflowExecutionReplayService should not be invoked in non-workflow tests.");
+
+    public Task<object> CancelSuspendedAsync(Guid workflowExecutionId, string approverIdentity, string? rationale = null)
+        => throw new InvalidOperationException("NoOpWorkflowExecutionReplayService should not be invoked in non-workflow tests.");
 }

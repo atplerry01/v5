@@ -44,6 +44,12 @@ public sealed class WorkflowExecutionBootstrap : IDomainBootstrapModule
         projection.Register("WorkflowExecutionCompletedEvent", handler);
         projection.Register("WorkflowExecutionFailedEvent", handler);
         projection.Register("WorkflowExecutionResumedEvent", handler);
+        // R3.A.6 / R-WF-APPROVAL-PROJ-01: approval wait-state + rejection
+        // transitions ride on the canonical Suspended/Cancelled events;
+        // the projection now materializes their read-model effect plus
+        // derived ApprovalState/Signal/Decision fields.
+        projection.Register("WorkflowExecutionSuspendedEvent", handler);
+        projection.Register("WorkflowExecutionCancelledEvent", handler);
     }
 
     public void RegisterEngines(IEngineRegistry engine) { }

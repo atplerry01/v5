@@ -104,10 +104,18 @@ public sealed class WorkflowExecutionReplayService : IWorkflowExecutionReplaySer
             nonPublic: true)!;
         aggregate.LoadFromHistory(events);
 
+        // R3.A.6 D8: this service method enforces the Failed-only
+        // precondition for the failure-retry caller. Suspended-resume
+        // for the human-approval path is handled by
+        // ResumeWithApprovalAsync per R-WF-APPROVAL-03. The factory's
+        // Resumed(aggregate) overload accepts both Failed and Suspended
+        // (R-WORKFLOW-SUSPEND-RESUME-GUARD-01); the narrower check here
+        // reflects failure-retry intent, not a factory constraint.
         if (aggregate.Status != WorkflowExecutionStatus.Failed)
             throw new InvalidOperationException(
                 $"Workflow execution '{workflowExecutionId}' is in status {aggregate.Status}; " +
-                "resume is only valid from the Failed state.");
+                "failure-retry resume is only valid from the Failed state. " +
+                "Use ResumeWithApprovalAsync for Suspended-for-approval workflows.");
 
         // phase1.6-S1.2 (E-LIFECYCLE-FACTORY-CALL-SITE-01): construct the
         // resume event via the lifecycle factory instead of mutating the
@@ -118,6 +126,112 @@ public sealed class WorkflowExecutionReplayService : IWorkflowExecutionReplaySer
         // the persist pipeline writes it to the event store, and the next
         // replay reconstructs the Running status via Apply.
         return _lifecycleFactory.Resumed(aggregate);
+    }
+
+    /// <inheritdoc />
+    public async Task<object> ResumeWithApprovalAsync(
+        Guid workflowExecutionId, string approverIdentity, string? rationale = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(approverIdentity);
+
+        var (aggregate, latestSuspended) = await LoadForApprovalAsync(
+            workflowExecutionId, failureMessage: WorkflowApprovalErrors.CannotApproveUnlessAwaitingApproval);
+
+        var signal = ExtractSignalSuffix(latestSuspended.Reason, WorkflowApprovalErrors.HumanApprovalPrefix);
+        var grantedCarrier = ComposeApprovalCarrier(
+            WorkflowApprovalErrors.HumanApprovalGrantedPrefix, signal, approverIdentity, rationale);
+
+        return _lifecycleFactory.Resumed(aggregate, grantedCarrier);
+    }
+
+    /// <inheritdoc />
+    public async Task<object> CancelSuspendedAsync(
+        Guid workflowExecutionId, string approverIdentity, string? rationale = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(approverIdentity);
+
+        var (_, latestSuspended) = await LoadForApprovalAsync(
+            workflowExecutionId, failureMessage: WorkflowApprovalErrors.CannotRejectUnlessAwaitingApproval);
+
+        var signal = ExtractSignalSuffix(latestSuspended.Reason, WorkflowApprovalErrors.HumanApprovalPrefix);
+        var rejectedCarrier = ComposeApprovalCarrier(
+            WorkflowApprovalErrors.HumanApprovalRejectedPrefix, signal, approverIdentity, rationale);
+
+        return _lifecycleFactory.Cancelled(
+            workflowExecutionId, latestSuspended.StepName, rejectedCarrier);
+    }
+
+    private async Task<(WorkflowExecutionAggregate, WorkflowExecutionSuspendedEvent)> LoadForApprovalAsync(
+        Guid workflowExecutionId, string failureMessage)
+    {
+        var events = await _eventStore.LoadEventsAsync(workflowExecutionId);
+        if (events.Count == 0)
+            throw new InvalidOperationException(
+                $"Workflow execution '{workflowExecutionId}' has no recorded events; cannot resolve approval.");
+
+        var aggregate = (WorkflowExecutionAggregate)System.Activator.CreateInstance(
+            typeof(WorkflowExecutionAggregate),
+            nonPublic: true)!;
+        aggregate.LoadFromHistory(events);
+
+        if (aggregate.Status != WorkflowExecutionStatus.Suspended)
+            throw new InvalidOperationException(failureMessage);
+
+        var latestSuspended = FindLatestSuspendedEvent(events);
+        if (latestSuspended is null)
+            throw new InvalidOperationException(failureMessage);
+
+        // R-WF-APPROVAL-02: reject when the carrier prefix does not
+        // denote human-approval (timer/external-dep suspends etc.).
+        if (!IsHumanApprovalSignal(latestSuspended.Reason))
+            throw new InvalidOperationException(failureMessage);
+
+        return (aggregate, latestSuspended);
+    }
+
+    private static WorkflowExecutionSuspendedEvent? FindLatestSuspendedEvent(IReadOnlyList<object> events)
+    {
+        for (var i = events.Count - 1; i >= 0; i--)
+        {
+            if (events[i] is WorkflowExecutionSuspendedEvent suspended)
+                return suspended;
+        }
+        return null;
+    }
+
+    private static bool IsHumanApprovalSignal(string reason)
+    {
+        if (string.IsNullOrEmpty(reason)) return false;
+        // Exact match on the prefix word. Either "human_approval" on its
+        // own or "human_approval:<signal>..." qualifies; "human_approval_"
+        // does NOT match (prevents accidental matches against the
+        // granted/rejected variants on a malformed carrier).
+        if (reason == WorkflowApprovalErrors.HumanApprovalPrefix) return true;
+        return reason.StartsWith(WorkflowApprovalErrors.HumanApprovalPrefix + ":", StringComparison.Ordinal);
+    }
+
+    private static string? ExtractSignalSuffix(string reason, string prefix)
+    {
+        if (string.IsNullOrEmpty(reason)) return null;
+        var prefixWithColon = prefix + ":";
+        if (!reason.StartsWith(prefixWithColon, StringComparison.Ordinal)) return null;
+        var suffix = reason[prefixWithColon.Length..];
+        return string.IsNullOrEmpty(suffix) ? null : suffix;
+    }
+
+    private static string ComposeApprovalCarrier(
+        string prefix, string? signal, string actor, string? rationale)
+    {
+        // Canonical shape:
+        //   {prefix}:{signal?}:{actor}[:{rationale}]
+        // Signal may be null when the original Suspended carrier was
+        // the bare "human_approval" prefix without a suffix. Empty
+        // signal segment is preserved positionally so consumers can
+        // parse by index. Rationale is optional trailing context.
+        var actorSegment = actor ?? string.Empty;
+        var signalSegment = signal ?? string.Empty;
+        var baseCarrier = $"{prefix}:{signalSegment}:{actorSegment}";
+        return string.IsNullOrEmpty(rationale) ? baseCarrier : $"{baseCarrier}:{rationale}";
     }
 
     private object? Rehydrate(object? value, string? typeName)

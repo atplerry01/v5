@@ -3700,3 +3700,111 @@ S2
 References:
 - `src/domain/orchestration-system/workflow/execution/aggregate/WorkflowExecutionAggregate.cs`
 - Source: `claude/new-rules/20260420-050000-guards.md`
+
+### R-WF-APPROVAL-01 — AwaitingApproval Yields Suspended via Factory
+
+Definition:
+A step returning `WorkflowStepResult.AwaitingApproval(approvalSignal, approvalStepName?)` MUST cause `T1MWorkflowEngine` to halt execution and emit `WorkflowExecutionSuspendedEvent` via `WorkflowLifecycleEventFactory.Suspended(Guid, string?, string)` with the supplied `approvalSignal` as the event `Reason`. The signal MUST start with the canonical `human_approval` prefix (bare `human_approval` or `human_approval:{signal}`). Direct event-store writes bypassing the factory are FORBIDDEN.
+
+Severity:
+S1
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` (AwaitingApproval branch)
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` (`Suspended(Guid, …)` overload)
+- `src/shared/contracts/runtime/WorkflowStepResult.cs`
+- `src/shared/contracts/runtime/WorkflowApprovalErrors.cs` (HumanApprovalPrefix)
+
+### R-WF-APPROVAL-02 — Approve/Reject State + Signal Precondition
+
+Definition:
+`ApproveWorkflowCommand` / `RejectWorkflowCommand` handlers MUST reject with canonical reasons `CannotApproveUnlessAwaitingApproval` / `CannotRejectUnlessAwaitingApproval` when the aggregate `Status != Suspended` OR the latest `WorkflowExecutionSuspendedEvent.Reason` does not start with the canonical `human_approval` prefix. The precondition is enforced at the `IWorkflowExecutionReplayService.ResumeWithApprovalAsync` / `CancelSuspendedAsync` seam (domain-reachable) with a short-circuit state check at the dispatcher layer for early refusal. Caller-cancellation Suspends (timer / external-dep) are deliberately NOT approve/reject-eligible.
+
+Severity:
+S1
+
+References:
+- `src/runtime/dispatcher/RuntimeCommandDispatcher.cs` (ApproveWorkflowAsync / RejectWorkflowAsync)
+- `src/engines/T1M/core/lifecycle/WorkflowExecutionReplayService.cs` (LoadForApprovalAsync)
+- `src/shared/contracts/runtime/WorkflowApprovalErrors.cs`
+
+### R-WF-APPROVAL-03 — Approve Reuses ResumeAsync Seam; Granted Carrier
+
+Definition:
+`ApproveWorkflowCommand` resume path MUST re-enter the existing `IWorkflowExecutionReplayService.ResumeWithApprovalAsync` seam (no parallel `ApproveAsync` API on the workflow engine or replay service). The emitted `WorkflowExecutionResumedEvent.PreviousFailureReason` MUST start with the canonical `human_approval_granted` prefix and carry `:{signal}:{actor}[:{rationale}]` segments in order. The `{signal}` segment is extracted from the preceding Suspended event's Reason; `{actor}` is the authoritative approver identity sourced from `CommandContext.ActorId` per R-WF-APPROVAL-07. Workflow re-enters `T1MWorkflowEngine.ExecuteAsync` at `WorkflowExecutionReplayState.NextStepIndex`, identical to the existing resume cursor contract (R-WF-RESUME-02..05).
+
+**Temporary carrier (per R3.A.6 D4):** overloading `PreviousFailureReason` with `human_approval_granted:` prefix is a temporary carrier convention. Approval-granted is a successful approval decision — NOT failure semantics. Design-note text, factory XML docs, and guard/audit text MUST describe this clearly; approval-granted MUST NEVER be described as an "actual failure" anywhere. Field renaming/normalization is deferred.
+
+Severity:
+S1
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowExecutionReplayService.cs` (ResumeWithApprovalAsync)
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` (Resumed(aggregate, approvalSignalOverride) overload)
+- `src/runtime/dispatcher/RuntimeCommandDispatcher.cs`
+
+### R-WF-APPROVAL-04 — Reject Uses CancelSuspendedAsync; Rejected Carrier
+
+Definition:
+`RejectWorkflowCommand` cancel path MUST call `IWorkflowExecutionReplayService.CancelSuspendedAsync(Guid, string, string?)`. The emitted `WorkflowExecutionCancelledEvent.Reason` MUST start with the canonical `human_approval_rejected` prefix and carry `:{signal}:{actor}[:{rationale}]` segments. The `CancelSuspendedAsync` service method MUST assert `aggregate.Status == Suspended` AND the latest Suspended event's Reason starts with `human_approval` before constructing the event (canonical reason `CannotRejectUnlessAwaitingApproval`). The Cancelled event's `StepName` inherits from the latest Suspended event. No engine re-entry follows — the workflow is terminal.
+
+Severity:
+S1
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowExecutionReplayService.cs` (CancelSuspendedAsync)
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` (Cancelled(Guid, …) overload)
+- `src/runtime/dispatcher/RuntimeCommandDispatcher.cs` (RejectWorkflowAsync)
+
+### R-WF-APPROVAL-05 — No New Approval-Specific Lifecycle Events
+
+Definition:
+New approval-specific lifecycle event types (e.g. `WorkflowExecutionAwaitingApprovalEvent`, `WorkflowExecutionApprovedEvent`, `WorkflowExecutionRejectedEvent`) are DISALLOWED in `src/domain/**` and `src/shared/contracts/events/**`. Approval state transitions ride on the canonical `WorkflowExecutionSuspendedEvent` / `WorkflowExecutionResumedEvent` / `WorkflowExecutionCancelledEvent` triple. Introducing a parallel event family was explicitly rejected in the R3.A.6 Step 1 design review — any such addition would require a fresh Step 1 sufficiency-test ratification.
+
+Severity:
+S1
+
+References:
+- `claude/project-topics/v2b/closure/20260420-090441-r3-a-6-design.md` §1.4, §3 R-WF-APPROVAL-05
+
+### R-WF-APPROVAL-06 — Approval Context Channels
+
+Definition:
+Approval context (approver identity, approval decision, full rationale, attachments) MUST be carried via:
+(a) canonical Reason prefix/suffix conventions on the reused events (`human_approval[:signal]` on Suspended; `human_approval_granted:{signal}:{actor}[:{rationale}]` on Resumed; `human_approval_rejected:{signal}:{actor}[:{rationale}]` on Cancelled);
+(b) the command envelope per `R-PLAT-12` (`PolicyEvaluatedEvent`, `DecisionHash`, `CorrelationId`, `CausationId`, actor propagation);
+(c) `ApprovalDecisionPayload(Rationale, ApprovalKey?)` registered in `IPayloadTypeRegistry`.
+Approval context MUST NOT be duplicated onto lifecycle event fields beyond the canonical signal prefix + short suffix.
+
+Severity:
+S2
+
+References:
+- `src/shared/contracts/runtime/ApprovalDecisionPayload.cs`
+- `src/shared/contracts/runtime/ApproveWorkflowCommand.cs`, `RejectWorkflowCommand.cs`
+
+### R-WF-APPROVAL-07 — Authoritative Approver Identity
+
+Definition:
+Authoritative approver identity for `ApproveWorkflowCommand` / `RejectWorkflowCommand` MUST be sourced from `CommandContext.ActorId` (runtime identity middleware output). Any actor segment written into the `human_approval_granted` / `human_approval_rejected` Reason carrier is a denormalized observability mirror and is NON-AUTHORITATIVE. Authorization decisions, audit resolution, projection trust boundaries, and any downstream consumer MUST resolve the authoritative actor from the command envelope and `PolicyEvaluatedEvent` — NEVER by parsing the carrier text. Implementations MAY optionally validate that the carrier actor matches `CommandContext.ActorId` at emit time (defence-in-depth) but MUST NOT trust the carrier actor on re-read. The `ApprovalDecisionPayload` schema deliberately does NOT carry an approver field.
+
+Severity:
+S1
+
+References:
+- `src/runtime/dispatcher/RuntimeCommandDispatcher.cs` (ApproveWorkflowAsync / RejectWorkflowAsync: `context.ActorId` is the authoritative source)
+- `src/engines/T1M/core/lifecycle/WorkflowExecutionReplayService.cs` (composes carrier from caller-supplied approver parameter — does not trust event-side actor segments)
+- `src/shared/contracts/runtime/ApprovalDecisionPayload.cs` (no approver field by design)
+
+### R-WF-APPROVAL-PROJ-01 — Canonical Lifecycle Status Preserved in Projection
+
+Definition:
+`WorkflowExecutionProjectionHandler` MUST preserve canonical lifecycle `Status` values (`Running`, `Suspended`, `Cancelled`, `Completed`, `Failed`) aligned with `WorkflowExecutionStatus`. Approval-specific semantics are carried via derived fields `ApprovalState` (`"AwaitingApproval"` / `"Granted"` / `"Rejected"` / null), `ApprovalSignal`, and `ApprovalDecision` on `WorkflowExecutionReadModel`. Overloading `Status` with values like `"AwaitingApproval"` or `"Rejected"` is FORBIDDEN — those values live exclusively in `ApprovalState`.
+
+Severity:
+S2
+
+References:
+- `src/projections/orchestration/workflow/handler/WorkflowExecutionProjectionHandler.cs`
+- `src/shared/contracts/projections/orchestration/workflow/WorkflowExecutionReadModel.cs`
+- `claude/project-topics/v2b/closure/20260420-090441-r3-a-6-design.md` §2.5, §3 R-WF-APPROVAL-PROJ-01, D6 ratification
