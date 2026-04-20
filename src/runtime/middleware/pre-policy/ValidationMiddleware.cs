@@ -16,17 +16,21 @@ public sealed class ValidationMiddleware : IMiddleware
         CancellationToken cancellationToken = default)
     {
         if (command is null)
-            return Task.FromResult(CommandResult.Failure("Command payload is required."));
+            return Task.FromResult(CommandResult.ValidationFailure(
+                "Command payload is required.", ValidationFailureCategory.InputSchema));
 
         if (context.CommandId == Guid.Empty)
-            return Task.FromResult(CommandResult.Failure("CommandId is required."));
+            return Task.FromResult(CommandResult.ValidationFailure(
+                "CommandId is required.", ValidationFailureCategory.CommandPrecondition));
 
         if (context.CausationId == Guid.Empty)
-            return Task.FromResult(CommandResult.Failure("CausationId is required."));
+            return Task.FromResult(CommandResult.ValidationFailure(
+                "CausationId is required.", ValidationFailureCategory.CommandPrecondition));
 
         var commandType = command.GetType();
         if (commandType.Namespace is null || !commandType.IsClass)
-            return Task.FromResult(CommandResult.Failure($"Invalid command type: {commandType.Name}"));
+            return Task.FromResult(CommandResult.ValidationFailure(
+                $"Invalid command type: {commandType.Name}", ValidationFailureCategory.InputSchema));
 
         return next(cancellationToken);
     }

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Npgsql;
 using Whycespace.Shared.Contracts.Infrastructure.Admission;
 using Whycespace.Shared.Contracts.Infrastructure.Chain;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -58,21 +59,24 @@ public sealed class WhyceChainPostgresAdapter : IChainAnchor
     private readonly IClock _clock;
     private readonly ChainAnchorOptions _options;
 
-    // Breaker state. Mirrors the OpaPolicyEvaluator PC-2 pattern:
-    // uncontended on the happy path; the lock only enters the critical
-    // section on a failure or a state-transition observation.
-    private readonly object _breakerLock = new();
-    private int _consecutiveFailures;
-    private DateTimeOffset? _openedAt;
+    // R2.A.D.3a / R-CHAIN-BREAKER-DELEGATION-01 — delegated to the canonical
+    // ICircuitBreaker. Inline state (_breakerLock / _consecutiveFailures /
+    // _openedAt) removed to match the R2.A.D.2 OPA refactor pattern. The
+    // breaker INSTANCE is owned by host composition so it can be registered
+    // by name ("chain-anchor") and surfaced by IRuntimeStateAggregator via
+    // ICircuitBreakerRegistry.GetAll() iteration (R2.A.D.4).
+    private readonly ICircuitBreaker _breaker;
 
     public WhyceChainPostgresAdapter(
         ChainDataSource dataSource,
         IClock clock,
-        ChainAnchorOptions options)
+        ChainAnchorOptions options,
+        ICircuitBreaker breaker)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(breaker);
         if (options.BreakerThreshold < 1)
             throw new ArgumentOutOfRangeException(
                 nameof(options), options.BreakerThreshold,
@@ -85,6 +89,7 @@ public sealed class WhyceChainPostgresAdapter : IChainAnchor
         _dataSource = dataSource;
         _clock = clock;
         _options = options;
+        _breaker = breaker;
     }
 
     public async Task<ChainBlock> AnchorAsync(
@@ -93,75 +98,103 @@ public sealed class WhyceChainPostgresAdapter : IChainAnchor
         string decisionHash,
         CancellationToken cancellationToken = default)
     {
-        // --- Breaker gate (pre-call) ---
-        // Open → throw immediately. HalfOpen window has elapsed → admit a
-        // single trial call (single-writer under the lock; concurrent
-        // callers during HalfOpen still see Open until the trial commits).
-        if (IsBreakerOpenInternal())
-        {
-            FailureCounter.Add(1,
-                new KeyValuePair<string, object?>("outcome", "breaker_open"));
-            throw new ChainAnchorUnavailableException(
-                reason: "breaker_open",
-                retryAfterSeconds: _options.BreakerWindowSeconds,
-                message: "Chain-store circuit breaker open. No bypass allowed.");
-        }
-
+        // R2.A.D.3a / R-CHAIN-BREAKER-DELEGATION-01: DB work wrapped in
+        // the injected circuit breaker. Transport failures inside the
+        // lambda throw ChainAnchorUnavailableException — the breaker
+        // counts these as failures. Successful anchor = breaker success.
+        // On Open, breaker throws CircuitBreakerOpenException which we
+        // translate at the adapter boundary (R-CHAIN-BREAKER-BOUNDARY-01)
+        // so callers keep seeing the same typed exception.
         try
         {
-            var previousBlockHash = await GetPreviousBlockHashAsync(cancellationToken);
-            var eventHash = ComputeEventHash(events);
-            var blockId = ComputeBlockId(previousBlockHash, eventHash, decisionHash);
-            var timestamp = _clock.UtcNow;
+            return await _breaker.ExecuteAsync<ChainBlock>(async ct =>
+            {
+                try
+                {
+                    var previousBlockHash = await GetPreviousBlockHashAsync(ct);
+                    var eventHash = ComputeEventHash(events);
+                    var blockId = ComputeBlockId(previousBlockHash, eventHash, decisionHash);
+                    var timestamp = _clock.UtcNow;
 
-            var block = new ChainBlock(blockId, correlationId, eventHash, decisionHash, previousBlockHash, timestamp);
+                    var block = new ChainBlock(blockId, correlationId, eventHash, decisionHash, previousBlockHash, timestamp);
 
-            await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(ChainDataSource.PoolName);
+                    await using var conn = await _dataSource.OpenAsync(ct);
 
-            await using var cmd = new NpgsqlCommand(
-                """
-                INSERT INTO whyce_chain (block_id, correlation_id, event_hash, decision_hash, previous_block_hash, timestamp)
-                VALUES (@blockId, @corrId, @evtHash, @decHash, @prevHash, @ts)
-                """,
-                conn);
+                    await using var cmd = new NpgsqlCommand(
+                        """
+                        INSERT INTO whyce_chain (block_id, correlation_id, event_hash, decision_hash, previous_block_hash, timestamp)
+                        VALUES (@blockId, @corrId, @evtHash, @decHash, @prevHash, @ts)
+                        """,
+                        conn);
 
-            cmd.Parameters.AddWithValue("blockId", block.BlockId);
-            cmd.Parameters.AddWithValue("corrId", block.CorrelationId);
-            cmd.Parameters.AddWithValue("evtHash", block.EventHash);
-            cmd.Parameters.AddWithValue("decHash", block.DecisionHash);
-            cmd.Parameters.AddWithValue("prevHash", block.PreviousBlockHash);
-            cmd.Parameters.AddWithValue("ts", block.Timestamp);
+                    cmd.Parameters.AddWithValue("blockId", block.BlockId);
+                    cmd.Parameters.AddWithValue("corrId", block.CorrelationId);
+                    cmd.Parameters.AddWithValue("evtHash", block.EventHash);
+                    cmd.Parameters.AddWithValue("decHash", block.DecisionHash);
+                    cmd.Parameters.AddWithValue("prevHash", block.PreviousBlockHash);
+                    cmd.Parameters.AddWithValue("ts", block.Timestamp);
 
-            // phase1.5-S5.2.3 / TC-3: ExecuteNonQueryAsync now receives
-            // the request/host-shutdown CancellationToken. The empty-paren
-            // form is gone.
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
+                    await cmd.ExecuteNonQueryAsync(ct);
 
-            RecordSuccess();
-            return block;
+                    return block;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    // Caller-driven cancellation propagates unchanged — the
+                    // breaker itself honors OCE and does NOT count it as
+                    // a failure, so the pre-refactor invariant holds.
+                    throw;
+                }
+                catch (CircuitBreakerOpenException)
+                {
+                    // R2.A.D.3c: the postgres-pool breaker can trip while
+                    // the chain-anchor breaker is Closed. Re-throw so the
+                    // outer catch discriminates by BreakerName and attributes
+                    // the failure correctly (pool, not chain-store transport).
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    FailureCounter.Add(1,
+                        new KeyValuePair<string, object?>("outcome", "transport"));
+                    throw new ChainAnchorUnavailableException(
+                        reason: "transport",
+                        retryAfterSeconds: _options.BreakerWindowSeconds,
+                        message: $"Chain-store transport failure: {ex.Message}. No bypass allowed.",
+                        innerException: ex);
+                }
+            },
+            cancellationToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (CircuitBreakerOpenException breakerEx)
         {
-            // Caller-driven cancellation: propagate as-is. Not a chain-store
-            // health signal — do not advance the breaker.
-            throw;
-        }
-        catch (Exception ex) when (ex is not ChainAnchorUnavailableException)
-        {
+            // R-CHAIN-BREAKER-BOUNDARY-01: translate at the adapter edge so
+            // external callers (ChainAnchorService, API-edge handler) see
+            // the same typed exception shape as pre-R2.A.D.3a.
+            //
+            // R2.A.D.3c: distinguish chain-anchor breaker (this adapter's
+            // own dependency breaker) from the shared postgres-pool breaker.
+            // Both surface as ChainAnchorUnavailableException but the
+            // failure-counter outcome tag differs so operator dashboards
+            // attribute the root cause correctly.
+            var outcomeTag = breakerEx.BreakerName == "postgres-pool"
+                ? "pool_breaker_open"
+                : "breaker_open";
             FailureCounter.Add(1,
-                new KeyValuePair<string, object?>("outcome", "transport"));
-            RecordFailure();
+                new KeyValuePair<string, object?>("outcome", outcomeTag));
             throw new ChainAnchorUnavailableException(
-                reason: "transport",
-                retryAfterSeconds: _options.BreakerWindowSeconds,
-                message: $"Chain-store transport failure: {ex.Message}. No bypass allowed.",
-                innerException: ex);
+                reason: outcomeTag,
+                retryAfterSeconds: breakerEx.RetryAfterSeconds,
+                message: breakerEx.BreakerName == "postgres-pool"
+                    ? "Postgres pool circuit breaker open. No bypass allowed."
+                    : "Chain-store circuit breaker open. No bypass allowed.",
+                innerException: breakerEx);
         }
     }
 
     private async Task<string> GetPreviousBlockHashAsync(CancellationToken cancellationToken)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(ChainDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             "SELECT block_id FROM whyce_chain ORDER BY timestamp DESC LIMIT 1",
@@ -173,67 +206,18 @@ public sealed class WhyceChainPostgresAdapter : IChainAnchor
         return result is Guid id ? id.ToString() : "genesis";
     }
 
-    // --- Breaker primitives (mirrors OpaPolicyEvaluator PC-2) ---
+    // --- Breaker state getter (HC-2 consumer contract preserved) ---
 
     /// <summary>
     /// phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
-    /// side-effect-free public getter for the canonical
-    /// runtime-state aggregator. Mirrors the
-    /// <c>OpaPolicyEvaluator.IsBreakerOpen</c> getter exactly.
-    /// Returns <c>true</c> when <c>_openedAt</c> is set; does NOT
-    /// perform the HalfOpen transition that the request-path
-    /// internal call site does — that side-effect must remain
-    /// reserved for the actual request path so the aggregator poll
-    /// cannot accidentally admit a trial call.
+    /// side-effect-free public getter. Post-R2.A.D.4 the
+    /// <see cref="RuntimeStateAggregator"/> reads breaker state via
+    /// <c>ICircuitBreakerRegistry</c> iteration and no longer calls this
+    /// getter directly. Retained for any remaining consumers with adapted
+    /// semantics: returns true when the delegated
+    /// <see cref="ICircuitBreaker"/> is NOT Closed.
     /// </summary>
-    public bool IsBreakerOpen
-    {
-        get
-        {
-            lock (_breakerLock)
-            {
-                return _openedAt is not null;
-            }
-        }
-    }
-
-    private bool IsBreakerOpenInternal()
-    {
-        lock (_breakerLock)
-        {
-            if (_openedAt is null) return false;
-            var elapsed = _clock.UtcNow - _openedAt.Value;
-            if (elapsed.TotalSeconds < _options.BreakerWindowSeconds)
-                return true;
-            // HalfOpen: allow one trial call by clearing _openedAt while
-            // leaving _consecutiveFailures intact. A successful trial
-            // resets via RecordSuccess; a failed trial re-opens via
-            // RecordFailure (consecutive count is already at threshold).
-            _openedAt = null;
-            return false;
-        }
-    }
-
-    private void RecordSuccess()
-    {
-        lock (_breakerLock)
-        {
-            _consecutiveFailures = 0;
-            _openedAt = null;
-        }
-    }
-
-    private void RecordFailure()
-    {
-        lock (_breakerLock)
-        {
-            _consecutiveFailures++;
-            if (_consecutiveFailures >= _options.BreakerThreshold && _openedAt is null)
-            {
-                _openedAt = _clock.UtcNow;
-            }
-        }
-    }
+    public bool IsBreakerOpen => _breaker.State != CircuitBreakerState.Closed;
 
     private static string ComputeEventHash(IReadOnlyList<object> events)
     {

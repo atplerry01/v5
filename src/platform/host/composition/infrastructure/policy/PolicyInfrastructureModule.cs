@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Whycespace.Platform.Host.Adapters;
 using Whycespace.Runtime.Middleware.Policy;
 using Whycespace.Runtime.Middleware.Policy.Loaders;
+using Whycespace.Runtime.Resilience;
 using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Composition.Infrastructure.Policy;
@@ -40,6 +42,24 @@ public static class PolicyInfrastructureModule
                 ?? new OpaOptions().OpenStateBehavior,
         };
         services.AddSingleton(opaOptions);
+
+        // R2.A.D.2 / R-OPA-BREAKER-DELEGATION-01 + R2.A.D.4 / R-BREAKER-REGISTRY-01:
+        // dedicated ICircuitBreaker for the OPA dependency. Name
+        // "opa-policy-evaluator" is the stable metrics tag + health-posture
+        // reason key. Registered as a plain ICircuitBreaker enumerable
+        // contributor so CircuitBreakerRegistry picks it up via
+        // sp.GetServices<ICircuitBreaker>(). Consumers that need this
+        // specific breaker use ICircuitBreakerRegistry.Get("opa-policy-evaluator").
+        services.AddSingleton<ICircuitBreaker>(sp =>
+            new DeterministicCircuitBreaker(
+                new CircuitBreakerOptions
+                {
+                    Name = "opa-policy-evaluator",
+                    FailureThreshold = sp.GetRequiredService<OpaOptions>().BreakerThreshold,
+                    WindowSeconds = sp.GetRequiredService<OpaOptions>().BreakerWindowSeconds
+                },
+                sp.GetRequiredService<IClock>()));
+
         // phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
         // mirror of the chain-anchor pattern above. Register the
         // concrete OpaPolicyEvaluator first so RuntimeStateAggregator
@@ -49,7 +69,8 @@ public static class PolicyInfrastructureModule
             new OpaPolicyEvaluator(
                 new HttpClient(),
                 sp.GetRequiredService<OpaOptions>(),
-                sp.GetRequiredService<IClock>()));
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<ICircuitBreakerRegistry>().Get("opa-policy-evaluator")));
         services.AddSingleton<IPolicyEvaluator>(sp => sp.GetRequiredService<OpaPolicyEvaluator>());
 
         // Phase 11 B3 — CompositeAggregateStateLoader replaces the

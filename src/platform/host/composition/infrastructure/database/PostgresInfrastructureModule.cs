@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Whycespace.Platform.Host.Adapters;
 using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Resilience;
 using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Shared.Contracts.Infrastructure.Projection;
 using Whycespace.Shared.Contracts.Runtime;
@@ -99,9 +100,49 @@ public static class PostgresInfrastructureModule
             CommandTimeoutSeconds = configuration.GetValue<int?>("Postgres:Pools:Projections:CommandTimeoutSeconds")
                 ?? poolDefaults.CommandTimeoutSeconds,
         };
-        services.AddSingleton(new EventStoreDataSource(BuildDataSource(eventStorePoolOptions)));
-        services.AddSingleton(new ChainDataSource(BuildDataSource(chainPoolOptions)));
-        services.AddSingleton(new ProjectionsDataSource(BuildDataSource(projectionsPoolOptions)));
+        // R2.A.D.3c / R-POSTGRES-POOL-BREAKER-01: shared "postgres-pool"
+        // breaker. Wraps every pooled connection acquisition across the
+        // three declared Npgsql pools (event-store, chain, projections).
+        // A single shared breaker is chosen because the three pools
+        // typically point at the same Postgres instance in deployments —
+        // an outage affects all three uniformly and should produce one
+        // coherent health signal. Per-pool TotalFailures (HC-6) remains
+        // for diagnostic attribution. Defaults: 5 failures / 30s window —
+        // tune via Postgres:BreakerThreshold / Postgres:BreakerWindowSeconds.
+        var postgresBreakerThreshold = configuration.GetValue<int?>("Postgres:BreakerThreshold") ?? 5;
+        var postgresBreakerWindowSeconds = configuration.GetValue<int?>("Postgres:BreakerWindowSeconds") ?? 30;
+        services.AddSingleton<ICircuitBreaker>(sp =>
+            new DeterministicCircuitBreaker(
+                new CircuitBreakerOptions
+                {
+                    Name = "postgres-pool",
+                    FailureThreshold = postgresBreakerThreshold,
+                    WindowSeconds = postgresBreakerWindowSeconds
+                },
+                sp.GetRequiredService<IClock>()));
+
+        // R2.A.D.3c: the three DataSource wrappers resolve the shared
+        // "postgres-pool" breaker via the registry so every adapter
+        // acquiring connections through *.OpenAsync(ct) flows through
+        // the same breaker gate.
+        services.AddSingleton(sp => new EventStoreDataSource(
+            BuildDataSource(eventStorePoolOptions),
+            sp.GetRequiredService<ICircuitBreakerRegistry>().Get("postgres-pool")));
+        services.AddSingleton(sp => new ChainDataSource(
+            BuildDataSource(chainPoolOptions),
+            sp.GetRequiredService<ICircuitBreakerRegistry>().Get("postgres-pool")));
+        services.AddSingleton(sp => new ProjectionsDataSource(
+            BuildDataSource(projectionsPoolOptions),
+            sp.GetRequiredService<ICircuitBreakerRegistry>().Get("postgres-pool")));
+
+        // R2.A.D.3c: canonical ProjectionStoreFactory carries the shared
+        // pool breaker into every PostgresProjectionStore built across the
+        // six projection modules. Registering as a singleton here lets each
+        // module resolve via DI instead of rewriting 40+ inline factory
+        // construction sites with an extra ctor parameter.
+        services.AddSingleton(sp => new Whycespace.Projections.Shared.ProjectionStoreFactory(
+            sp.GetRequiredService<ProjectionsDataSource>().Inner,
+            sp.GetRequiredService<ICircuitBreakerRegistry>().Get("postgres-pool")));
 
         // phase1.5-S5.2.4 / HC-6 (POSTGRES-POOL-HEALTH-01): canonical
         // catalog of declared pool name → MaxPoolSize. Read by
@@ -131,6 +172,24 @@ public static class PostgresInfrastructureModule
             new PostgresIdempotencyStoreAdapter(sp.GetRequiredService<EventStoreDataSource>()));
         services.AddSingleton<ISequenceStore>(sp =>
             new PostgresSequenceStoreAdapter(sp.GetRequiredService<EventStoreDataSource>()));
+
+        // R2.A.3b / R-DLQ-STORE-01: durable dead-letter mirror. Wired into
+        // KafkaOutboxPublisher (infrastructure/messaging module) so every
+        // message routed to a `.deadletter` Kafka topic is also recorded
+        // here for operator inspection / re-drive / retention.
+        services.AddSingleton<Whycespace.Shared.Contracts.Infrastructure.Messaging.IDeadLetterStore>(sp =>
+            new PostgresDeadLetterStore(sp.GetRequiredService<EventStoreDataSource>()));
+
+        // R2.A.C.1 / R-LEASE-POSTGRES-01: D3 LOCKED → Postgres advisory
+        // lock based distributed leases. Session-level lock = crash-safe
+        // recovery (R-LEASE-CRASH-SAFE-01). Each active lease holds a
+        // dedicated connection from the declared event-store pool until
+        // DisposeAsync — callers MUST NOT hold more leases than the pool
+        // permits minus headroom for command traffic.
+        services.AddSingleton<Whycespace.Shared.Contracts.Infrastructure.Persistence.IDistributedLeaseProvider>(sp =>
+            new PostgresAdvisoryLeaseProvider(
+                sp.GetRequiredService<EventStoreDataSource>(),
+                sp.GetRequiredService<Whycespace.Shared.Kernel.Domain.IClock>()));
 
         return services;
     }

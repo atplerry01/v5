@@ -18,14 +18,20 @@ public sealed class AuthorizationGuardMiddleware : IMiddleware
     {
         // Authorization requires identity to have been resolved by PolicyMiddleware
         if (string.IsNullOrWhiteSpace(context.IdentityId))
-            return Task.FromResult(CommandResult.Failure("Authorization failed: no identity resolved."));
+            return Task.FromResult(CommandResult.Failure(
+                "Authorization failed: no identity resolved.",
+                RuntimeFailureCategory.AuthorizationDenied));
 
         // Policy decision must exist and be allowed
         if (context.PolicyDecisionAllowed is not true)
-            return Task.FromResult(CommandResult.Failure("Authorization failed: policy decision not approved."));
+            return Task.FromResult(CommandResult.Failure(
+                "Authorization failed: policy decision not approved.",
+                RuntimeFailureCategory.AuthorizationDenied));
 
         if (string.IsNullOrWhiteSpace(context.PolicyDecisionHash))
-            return Task.FromResult(CommandResult.Failure("Authorization failed: policy decision hash missing."));
+            return Task.FromResult(CommandResult.Failure(
+                "Authorization failed: policy decision hash missing.",
+                RuntimeFailureCategory.AuthorizationDenied));
 
         return next(cancellationToken);
     }

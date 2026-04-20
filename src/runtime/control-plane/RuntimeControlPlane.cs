@@ -120,8 +120,8 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
             // distinguish a graceful drain from an infrastructure
             // outage.
             if (cancellationToken.IsCancellationRequested)
-                return CommandResult.Failure("execution_cancelled");
-            return CommandResult.Failure("execution_lock_unavailable");
+                return CommandResult.Failure("execution_cancelled", RuntimeFailureCategory.Cancellation);
+            return CommandResult.Failure("execution_lock_unavailable", RuntimeFailureCategory.DependencyUnavailable);
         }
 
         try
@@ -165,9 +165,9 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
         switch (decision.Outcome)
         {
             case RuntimeEnforcementOutcome.BlockMaintenance:
-                return CommandResult.Failure(decision.Reason!);
+                return CommandResult.Failure(decision.Reason!, RuntimeFailureCategory.RuntimeGuardRejection);
             case RuntimeEnforcementOutcome.BlockRestricted:
-                return CommandResult.Failure(decision.Reason!);
+                return CommandResult.Failure(decision.Reason!, RuntimeFailureCategory.RuntimeGuardRejection);
             case RuntimeEnforcementOutcome.ProceedRestricted:
                 // Soft tag — the dispatch proceeds normally; the
                 // tag exists so middleware / observability / audit
@@ -217,7 +217,8 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
             {
                 return CommandResult.Failure(
                     "WHYCEPOLICY HARD STOP: Audit emission requires PolicyDecisionHash. " +
-                    "Chain anchoring requires a valid decision hash.");
+                    "Chain anchoring requires a valid decision hash.",
+                    RuntimeFailureCategory.PolicyDenied);
             }
 
             await _eventFabric.ProcessAuditAsync(audit, context, cancellationToken);
@@ -229,14 +230,16 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
             {
                 return CommandResult.Failure(
                     "WHYCEPOLICY HARD STOP: Events cannot be persisted without policy approval. " +
-                    "PolicyDecisionAllowed is not true. Chain integrity requires policy evaluation.");
+                    "PolicyDecisionAllowed is not true. Chain integrity requires policy evaluation.",
+                    RuntimeFailureCategory.PolicyDenied);
             }
 
             if (string.IsNullOrEmpty(context.PolicyDecisionHash))
             {
                 return CommandResult.Failure(
                     "WHYCEPOLICY HARD STOP: Events cannot be persisted without PolicyDecisionHash. " +
-                    "Chain anchoring requires a valid decision hash.");
+                    "Chain anchoring requires a valid decision hash.",
+                    RuntimeFailureCategory.PolicyDenied);
             }
 
             await _eventFabric.ProcessAsync(result.EmittedEvents, context, cancellationToken);
@@ -266,14 +269,16 @@ public sealed class RuntimeControlPlane : IRuntimeControlPlane
         {
             return Task.FromResult(CommandResult.Failure(
                 "WHYCEPOLICY HARD STOP: Command dispatch blocked. PolicyDecisionAllowed is not true. " +
-                "No engine execution without explicit policy approval. No bypass allowed."));
+                "No engine execution without explicit policy approval. No bypass allowed.",
+                RuntimeFailureCategory.PolicyDenied));
         }
 
         if (string.IsNullOrEmpty(context.IdentityId))
         {
             return Task.FromResult(CommandResult.Failure(
                 "WHYCEID HARD STOP: Command dispatch blocked. IdentityId is not set. " +
-                "No engine execution without identity resolution. No bypass allowed."));
+                "No engine execution without identity resolution. No bypass allowed.",
+                RuntimeFailureCategory.AuthorizationDenied));
         }
 
         return _dispatcher.DispatchAsync(command, context, cancellationToken);

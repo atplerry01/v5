@@ -30,7 +30,7 @@ public sealed class PostgresSequenceStoreAdapter : ISequenceStore
 
     public async Task<long> NextAsync(string scope, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             """
@@ -51,7 +51,7 @@ public sealed class PostgresSequenceStoreAdapter : ISequenceStore
 
     public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         // Strict shape check: confirm the table exists AND both required
         // columns are present. Catches partial / drifted migrations as well

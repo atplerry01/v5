@@ -175,7 +175,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<WorkflowTriggerHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<WorkflowTriggerWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<WorkflowTriggerWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 2 — Ledger → Capital event-driven integration.
         // Subscribes to whyce.economic.ledger.{journal,ledger}.events and dispatches
@@ -191,7 +197,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<LedgerToCapitalIntegrationHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<LedgerToCapitalIntegrationWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<LedgerToCapitalIntegrationWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 8 B3 — Payout failure → compensation saga reactor.
         // Subscribes to whyce.economic.revenue.payout.events and starts
@@ -208,7 +220,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<PayoutFailureCompensationIntegrationHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<PayoutFailureCompensationWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<PayoutFailureCompensationWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 8 B4 — Sanction activation → enforcement saga reactor.
         // Subscribes to whyce.economic.enforcement.sanction.events and
@@ -226,7 +244,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<SanctionActivationEnforcementHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionActivationEnforcementWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionActivationEnforcementWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 8 B5 — Expiry schedulers for sanction + system lock.
         // Timer-driven BackgroundServices that scan the enforcement
@@ -273,7 +297,10 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sanctionSchedulerIntervalSeconds,
                 sanctionSchedulerBatchSize,
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionExpirySchedulerWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SanctionExpirySchedulerWorker>>(),
+                // R2.A.C.2.5 / R-LEADER-ELECTION-01: parallel migration to the
+                // SystemLock scheduler. sp.GetService tolerates legacy hosts.
+                leaseProvider: sp.GetService<Whycespace.Shared.Contracts.Infrastructure.Persistence.IDistributedLeaseProvider>()));
 
         services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
             new SystemLockExpirySchedulerWorker(
@@ -283,7 +310,11 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 lockSchedulerIntervalSeconds,
                 lockSchedulerBatchSize,
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<SystemLockExpirySchedulerWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<SystemLockExpirySchedulerWorker>>(),
+                // R2.A.C.2 / R-LEADER-ELECTION-01: enable single-leader
+                // semantics when the lease provider is registered. sp.GetService
+                // (not GetRequiredService) tolerates legacy hosts / tests.
+                leaseProvider: sp.GetService<Whycespace.Shared.Contracts.Infrastructure.Persistence.IDistributedLeaseProvider>()));
 
         // Phase 3 (enforcement) — Violation → Capital command bridge.
         // Consumes whyce.economic.enforcement.violation.events and, when the
@@ -301,7 +332,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<EnforcementToCapitalIntegrationHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementToCapitalWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementToCapitalWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 2 (enforcement) — Violation → Policy feedback bridge.
         // Consumes whyce.economic.enforcement.violation.events and publishes
@@ -309,11 +346,17 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
         // so WhycePolicy evaluations can factor in active enforcement state.
         var policyVersion = configuration.GetValue<string>("WhycePolicy:Version") ?? "v1";
 
+        // R2.A.D.3b closure: feedback handler's ProduceAsync flows through
+        // the shared "kafka-producer" breaker — same instance protecting
+        // outbox primary + DLQ publish. Registry TryGet is null-safe so
+        // test composition paths that omit the breaker still wire cleanly.
         services.AddSingleton(sp => new EnforcementToPolicyFeedbackHandler(
             sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<IIdGenerator>(),
-            policyVersion));
+            policyVersion,
+            sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer"),
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementToPolicyFeedbackHandler>>()));
 
         services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp =>
             new EnforcementToPolicyFeedbackWorker(
@@ -322,7 +365,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<EnforcementToPolicyFeedbackHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementToPolicyFeedbackWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementToPolicyFeedbackWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 3 (enforcement) — OPA-backed detection worker.
         // Subscribes to a configurable set of source topics, evaluates each
@@ -397,7 +446,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<ViolationToEscalationHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<ViolationToEscalationWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<ViolationToEscalationWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         var detectionTopics = configuration.GetSection("Enforcement:Detection:Topics").Get<string[]>()
             ?? new[]
@@ -414,7 +469,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<EnforcementDetectionHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementDetectionWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EnforcementDetectionWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
 
         // Phase 2.5 (reconciliation lifecycle workflow) — Kafka-driven T1M
         // orchestrator. Consumes whyce.economic.reconciliation.{process,discrepancy}.events
@@ -447,7 +508,13 @@ public sealed class EconomicCompositionRoot : IDomainBootstrapModule
                 sp.GetRequiredService<RiskExposureEnforcementHandler>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<RiskExposureEnforcementWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<RiskExposureEnforcementWorker>>(),
+                // R2.A.3d Phase B: retry tier escalation
+                producer: sp.GetRequiredService<Confluent.Kafka.IProducer<string, string>>(),
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<Whycespace.Platform.Host.Adapters.RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>(),
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer")));
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)

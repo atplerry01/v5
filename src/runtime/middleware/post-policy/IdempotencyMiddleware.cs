@@ -30,6 +30,13 @@ public sealed class IdempotencyMiddleware : IMiddleware
     {
         var idempotencyKey = $"{command.GetType().Name}:{context.CommandId}";
 
+        // R1 §8 — surface the key on the context so audit, metrics, and
+        // downstream middleware see evidence of idempotency tracking.
+        if (context.IdempotencyKey is null)
+        {
+            context.IdempotencyKey = idempotencyKey;
+        }
+
         // phase1.5-S5.2.2 / KC-2 (IDEMPOTENCY-COALESCE-01): single
         // round-trip claim replaces the pre-KC-2 ExistsAsync +
         // MarkAsync two-step shape. Happy path = 1 event-store pool
@@ -47,8 +54,26 @@ public sealed class IdempotencyMiddleware : IMiddleware
         // cancellation end-to-end.
         if (!await _idempotencyStore.TryClaimAsync(idempotencyKey, cancellationToken))
         {
-            return CommandResult.Failure("Duplicate command detected.");
+            // R1 §8 — duplicate signal surfaced via canonical shape. The
+            // `IIdempotencyStore` contract does not return the previous
+            // result today, so `AlreadyProcessed` cannot be reconstructed
+            // verbatim; callers get IsDuplicate=true + the key + the
+            // canonical ConcurrencyConflict category. Full previous-result
+            // replay is a follow-up once the store contract exposes it.
+            if (context.IdempotencyOutcome is null)
+                context.IdempotencyOutcome = IdempotencyOutcome.Hit;
+            return CommandResult.Failure(
+                "Duplicate command detected.",
+                RuntimeFailureCategory.ConcurrencyConflict)
+                with
+                {
+                    IsDuplicate = true,
+                    IdempotencyKey = idempotencyKey
+                };
         }
+
+        if (context.IdempotencyOutcome is null)
+            context.IdempotencyOutcome = IdempotencyOutcome.Miss;
 
         CommandResult result;
         try

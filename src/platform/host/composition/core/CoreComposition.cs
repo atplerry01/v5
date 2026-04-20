@@ -20,6 +20,18 @@ public static class CoreComposition
         // IIdGenerator — deterministic ID generation (SHA256-based)
         services.AddSingleton<IIdGenerator, DeterministicIdGenerator>();
 
+        // R2.A.1 — IRandomProvider: deterministic randomness (SHA256-based,
+        // seed-driven, no hidden RNG state). Required by IRetryExecutor for
+        // replay-safe jitter and by any future rebalance / probe / load-shed
+        // selector under R-RETRY-DET-01.
+        services.AddSingleton<Whycespace.Shared.Kernel.Domain.IRandomProvider,
+            Whycespace.Runtime.Resilience.DeterministicRandomProvider>();
+
+        // R2.A.1 — IRetryExecutor: canonical bounded retry with deterministic
+        // backoff+jitter. Category-driven eligibility via RetryEligibility.
+        services.AddSingleton<Whycespace.Shared.Contracts.Runtime.IRetryExecutor,
+            Whycespace.Runtime.Resilience.DeterministicRetryExecutor>();
+
         return services;
     }
 }

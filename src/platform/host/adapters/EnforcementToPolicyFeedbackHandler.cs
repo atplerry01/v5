@@ -1,8 +1,10 @@
 using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.EventFabric;
 using Whycespace.Shared.Contracts.Events.Constitutional.Policy.Feedback;
 using Whycespace.Shared.Contracts.Events.Economic.Enforcement.Violation;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -31,19 +33,29 @@ public sealed class EnforcementToPolicyFeedbackHandler
     private readonly IIdGenerator _idGenerator;
     private readonly string _policyVersion;
 
+    // R2.A.D.3b closure: shared "kafka-producer" breaker — same instance
+    // that protects outbox primary + DLQ publish. Optional so tests that
+    // construct the handler without a composition root continue to work.
+    private readonly ICircuitBreaker? _kafkaBreaker;
+    private readonly ILogger<EnforcementToPolicyFeedbackHandler>? _logger;
+
     public EnforcementToPolicyFeedbackHandler(
         IProducer<string, string> producer,
         IClock clock,
         IIdGenerator idGenerator,
-        string policyVersion)
+        string policyVersion,
+        ICircuitBreaker? kafkaBreaker = null,
+        ILogger<EnforcementToPolicyFeedbackHandler>? logger = null)
     {
         _producer = producer;
         _clock = clock;
         _idGenerator = idGenerator;
         _policyVersion = policyVersion;
+        _kafkaBreaker = kafkaBreaker;
+        _logger = logger;
     }
 
-    public Task HandleAsync(IEventEnvelope envelope, CancellationToken cancellationToken = default)
+    public async Task HandleAsync(IEventEnvelope envelope, CancellationToken cancellationToken = default)
     {
         var feedback = envelope.Payload switch
         {
@@ -66,7 +78,7 @@ public sealed class EnforcementToPolicyFeedbackHandler
             _ => null
         };
 
-        if (feedback is null) return Task.CompletedTask;
+        if (feedback is null) return;
 
         var derivedEventId = _idGenerator.Generate(
             $"policy-feedback:{envelope.EventId}:{feedback.Outcome}");
@@ -80,14 +92,39 @@ public sealed class EnforcementToPolicyFeedbackHandler
             { "correlation-id", System.Text.Encoding.UTF8.GetBytes(envelope.CorrelationId.ToString()) }
         };
 
-        return _producer.ProduceAsync(
-            FeedbackTopic,
-            new Message<string, string>
+        var message = new Message<string, string>
+        {
+            Key = feedback.ViolationId.ToString(),
+            Value = payload,
+            Headers = headers
+        };
+
+        // R2.A.D.3b closure: feedback emission is a fire-and-forget bridge,
+        // NOT the command critical path. When the shared "kafka-producer"
+        // breaker is Open we skip + log rather than re-throw — the source
+        // consumer (EnforcementToPolicyFeedbackWorker) MUST continue to
+        // advance its offset on other envelopes and the feedback stream
+        // self-repairs when the breaker recovers (source consumer replays
+        // from its last committed offset). Re-throwing would block the
+        // source consumer and pin its offset behind the outage window.
+        try
+        {
+            if (_kafkaBreaker is null)
             {
-                Key = feedback.ViolationId.ToString(),
-                Value = payload,
-                Headers = headers
-            },
-            cancellationToken);
+                await _producer.ProduceAsync(FeedbackTopic, message, cancellationToken);
+            }
+            else
+            {
+                await _kafkaBreaker.ExecuteAsync(
+                    ct => _producer.ProduceAsync(FeedbackTopic, message, ct),
+                    cancellationToken);
+            }
+        }
+        catch (CircuitBreakerOpenException ex)
+        {
+            _logger?.LogWarning(
+                "EnforcementToPolicyFeedbackHandler skipped publish: breaker '{Breaker}' open ({RetryAfter}s). eventId={EventId}, outcome={Outcome}.",
+                ex.BreakerName, ex.RetryAfterSeconds, envelope.EventId, feedback.Outcome);
+        }
     }
 }

@@ -25,7 +25,7 @@ public static class KanbanProjectionModule
     {
         // Projection layer — factory-created store + domain-focused handlers
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<KanbanBoardReadModel>("projection_operational_sandbox_kanban", "kanban_read_model", "Kanban"));
         services.AddSingleton(sp => new KanbanBoardProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<KanbanBoardReadModel>>()));
@@ -61,7 +61,15 @@ public static class KanbanProjectionModule
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>(),
+                pollTimeout: null,
+                deadLetterStore: sp.GetService<Whycespace.Shared.Contracts.Infrastructure.Messaging.IDeadLetterStore>(),
+                // R2.A.D.3b: consumer DLQ publish flows through shared "kafka-producer" breaker.
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer"),
+                // R2.A.3d: retry tier escalation wiring.
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>()));
 
         return services;
     }

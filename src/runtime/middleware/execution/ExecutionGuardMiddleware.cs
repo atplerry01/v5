@@ -113,13 +113,15 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
         if (context.PolicyDecisionAllowed is not true)
         {
             return CommandResult.Failure(
-                "Execution guard: command cannot proceed without approved policy decision.");
+                "Execution guard: command cannot proceed without approved policy decision.",
+                RuntimeFailureCategory.PolicyDenied);
         }
 
         if (string.IsNullOrWhiteSpace(context.PolicyDecisionHash))
         {
             return CommandResult.Failure(
-                "Execution guard: policy decision hash is required for chain anchoring.");
+                "Execution guard: policy decision hash is required for chain anchoring.",
+                RuntimeFailureCategory.PolicyDenied);
         }
 
         var commandType = command.GetType().Name;
@@ -147,7 +149,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                     EnforcementActions.Add(1, new("action", "lock_block_cached"), new("command.type", commandType));
                     return CommandResult.Failure(
                         $"Execution guard: subject is locked (scope={cachedLock.Scope}, source=cache). " +
-                        "All commands rejected until lock is released.");
+                        "All commands rejected until lock is released.",
+                        RuntimeFailureCategory.RuntimeGuardRejection);
                 }
             }
         }
@@ -169,7 +172,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
 
                 return CommandResult.Failure(
                     "Execution guard: lock state cannot be verified (infrastructure unavailable). " +
-                    "Command blocked — fail-closed. Retry when lock projection is available.");
+                    "Command blocked — fail-closed. Retry when lock projection is available.",
+                    RuntimeFailureCategory.DependencyUnavailable);
             }
 
             if (lockState.IsLocked)
@@ -183,7 +187,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
 
                 return CommandResult.Failure(
                     $"Execution guard: subject is locked (scope={lockState.Scope}). " +
-                    "All commands rejected until lock is released.");
+                    "All commands rejected until lock is released.",
+                    RuntimeFailureCategory.RuntimeGuardRejection);
             }
         }
 
@@ -199,7 +204,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                 {
                     EnforcementActions.Add(1, new("action", "violation_block_cached"), new("command.type", commandType));
                     return CommandResult.Failure(
-                        "Execution guard: subject has an active Critical+Block enforcement violation (source=cache). Command rejected.");
+                        "Execution guard: subject has an active Critical+Block enforcement violation (source=cache). Command rejected.",
+                        RuntimeFailureCategory.RuntimeGuardRejection);
                 }
                 if (!string.IsNullOrEmpty(cachedViolation.Constraint))
                 {
@@ -216,7 +222,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                 EnforcementActions.Add(1, new("action", "violation_block"), new("command.type", commandType));
 
                 return CommandResult.Failure(
-                    "Execution guard: subject has an active Critical+Block enforcement violation. Command rejected.");
+                    "Execution guard: subject has an active Critical+Block enforcement violation. Command rejected.",
+                    RuntimeFailureCategory.RuntimeGuardRejection);
             }
             if (!string.IsNullOrEmpty(posture.Constraint) && string.IsNullOrEmpty(context.EnforcementConstraint))
             {
@@ -254,7 +261,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                 context.EnforcementConstraint = $"Restricted:{cachedRestriction.Scope}";
                 return CommandResult.Failure(
                     $"Execution guard: subject is restricted (scope={cachedRestriction.Scope}, source=cache). " +
-                    "Command rejected.");
+                    "Command rejected.",
+                    RuntimeFailureCategory.RuntimeGuardRejection);
             }
         }
 
@@ -273,7 +281,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                 context.EnforcementConstraint = $"Restricted:{restriction.Scope}";
                 return CommandResult.Failure(
                     $"Execution guard: subject is restricted (scope={restriction.Scope}). " +
-                    "Command rejected.");
+                    "Command rejected.",
+                    RuntimeFailureCategory.RuntimeGuardRejection);
             }
         }
 
@@ -285,7 +294,8 @@ public sealed class ExecutionGuardMiddleware : IMiddleware
                 EnforcementActions.Add(1, new("action", "escalation_block"), new("command.type", commandType));
 
                 return CommandResult.Failure(
-                    "Execution guard: subject escalation level is Critical. Command rejected.");
+                    "Execution guard: subject escalation level is Critical. Command rejected.",
+                    RuntimeFailureCategory.RuntimeGuardRejection);
             }
             if (escalation.IsHigh || escalation.IsMedium)
             {

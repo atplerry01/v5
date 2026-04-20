@@ -41,6 +41,18 @@ public sealed class WorkflowExecutionSchemaModule : ISchemaModule
             EventVersion.Default,
             typeof(DomainEvents.WorkflowExecutionResumedEvent),
             typeof(WorkflowExecutionResumedEventSchema));
+        // R3.A.4 / R-WORKFLOW-CANCELLATION-SCHEMA-REGISTRATION-01
+        sink.RegisterSchema(
+            "WorkflowExecutionCancelledEvent",
+            EventVersion.Default,
+            typeof(DomainEvents.WorkflowExecutionCancelledEvent),
+            typeof(WorkflowExecutionCancelledEventSchema));
+        // R3.A.3 / R-WORKFLOW-SUSPEND-SCHEMA-REGISTRATION-01
+        sink.RegisterSchema(
+            "WorkflowExecutionSuspendedEvent",
+            EventVersion.Default,
+            typeof(DomainEvents.WorkflowExecutionSuspendedEvent),
+            typeof(WorkflowExecutionSuspendedEventSchema));
 
         sink.RegisterPayloadMapper("WorkflowExecutionStartedEvent", e =>
         {
@@ -69,6 +81,20 @@ public sealed class WorkflowExecutionSchemaModule : ISchemaModule
             var evt = (DomainEvents.WorkflowExecutionResumedEvent)e;
             return new WorkflowExecutionResumedEventSchema(
                 evt.AggregateId.Value, evt.ResumedFromStepName, evt.PreviousFailureReason);
+        });
+        // R3.A.4 / R-WORKFLOW-CANCELLATION-SCHEMA-REGISTRATION-01
+        sink.RegisterPayloadMapper("WorkflowExecutionCancelledEvent", e =>
+        {
+            var evt = (DomainEvents.WorkflowExecutionCancelledEvent)e;
+            return new WorkflowExecutionCancelledEventSchema(
+                evt.AggregateId.Value, evt.StepName, evt.Reason);
+        });
+        // R3.A.3 / R-WORKFLOW-SUSPEND-SCHEMA-REGISTRATION-01
+        sink.RegisterPayloadMapper("WorkflowExecutionSuspendedEvent", e =>
+        {
+            var evt = (DomainEvents.WorkflowExecutionSuspendedEvent)e;
+            return new WorkflowExecutionSuspendedEventSchema(
+                evt.AggregateId.Value, evt.StepName, evt.Reason);
         });
     }
 }

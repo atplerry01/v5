@@ -2611,3 +2611,1092 @@ References:
 - CLAUDE.md $12 (failure semantics)
 - GUARD-PIPELINE-TEMPLATE-01 (`/pipeline/*.md` templates)
 - Source: `claude/new-rules/20260418-093419-audits.md`
+
+---
+
+## Section: R1 Foundation Hardening (Batch 3.5 — 2026-04-19)
+
+These seven rules lock the R1 canonical failure-taxonomy + idempotency-evidence + policy-overlay + state-boundary wiring landed during R1 Batch 3.5. They are consolidated from `claude/new-rules/20260419-020000-guards.md`.
+
+### R-FAIL-CAT-01 — Every Runtime Failure Carries a Canonical Category
+
+Definition:
+Every `CommandResult.Failure(...)` call inside `src/runtime/**` MUST use a categorized overload: `Failure(error, RuntimeFailureCategory)`, `CommandResult.ValidationFailure(error, ValidationFailureCategory)`, or `CommandResult.PersistenceFailure(error, PersistenceFailureCategory)`. The 1-arg `Failure(error)` overload is retained ONLY for backwards compatibility with tests and boundary code outside runtime. Any call to it inside `src/runtime/**` is S1 drift.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/CommandResult.cs` (factories)
+- `src/shared/contracts/runtime/RuntimeFailureCategory.cs`
+- `src/shared/contracts/runtime/ValidationFailureCategory.cs`
+- `src/shared/contracts/runtime/PersistenceFailureCategory.cs`
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-FAIL-CAT-02 — Category Matches Semantic Intent
+
+Definition:
+Middleware failures MUST choose the category matching where in the pipeline the rejection happened. Canonical mapping: `ValidationMiddleware` → `ValidationFailure(*)`; `AuthorizationGuardMiddleware` → `AuthorizationDenied`; `PolicyMiddleware` deny paths → `PolicyDenied`; `PolicyMiddleware` identity-resolution failure → `AuthorizationDenied`; `ExecutionGuardMiddleware` lock/violation/restriction/escalation → `RuntimeGuardRejection`; `ExecutionGuardMiddleware` lock-state-unavailable (fail-closed) → `DependencyUnavailable`; `IdempotencyMiddleware` duplicate → `ConcurrencyConflict` + `IsDuplicate=true`; `RuntimeControlPlane` cancellation → `Cancellation`; `RuntimeControlPlane` lock-unavailable → `DependencyUnavailable`; `RuntimeControlPlane` WHYCEPOLICY hard-stop → `PolicyDenied`.
+
+Severity:
+S2
+
+References:
+- R-FAIL-CAT-01
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-EXC-MAP-01 — Unhandled Exceptions Route Through `RuntimeExceptionMapper`
+
+Definition:
+Any top-level `try/catch` in `src/runtime/control-plane/**` that converts an exception to a `CommandResult` MUST route through `RuntimeExceptionMapper.ToCommandResult(ex, correlationId)`. Ad-hoc `catch { return CommandResult.Failure(ex.Message); }` is forbidden — leaks internal type names / stack traces and produces uncategorized failures. Severity is S2 today (advisory) and hardens to S1 once R2 wires the top-level try/catch.
+
+Severity:
+S2 (→ S1 post-R2)
+
+References:
+- `src/runtime/control-plane/RuntimeExceptionMapper.cs`
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-IDEM-EVIDENCE-01 — Idempotency Evidence Stamped on Context
+
+Definition:
+`IdempotencyMiddleware` MUST stamp `CommandContext.IdempotencyKey` and `CommandContext.IdempotencyOutcome` on every invocation (`Hit` on duplicate, `Miss` on fresh claim). Duplicate path MUST return `CommandResult.Failure(msg, ConcurrencyConflict) with { IsDuplicate = true, IdempotencyKey = key }`. Missing evidence breaks audit hit-rate measurement and forces consumers to parse error strings.
+
+Severity:
+S2
+
+References:
+- `src/runtime/middleware/post-policy/IdempotencyMiddleware.cs`
+- `src/shared/contracts/runtime/CommandContext.cs` (`IdempotencyKey`, `IdempotencyOutcome`)
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-POLICY-OVERLAY-01 — Policy Input Uses 6-arg `Enrich`
+
+Definition:
+`PolicyMiddleware` MUST invoke `PolicyInputBuilder.Enrich(baseContext, command, resourceState, now, environment, jurisdiction)`. The 4-arg overload is deprecated for new callers but retained for backwards compatibility. `environment` and `jurisdiction` may be passed as `null` until overlay sources are wired; the builder emits omitted OPA input fields in that case, preserving pre-R1 rego behavior.
+
+Severity:
+S2
+
+References:
+- `src/runtime/middleware/policy/PolicyInputBuilder.cs`
+- `src/shared/contracts/infrastructure/policy/IPolicyEvaluator.cs` (`PolicyContext.Environment`, `Jurisdiction`)
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-CTX-SESSION-01 — Session / Token / Idempotency Fields Are Write-Once With Replay Reset
+
+Definition:
+`CommandContext.SessionId`, `TokenFingerprint`, `StepUpAuthenticatedAt`, `IdempotencyKey`, `IdempotencyOutcome` are write-once (second write throws, matching R-CTX-01 for the `PolicyDecisionHash` family). `CommandContext.ResetForReplay()` MUST clear ALL five fields alongside the pre-existing write-once set. Missing a field in the reset breaks replay determinism — the S1.4 reset seam only works if EVERY write-once field is in the reset path.
+
+Severity:
+S2
+
+References:
+- `src/shared/contracts/runtime/CommandContext.cs`
+- R-CTX-01 (pre-existing write-once pattern)
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### R-STATE-BOUNDARY-01 — Runtime Middleware Holds No Static Mutable State
+
+Definition:
+Types under `src/runtime/middleware/**` and `src/runtime/control-plane/**` MUST NOT declare static mutable fields. `static readonly` singletons (e.g. `Meter`, `Counter<T>`) are permitted; `static const` is permitted; any other static field is S1 drift. Middleware instances are shared across concurrent requests — static mutable state causes cross-request contamination and breaks both replay determinism and multi-instance deployment.
+
+Severity:
+S1
+
+References:
+- Architecture test `RuntimeMiddleware_holds_no_static_mutable_state` in `tests/unit/architecture/WbsmArchitectureTests.cs`
+- Source: `claude/new-rules/20260419-020000-guards.md`
+
+### DET-RAND-01 — Deterministic Randomness Seam (`IRandomProvider`)
+
+Definition:
+Non-cryptographic randomness in domain / engine / runtime / adapter paths MUST go through `IRandomProvider.NextDouble / NextInt / NextLong` with a seed derived from deterministic operation coordinates (e.g. `$"{correlationId}:retry:{attempt}"`). `Random` / `Random.Shared` / `RandomNumberGenerator.GetBytes` for non-cryptographic purposes remain forbidden. The `DeterministicRandomProvider` implementation (to land in R2 host composition) is the single permitted reader of any RNG source.
+
+Severity:
+S0 (constitutional — replay determinism)
+
+References:
+- `src/shared/kernel/domain/IRandomProvider.cs`
+- `constitutional.guard.md` § Determinism (this rule is a constitutional rule; it is listed in the runtime guard for visibility and will be promoted to the constitutional guard in a subsequent sweep)
+- Source: `claude/new-rules/20260419-010000-guards.md`
+
+### R-RETRY-DET-01 — Retry Executor Is Fully Replay-Deterministic
+
+Definition:
+`IRetryExecutor.ExecuteAsync` is a pure function of (input operation, policy, operation coordinates, `IClock.UtcNow` reads at attempt boundaries, `IRandomProvider.NextDouble` seeded from operation coordinates). No other entropy source. Forbidden inside `src/runtime/resilience/**`: `DateTime.UtcNow`, `DateTimeOffset.UtcNow`, `Environment.TickCount`, `Stopwatch` for values that land in events, `Random` / `Random.Shared` / `RandomNumberGenerator`. Permitted: `Task.Delay(backoff, ct)` for the actual wait (replay does NOT re-execute sleeps). Every `IClock.UtcNow` read MUST happen at a deterministic point and be captured in `RetryAttemptRecord`.
+
+Severity:
+S0
+
+References:
+- `src/shared/contracts/runtime/IRetryExecutor.cs`
+- `src/runtime/resilience/DeterministicRetryExecutor.cs`
+- `src/runtime/resilience/DeterministicRandomProvider.cs`
+- Unit tests `DeterministicRetryExecutorTests.Two_Runs_With_Same_Context_And_Outcomes_Produce_Identical_Delays` + `DeterministicRandomProviderTests.NextDouble_Same_Seed_Returns_Same_Value`
+- Source: `claude/new-rules/20260419-050000-guards.md`
+
+### R-RETRY-CAT-01 — Retry Eligibility Is Category-Driven
+
+Definition:
+Retry eligibility MUST be computed from `RuntimeFailureCategory` via `RetryEligibility.IsRetryable`, never from error strings. Canonical mapping: Retryable = `Timeout` / `DependencyUnavailable` / `ConcurrencyConflict` / `ResourceExhausted` / `ExecutionFailure` / `PersistenceFailure`. Non-retryable = `AuthorizationDenied` / `PolicyDenied` / `ValidationFailed` / `RuntimeGuardRejection` / `InvalidState` / `PoisonMessage` / `Cancellation` / `Unknown`. The string-based `RetryPolicy.IsPermanentFailure` heuristic is deprecated by R2.A.1; existing `PostToLedgerStep` caller migrates in R2.A.2.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/IRetryExecutor.cs` (`RetryEligibility.IsRetryable`)
+- `DeterministicRetryExecutorTests.RetryEligibility_Canonical_Mapping` (Theory: 14 categories)
+- Source: `claude/new-rules/20260419-050000-guards.md`
+
+### R-RETRY-CAP-01 — Bounded Attempts; No Infinite Retry
+
+Definition:
+Every `IRetryExecutor.ExecuteAsync` call terminates in ≤ `policy.MaxAttempts` attempts (default 3) regardless of failure category. After exhaustion the executor returns `RetryOutcome.Exhausted` with the final attempt's error preserved. Policy-deferred outcomes (R2.A.2 `PolicyEvaluationDeferred`) obey the same cap — on the final attempt, a defer converts to a terminal `FAIL_CLOSED` per POL-FAIL-CLASS-01. Closes the "infinite retry on policy unavailable" S0 concern.
+
+Severity:
+S0
+
+References:
+- `src/runtime/resilience/DeterministicRetryExecutor.cs`
+- `DeterministicRetryExecutorTests.Sustained_Retryable_Failures_Exhaust_After_MaxAttempts`
+- `DeterministicRetryExecutorTests.MaxAttempts_Of_One_Runs_Once_And_Then_Exhausts`
+- Source: `claude/new-rules/20260419-050000-guards.md`
+
+### R-RETRY-EVIDENCE-01 — Every Retry Emits Auditable Evidence
+
+Definition:
+`RetryResult` MUST carry an `IReadOnlyList<RetryAttemptRecord>` with one record per attempt (including the first). Each record carries: attempt number (1-based), `StartedAt` (from `IClock`), `CompletedAt` (from `IClock`), `DelayBeforeAttempt` (deterministic backoff+jitter, zero for attempt 1), `IsSuccess`, `FailureCategory` (null on success), `Error` (safe message). When a caller persists retry outcomes (R2.A.2+), they MUST emit `RetryAttemptedEvent` / `RetryExhaustedEvent` sourced from this record — never reconstructed.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/IRetryExecutor.cs` (`RetryAttemptRecord`)
+- `DeterministicRetryExecutorTests.Attempt_Records_Contain_Every_Attempt_With_Timestamps`
+- Source: `claude/new-rules/20260419-050000-guards.md`
+
+### R-TOPIC-TIER-01 — Canonical Three-Tier Topic Naming
+
+Definition:
+The runtime fabric emits events on exactly one of four topic tiers per `(classification, context, domain)` coordinate: `.commands` (inbound) / `.events` (primary outbound) / `.retry` (first-failure retry tier) / `.deadletter` (terminal). Tier transitions follow the locked order: a message failing on `.events` routes to `.retry`; a message failing on `.retry` after `MaxAttempts` routes to `.deadletter`; `.deadletter` is terminal and never feeds back into `.events` or `.retry` except via an explicit operator re-drive (R4 admin surface). Poison messages (deserialization / schema validation failures) route directly to `.deadletter` — no retry tier. `TopicNameResolver` is the single source of truth; callers constructing these strings inline are S1 drift.
+
+Severity:
+S1
+
+References:
+- `src/runtime/event-fabric/TopicNameResolver.cs` (`ResolveRetry`, extended `ResolveDeadLetter`)
+- `TopicNameResolverRetryTierTests` (13 tests, covers every tier transition)
+- `D2` locked → tiered `.events` → `.retry` → `.deadletter`
+- Source: `claude/new-rules/20260419-060000-guards.md`
+
+### R-BREAKER-REGISTRY-01 — ICircuitBreakerRegistry Canonical Lookup + Enumeration
+
+Definition:
+`ICircuitBreakerRegistry` exposes `Get(string name) → ICircuitBreaker` (throws `KeyNotFoundException` for unknown — fail loud on misconfiguration), `TryGet(string name) → ICircuitBreaker?` (null-tolerant), `GetAll() → IReadOnlyCollection<ICircuitBreaker>` sorted by `Name` for deterministic iteration. Registry is immutable after construction. Names MUST match `ICircuitBreaker.Name`. Replaces the keyed-DI approach from R2.A.D.2.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/ICircuitBreakerRegistry.cs`
+- `src/runtime/resilience/CircuitBreakerRegistry.cs`
+- `CircuitBreakerRegistryTests` (10 tests)
+- Source: `claude/new-rules/20260419-140000-guards.md`
+
+### R-BREAKER-HEALTH-POSTURE-01 — Aggregator Iterates Breakers via Registry
+
+Definition:
+`RuntimeStateAggregator` takes `ICircuitBreakerRegistry` constructor dependency. Both `ComputeFromResults` and `GetDegradedMode` iterate `registry.GetAll()` and emit one reason per non-Closed breaker via `AppendBreakerReasons`. Canonical name-to-reason whitelist preserves pre-R2.A.D.4 strings (`"opa-policy-evaluator"` → `"opa_breaker_open"`); unknown names produce `{normalized_name}_breaker_open`. The concrete `WhyceChainPostgresAdapter.IsBreakerOpen` check remains until R2.A.D.3 refactors chain.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/health/RuntimeStateAggregator.cs` (`AppendBreakerReasons`)
+- `src/platform/host/composition/observability/ObservabilityComposition.cs` (registry DI wiring via `sp.GetServices<ICircuitBreaker>()`)
+- Source: `claude/new-rules/20260419-140000-guards.md`
+
+### R-REDIS-BREAKER-01 — Shared "redis" Breaker Protects All Redis Operations
+
+Definition:
+One `ICircuitBreaker` instance named `"redis"` registered in `CacheInfrastructureModule.AddCache`. Two consumers share it: `RedisExecutionLockProvider` (StringSetAsync / ScriptEvaluateAsync on every command-dispatch acquire/release) and `RedisHealthSnapshotProvider` (PingAsync). Tunables via `Redis:BreakerThreshold` / `Redis:BreakerWindowSeconds`. Registered as plain `ICircuitBreaker` so the registry picks it up; aggregator whitelist surfaces state as `"redis_breaker_open"`.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/composition/infrastructure/cache/CacheInfrastructureModule.cs`
+- `src/platform/host/runtime/RedisExecutionLockProvider.cs`
+- `src/platform/host/health/RedisHealthSnapshotProvider.cs`
+- Source: `claude/new-rules/20260419-170000-guards.md`
+
+### R-REDIS-BREAKER-OPEN-FAIL-CLOSED-01 — Open-State Preserves Fail-Closed Contract
+
+Definition:
+`CircuitBreakerOpenException` never escapes either Redis consumer. `RedisExecutionLockProvider.TryAcquireAsync` returns `false`; `ReleaseAsync` no-op (TTL expiry); `RedisHealthSnapshotProvider.GetSnapshotAsync` returns `IsHealthy: false, IsConnected: true, PingLatencyMs: null`. The breaker sits INSIDE each provider's pre-R2.A.D.3d outer try/catch so breaker-open and transport failures fold into the same default. No new exception propagation paths at the API edge.
+
+Severity:
+S1
+
+References:
+- R-REDIS-BREAKER-01 consumers
+- Source: `claude/new-rules/20260419-170000-guards.md`
+
+### R-POSTGRES-POOL-BREAKER-01 — Shared "postgres-pool" Breaker Wraps All Pooled Acquisitions
+
+Definition:
+One `ICircuitBreaker` instance named `"postgres-pool"` registered in `PostgresInfrastructureModule.AddDatabase` as a plain `ICircuitBreaker` (registry picks it up via R2.A.D.4 enumeration). The three declared Npgsql pool wrappers (`EventStoreDataSource`, `ChainDataSource`, `ProjectionsDataSource`) each expose `OpenAsync(CancellationToken)` as the canonical acquire seam — internally wraps `Inner.OpenInstrumentedAsync(PoolName, ct)` inside `breaker.ExecuteAsync(...)`. Every adapter that acquires a pooled connection (event store, idempotency, sequence, outbox, DLQ store, advisory lease, chain anchor, projection writer, outbox depth sampler, Kafka outbox publisher, projection store) MUST go through `dataSource.OpenAsync(ct)` — the pre-R2.A.D.3c `.Inner.OpenInstrumentedAsync(PoolName, ct)` shape is deprecated in host-adapters. Shared not per-pool because the three pools typically target the same Postgres instance in deployments; per-pool `TotalFailures` (HC-6) remains for diagnostic attribution. Tunables via `Postgres:BreakerThreshold` / `Postgres:BreakerWindowSeconds` (defaults 5/30). Aggregator whitelist maps to `"postgres_pool_breaker_open"`.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/composition/infrastructure/database/PostgresInfrastructureModule.cs`
+- `src/platform/host/adapters/EventStoreDataSource.cs`, `ChainDataSource.cs`, `ProjectionsDataSource.cs`
+- 14 host-adapter call sites + `src/projections/shared/PostgresProjectionStore.cs`
+- Source: `claude/new-rules/20260419-180000-guards.md`
+
+### R-POSTGRES-POOL-BREAKER-OPEN-SEMANTICS-01 — Per-Adapter Open-State Handling
+
+Definition:
+`CircuitBreakerOpenException` from the shared `"postgres-pool"` breaker is handled per the posture table: Outbox enqueue / Idempotency / Sequence / Event-store / Chain anchor / DLQ read paths / Projection writer / Projection store → re-throw (runtime exception mapper classifies as `DependencyUnavailable`); Kafka outbox publisher batch loop + Outbox depth sampler → catch + log + skip this tick (background retry); Advisory lease `TryAcquireAsync` → return `null` (busy signal); DLQ store `RecordAsync` → catch + log + swallow (Kafka DLQ publish is the primary durability path; Postgres mirror is secondary audit). `RuntimeExceptionMapper.Map` adds a dedicated `CircuitBreakerOpenException` case mapping to `RuntimeFailureCategory.DependencyUnavailable` with a safe "Dependency unavailable." message — the re-throw paths automatically surface correctly at the command result boundary.
+
+Severity:
+S1
+
+References:
+- R-POSTGRES-POOL-BREAKER-01 call sites
+- `src/runtime/control-plane/RuntimeExceptionMapper.cs`
+- Source: `claude/new-rules/20260419-180000-guards.md`
+
+### R-POSTGRES-POOL-BREAKER-DATASOURCE-API-01 — DataSource Wrappers Expose OpenAsync(ct) as Canonical Acquire
+
+Definition:
+`EventStoreDataSource.OpenAsync(ct)`, `ChainDataSource.OpenAsync(ct)`, `ProjectionsDataSource.OpenAsync(ct)` are the canonical pooled-connection acquisition API post-R2.A.D.3c. Each wrapper's ctor takes an optional `ICircuitBreaker? poolBreaker` (trailing optional so legacy test constructions without a breaker still compile); composition injects the shared `"postgres-pool"` instance. The pre-R2.A.D.3c pattern `_dataSource.Inner.OpenInstrumentedAsync(PoolName, ct)` MUST NOT appear in `src/platform/host/adapters/**` (grep-check). `Inner` remains public because `Whycespace.Projections` assembly consumes raw `NpgsqlDataSource` directly (cross-assembly constraint); `PostgresProjectionStore` carries its own optional breaker for the same wrap.
+
+Severity:
+S2
+
+References:
+- `src/platform/host/adapters/EventStoreDataSource.cs`, `ChainDataSource.cs`, `ProjectionsDataSource.cs`
+- `src/projections/shared/PostgresProjectionStore.cs` / `ProjectionStoreFactory.cs`
+- Source: `claude/new-rules/20260419-180000-guards.md`
+
+---
+
+## R2.E Consumer Fabric Hardening
+
+### R-CONSUMER-REBALANCE-01 — Every Kafka Consumer Registers Rebalance Handlers
+
+Definition:
+Every `IConsumer<TKey,TValue>` created via `ConsumerBuilder<TKey,TValue>` MUST register `SetPartitionsAssignedHandler` / `SetPartitionsRevokedHandler` / `SetPartitionsLostHandler` before `.Build()` by calling `KafkaRebalanceObservability.Attach(builder, topic, workerName, logger)` at `src/platform/host/adapters/KafkaRebalanceObservability.cs`. Three counters on the dedicated `Whycespace.Kafka.Consumer` meter — `consumer.rebalance.assigned` / `consumer.rebalance.revoked` / `consumer.rebalance.lost` — tagged `{topic, worker}` low-cardinality. "Lost" is distinct from "revoked": it indicates session timeout / heartbeat failure and surfaces as a LogWarning (red-flag signal). Per-message `consumer.Commit(result)` is our canonical commit pattern — no cross-message batch buffer needs flushing inside the revoke handler.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/KafkaRebalanceObservability.cs`
+- 11 consumer worker files: `GenericKafkaProjectionConsumerWorker`, `EnforcementToPolicyFeedbackWorker`, `SanctionActivationEnforcementWorker`, `PayoutFailureCompensationWorker`, `RiskExposureEnforcementWorker`, `WorkflowTriggerWorker`, `ReconciliationLifecycleWorker`, `ViolationToEscalationWorker`, `EnforcementToCapitalWorker`, `EnforcementDetectionWorker`, `LedgerToCapitalIntegrationWorker`
+- `tests/unit/architecture/WbsmArchitectureTests.Every_ConsumerBuilder_Build_is_preceded_by_KafkaRebalanceObservability_Attach`
+- Source: `claude/new-rules/20260419-200000-guards.md`
+
+### R-CONSUMER-REBALANCE-COOPERATIVE-STICKY-01 — Cooperative Sticky Partition Assignment
+
+Definition:
+Every `ConsumerConfig` MUST set `PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky`. The default `Range` / `RoundRobin` strategies revoke-and-reassign all partitions on every rebalance (stop-the-world); cooperative sticky reassigns only the delta so instances that stay in the group keep their existing partitions. Safe under our per-message commit pattern — no cross-message batch state differs between strategies. Pinned by architecture test `Every_ConsumerConfig_sets_CooperativeSticky_partition_assignment_strategy`.
+
+Severity:
+S2
+
+References:
+- 11 consumer worker files listed under R-CONSUMER-REBALANCE-01
+- `tests/unit/architecture/WbsmArchitectureTests.Every_ConsumerConfig_sets_CooperativeSticky_partition_assignment_strategy`
+- Source: `claude/new-rules/20260419-200000-guards.md`
+
+### R-CONSUMER-REBALANCE-OBSERVABILITY-HELPER-01 — Canonical Helper Type
+
+Definition:
+`KafkaRebalanceObservability.Attach<TKey,TValue>(ConsumerBuilder<TKey,TValue>, string topic, string workerName, ILogger?)` is the single canonical attach point for rebalance observability. Stateless static class. Workers MUST NOT register ad-hoc inline `SetPartitionsAssignedHandler` / `SetPartitionsRevokedHandler` / `SetPartitionsLostHandler` — future rebalance-protocol changes land in one file. The helper uses the dedicated `Whycespace.Kafka.Consumer` meter (separate from `Whycespace.Projection.Consumer`) so rebalance signals are observable across ALL consumer workers, not just projection consumers.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/KafkaRebalanceObservability.cs`
+- Source: `claude/new-rules/20260419-200000-guards.md`
+
+### R-CONSUMER-LAG-01 — Per-Message Lag Sampling After Every Successful Consume
+
+Definition:
+Every consumer worker MUST call `KafkaLagObservability.Record(consumer, consumeResult, workerName, topicTag)` after each successful `Consume()` that returns a non-null `ConsumeResult<TKey,TValue>`. The helper queries `consumer.GetWatermarkOffsets(consumeResult.TopicPartition)` (fast in-process cached read, NOT a broker round-trip) and emits `consumer.lag_messages` histogram on the shared `Whycespace.Kafka.Consumer` meter, tagged low-cardinality `{topic, worker, partition}`. Lag = `HighWatermark - ConsumedOffset - 1`. Recording happens BEFORE commit and BEFORE poison/DLQ routing — the signal means "we saw this offset; how far behind are we?" regardless of routing outcome. Empty-poll returns do NOT emit lag; that's the rebalance observability seam's job.
+
+Severity:
+S2
+
+References:
+- `src/platform/host/adapters/KafkaLagObservability.cs`
+- 11 consumer worker files listed under R-CONSUMER-REBALANCE-01
+- `tests/unit/architecture/WbsmArchitectureTests.Every_Consumer_Consume_is_followed_by_KafkaLagObservability_Record`
+- Source: `claude/new-rules/20260419-210000-guards.md`
+
+### R-CONSUMER-LAG-HELPER-01 — Canonical Lag Helper Type
+
+Definition:
+`KafkaLagObservability.Record<TKey,TValue>(IConsumer<TKey,TValue>, ConsumeResult<TKey,TValue>, string workerName, string topicTag)` is the single canonical entry point for lag observability. Stateless static class at `src/platform/host/adapters/KafkaLagObservability.cs`. Parallel shape to `KafkaRebalanceObservability.Attach` — same `workerName` / `topicTag` convention. Helper swallows `KafkaException` from `GetWatermarkOffsets` (transient cache miss post-rebalance, pre-fetch) and emits a separate `consumer.lag_unknown` counter so operators can distinguish "zero lag" from "couldn't read lag" — a sustained `lag_unknown` count is a distinct consumer-health signal from a healthy zero-lag consumer.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/KafkaLagObservability.cs`
+- Source: `claude/new-rules/20260419-210000-guards.md`
+
+### R-CONSUMER-PARTITION-SKEW-01 — Per-Partition Throughput Counter (R2.E.3)
+
+Definition:
+`KafkaLagObservability.Record` emits `consumer.messages_processed` (Counter<long>) on every successful lag observation, tagged identically to `consumer.lag_messages`: `{topic, worker, partition}`. Operator dashboards compute partition skew as the max:mean (or max:min) ratio across the `{partition}` tag values at a fixed time window. The counter is co-located with the lag histogram so the two signals stay in lockstep — every message that contributes a lag observation ALSO contributes a throughput tick. The `consumer.lag_unknown` path does NOT increment throughput: semantic parity — if we couldn't observe the message's position, we also don't claim throughput for it.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/KafkaLagObservability.cs` — `MessagesProcessed` counter
+- Source: `claude/new-rules/20260419-220000-guards.md`
+
+### R-CONSUMER-HOT-PARTITION-DETECTION-01 — Lag Histogram IS the Hot-Partition Signal (R2.E.3)
+
+Definition:
+Hot-partition detection is NOT a separate metric — it is a derived signal from the `consumer.lag_messages` histogram tagged `{partition}`. A partition whose lag P95 / P99 is > N× the median across partitions IS a hot partition by definition. Threshold `N` lives in operator alerting config (Prometheus / Grafana), NOT in the adapter. Adapter-level thresholds create deployment-specific configuration drift; the raw signal is universal, the alert threshold is deployment-specific and belongs in the operator surface. Correspondingly, no new `consumer.hot_partition_detected` event or counter exists — the existing metrics compose.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/KafkaLagObservability.cs` (lag histogram, R2.E.2)
+- Grafana / Prometheus alerting config (deployment-specific)
+- Source: `claude/new-rules/20260419-220000-guards.md`
+
+### R-CONSUMER-HOT-KEY-DETECTION-DEFERRED-01 — Hot-Key Detection Deferred to R2.E.4/R3 (R2.E.3)
+
+Definition:
+Hot-key detection (identifying a single key that drives most messages within a partition) requires stateful tracking — count-min-sketch or reservoir sampling — with reset semantics on rebalance and memory budget per consumer. Deferred because (a) unbounded-cardinality keys (aggregate IDs) make tag-based metrics infeasible, (b) operator value is lower than partition-skew + lag combined — hot keys manifest as hot partitions first, so lag-per-partition catches them indirectly. Gap-matrix §12 "Hot-key detection" remains ABSENT with an explicit reference to this deferral.
+
+Severity:
+S3
+
+References:
+- Gap-matrix §12 "Hot-key detection"
+- Source: `claude/new-rules/20260419-220000-guards.md`
+
+### R-TOPIC-ALIGNMENT-01 — Startup-Time Topic Verification (R2.E.4)
+
+Definition:
+`TopicProvisioningHostedService` (an `IHostedService` registered in `KafkaInfrastructureModule.AddMessaging`) runs at `StartAsync` and calls `KafkaTopicVerifier.FindMissingTopicsAsync(adminClient, KafkaCanonicalTopics.All, timeout, logger, ct)`. Missing topics emit WARN per topic + one aggregate summary. With `Kafka:FailIfTopicsMissing=true` (default `false`), a missing set throws `InvalidOperationException` during `StartAsync` so the host never reaches "ready" with broker/runtime drift. Broker-unreachable failures log ERROR but do NOT fail host startup — transient broker issues are the R-KAFKA-BREAKER-01 concern, not this verifier's. Configuration keys: `Kafka:VerifyTopicsOnStartup` (default `true`), `Kafka:FailIfTopicsMissing` (default `false`), `Kafka:TopicMetadataTimeoutMs` (default `10000`). Topic CREATION remains the responsibility of `infrastructure/event-fabric/kafka/create-topics.sh`; this service is verification-only.
+
+Severity:
+S2
+
+References:
+- `src/platform/host/adapters/TopicProvisioningHostedService.cs`
+- `src/platform/host/composition/infrastructure/messaging/KafkaInfrastructureModule.cs`
+- Source: `claude/new-rules/20260419-230000-guards.md`
+
+### R-TOPIC-CANONICAL-DECLARATION-01 — Central Canonical Topic List (R2.E.4)
+
+Definition:
+`src/platform/host/adapters/KafkaCanonicalTopics.All` is the runtime-level source of truth for the full set of Kafka topics the runtime expects. Mirrors `infrastructure/event-fabric/kafka/create-topics.sh` (the operator-level source of truth for topic creation + partition count + replication factor). Both files carry a cross-reference comment. Adding a new bounded context requires updating BOTH — drift is guarded by the architecture test `KafkaCanonicalTopics_mirrors_create_topics_sh_exactly` which extracts topic names from both files and asserts set equality. The declaration is flat string names (not `TopicSpec` records with partition sizing) because R2.E.4 is existence-alignment only; partition-count alignment is a future R2.E.5 concern.
+
+Severity:
+S2
+
+References:
+- `src/platform/host/adapters/KafkaCanonicalTopics.cs`
+- `infrastructure/event-fabric/kafka/create-topics.sh`
+- `tests/unit/architecture/WbsmArchitectureTests.KafkaCanonicalTopics_mirrors_create_topics_sh_exactly`
+- Source: `claude/new-rules/20260419-230000-guards.md`
+
+### R-TOPIC-VERIFIER-HELPER-01 — Canonical Verifier Helper Type (R2.E.4)
+
+Definition:
+`src/platform/host/adapters/KafkaTopicVerifier.FindMissingTopicsAsync<...>` is the single canonical entry point for topic alignment verification. Stateless static class. Uses `IAdminClient.GetMetadata(timeout)` — a single broker round-trip that returns all known topics — and returns the subset of expected topics not present. Does NOT mutate broker state. Does NOT dispose the supplied admin client (caller-owned lifecycle). `KafkaException` propagates to the caller; `OperationCanceledException` propagates unchanged. Parallel shape to `KafkaRebalanceObservability.Attach` + `KafkaLagObservability.Record` — same `Whycespace.Platform.Host.Adapters` namespace, same stateless-static discipline.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/KafkaTopicVerifier.cs`
+- Source: `claude/new-rules/20260419-230000-guards.md`
+
+---
+
+## R2.A.3d Retry Tier Infrastructure
+
+### R-RETRY-TIER-01 — Four-Tier Shape Enforced in Routing Code
+
+Definition:
+The D2-locked `{topic}.commands`, `{topic}.events`, `{topic}.retry`, `{topic}.deadletter` four-tier shape is enforced at three canonical code paths: (1) `TopicNameResolver.ResolveRetry` (R2.A.3a), (2) `TopicNameResolver.ResolveDeadLetter` (R2.A.3a), (3) `KafkaRetryEscalator.EscalateAsync` (R2.A.3d). Consumer error paths MUST use the escalator — MUST NOT inline publish to `.deadletter` for handler-throws. Poison-message paths (absent header / bad JSON) continue direct since they are never retryable.
+
+Severity:
+S1
+
+References:
+- `src/runtime/event-fabric/TopicNameResolver.cs`
+- `src/platform/host/adapters/KafkaRetryEscalator.cs`
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-HEADERS-01 — Canonical Retry Header Contract
+
+Definition:
+Four headers on every `.retry` message (all UTF-8): `retry-attempt-count` (1-based int), `retry-max-attempts` (int ceiling), `retry-deliver-after-unix-ms` (long Unix-ms), `retry-source-topic` (canonical `.events` name). Original envelope headers (`event-id`, `aggregate-id`, `event-type`, `correlation-id`, `causation-id`) preserved unchanged. Header names live in `src/platform/host/adapters/RetryHeaders.cs` as `public const string` fields — single source of truth.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/RetryHeaders.cs`
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-ESCALATOR-01 — Canonical Escalator Helper
+
+Definition:
+`KafkaRetryEscalator.EscalateAsync(producer, resolver, sourceTopic, message, eventId, reason, attemptCount, maxAttempts, baseBackoff, maxBackoff, randomProvider, clock, kafkaBreaker, logger, ct)` returns `RetryEscalationOutcome { Tier, NextAttemptCount, DeliverAfterUtc, TargetTopic }`. Routes to `.deadletter` when `attemptCount + 1 > maxAttempts`; else routes to `.retry` with R-RETRY-HEADERS-01 headers. Backoff formula: `min(maxBackoff, baseBackoff × 2^(attempt-1)) × (1 + jitter × 0.25)` where jitter ∈ [0, 1) from `IRandomProvider.NextDouble($"{sourceTopic}:{eventId}:retry:{attemptCount}")`. Every `ProduceAsync` wrapped in the shared `"kafka-producer"` breaker. `CircuitBreakerOpenException` propagates unchanged.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/KafkaRetryEscalator.cs`
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-CONSUMER-WORKER-01 — Dedicated Retry Consumer Worker
+
+Definition:
+`KafkaRetryConsumerWorker` subscribes to every `.retry` topic from `KafkaCanonicalTopics.All.Where(t => t.EndsWith(".retry"))` under dedicated consumer group `whyce.retry-consumer`. Per-message flow: parse R-RETRY-HEADERS-01 (missing → direct DLQ); compute `delay = deliverAfterUnixMs - now`; if `delay > 60s` yield without committing (Kafka redelivers on next poll, worker stays responsive to cancellation / rebalance); else sleep then re-publish to the source `.events` topic (strip `retry-deliver-after-unix-ms` + `retry-source-topic`, preserve `retry-attempt-count` so source consumer can feed it to the escalator on next failure); commit `.retry` offset. Wires `KafkaRebalanceObservability.Attach` + `KafkaLagObservability.Record` identically to other 11 workers (architecture tests already enforce).
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/KafkaRetryConsumerWorker.cs`
+- `src/platform/host/composition/infrastructure/messaging/KafkaInfrastructureModule.cs` (registration)
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-DELIVER-AFTER-DETERMINISM-01 — Deliver-After Is Replay-Deterministic
+
+Definition:
+`retry-deliver-after-unix-ms` value written by `KafkaRetryEscalator.EscalateAsync` is replay-deterministic: same `(sourceTopic, eventId, attemptCount)` + same `IClock` + same `IRandomProvider` yields byte-identical value. NO `DateTime.UtcNow` / `DateTimeOffset.UtcNow` / `System.Random` / `Stopwatch`-derived values in the delay computation. Architecture test `KafkaRetryEscalator_delay_formula_uses_only_deterministic_entropy_sources` pins this invariant via source scan.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/KafkaRetryEscalator.cs` (`ComputeDeliverAfter`)
+- `tests/unit/architecture/WbsmArchitectureTests.KafkaRetryEscalator_delay_formula_uses_only_deterministic_entropy_sources`
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-CONSUMER-INTEGRATION-01 — GenericKafkaProjectionConsumerWorker Routes Handler-Throws Through Escalator
+
+Definition:
+`GenericKafkaProjectionConsumerWorker` handler-dispatch + writer work wrapped in a dedicated inner try/catch. On exception: reads prior `retry-attempt-count` from incoming headers (0 if absent → first failure), calls `KafkaRetryEscalator.EscalateAsync`, commits source offset on escalation success. On `CircuitBreakerOpenException` during escalation: does NOT commit — Kafka redelivers when breaker recovers. When retry tier is NOT wired (all four of `TopicNameResolver`, `RetryTierOptions`, `IRandomProvider`, `ICircuitBreaker` null), falls back to pre-R2.A.3d behaviour (no commit → Kafka redelivery loop). Poison-message paths (absent / malformed headers, JSON deserialize fails) continue to route directly to `.deadletter` via `PublishToDeadletterAsync` — those are never retryable. The 6 projection composition modules (Todo / Kanban / MediaAsset / Course / Messaging / Economic) all resolve and pass the 3 new optional parameters via DI.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/GenericKafkaProjectionConsumerWorker.cs`
+- 6 projection composition modules
+- Source: `claude/new-rules/20260419-240000-guards.md`
+
+### R-RETRY-CONSUMER-INTEGRATION-02 — Phase B Non-Projection Worker Integration (shipped)
+
+Definition:
+R2.A.3d Phase B migrated 9 of the 10 non-projection consumer workers (`SanctionActivationEnforcementWorker`, `PayoutFailureCompensationWorker`, `RiskExposureEnforcementWorker`, `WorkflowTriggerWorker`, `ViolationToEscalationWorker`, `EnforcementToCapitalWorker`, `EnforcementDetectionWorker`, `LedgerToCapitalIntegrationWorker`, `EnforcementToPolicyFeedbackWorker`) to the canonical retry pattern. Each worker wraps its handler dispatch in an inner try/catch that delegates to a local `EscalateOrRedeliverAsync` helper which:
+
+1. Checks whether all five retry-tier dependencies (`IProducer<string,string>`, `TopicNameResolver`, `RetryTierOptions`, `IRandomProvider`, `ICircuitBreaker`) are wired. If not, logs + does NOT commit (pre-Phase-B fallback — Kafka redelivers).
+2. Reads the prior `retry-attempt-count` via `RetryHeaders.ReadPriorAttemptCount`.
+3. Calls `KafkaRetryEscalator.EscalateAsync` to route through `.retry` or `.deadletter` per attempt budget.
+4. On success → commits source offset.
+5. On `CircuitBreakerOpenException` → logs + does NOT commit (Kafka redelivers when breaker recovers).
+6. On any other escalation failure → logs + does NOT commit (Kafka redelivers).
+
+Each worker also receives five new optional trailing constructor parameters wired via `EconomicCompositionRoot`. Existing test harnesses that construct workers without these parameters continue to compile — legacy "log + no-commit" fallback preserved. The canonical header-parse helper `RetryHeaders.ReadPriorAttemptCount` is centralised so all 10 migrated workers share one implementation.
+
+Severity:
+S1
+
+References:
+- 9 migrated consumer worker files under `src/platform/host/adapters/`
+- `src/platform/host/composition/economic/EconomicCompositionRoot.cs` (9 composition sites)
+- `src/platform/host/adapters/RetryHeaders.cs` (shared `ReadPriorAttemptCount` helper)
+- `tests/unit/architecture/WbsmArchitectureTests.Every_consumer_worker_except_reconciliation_escalates_handler_throws_via_KafkaRetryEscalator`
+- Source: `claude/new-rules/20260419-240000-guards.md` (Phase A) + inline Phase B promotion
+
+### R-RETRY-CONSUMER-INTEGRATION-EXCLUSION-01 — ReconciliationLifecycleWorker Opts Out
+
+Definition:
+`ReconciliationLifecycleWorker` is INTENTIONALLY excluded from R-RETRY-CONSUMER-INTEGRATION-02 because its documented semantics commit-on-failure to avoid poison-loop stalls on redelivered stale-data triggers. The inline comment in that file explicitly justifies the "advance the offset so the poll loop does not starve on one bad message" posture — downstream aggregates are idempotent per INV-302 so re-processing a successful step again is safe, but replaying a bad step forever blocks lifecycle progression. Migrating this worker to retry-tier escalation would reverse a deliberate design choice. The architecture test exempts this file by name and the guard rule references the exemption.
+
+Severity:
+S3
+
+References:
+- `src/platform/host/adapters/ReconciliationLifecycleWorker.cs` (see in-file comment around the handler-failure catch)
+- `tests/unit/architecture/WbsmArchitectureTests.cs` — `Every_consumer_worker_except_reconciliation_escalates_handler_throws_via_KafkaRetryEscalator` exempt list
+
+### R-KAFKA-BREAKER-01 — Shared "kafka-producer" Breaker Protects All Kafka Publish Paths
+
+Definition:
+One `ICircuitBreaker` instance named `"kafka-producer"` registered in `KafkaInfrastructureModule.AddMessaging` as a plain `ICircuitBreaker` contributor (registry picks it up via R2.A.D.4 enumeration). Four `IProducer<string,string>.ProduceAsync` call sites wrap it: `KafkaOutboxPublisher.PublishBatchAsync` (outbox primary), `KafkaOutboxPublisher.TryPublishToDeadletterAsync` (outbox DLQ), `GenericKafkaProjectionConsumerWorker.PublishToDeadletterAsync` (consumer DLQ), `EnforcementToPolicyFeedbackHandler.HandleAsync` (enforcement→policy feedback bridge). Shared not per-site because a broker outage impacts all four simultaneously. The architecture test `No_direct_Kafka_publish_outside_outbox_publisher` pins the exhaustive sanctioned list.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/composition/infrastructure/messaging/KafkaInfrastructureModule.cs`
+- `src/platform/host/adapters/KafkaOutboxPublisher.cs` (two sites)
+- `src/platform/host/adapters/GenericKafkaProjectionConsumerWorker.cs` (one site)
+- `src/platform/host/adapters/EnforcementToPolicyFeedbackHandler.cs` (one site, R2.A.D.3b closure)
+- `tests/unit/architecture/WbsmArchitectureTests.cs` — `No_direct_Kafka_publish_outside_outbox_publisher`
+- Source: `claude/new-rules/20260419-160000-guards.md`
+
+### R-KAFKA-BREAKER-OPEN-BEHAVIOR-01 — Per-Call-Site Open-State Behavior
+
+Definition:
+On Open, `CircuitBreakerOpenException` is handled per call site: (1) outbox primary publish catches + logs + `continue`s the batch loop WITHOUT calling `RecordFailureAsync` (broker outage is not per-row failure so `retry_count` does not advance); (2) outbox DLQ publish catches + logs + skips the DLQ attempt (DB row already `status='deadletter'`, `IDeadLetterStore` still records the entry); (3) consumer DLQ publish RE-THROWS to honor K-DLQ-001 (don't commit source offset on DLQ publish failure); (4) `EnforcementToPolicyFeedbackHandler` catches + logs + swallows (feedback emission is a fire-and-forget bridge; source consumer MUST continue advancing offsets, feedback stream self-repairs on replay). Outbox rows are ours to retry; consumer offsets are Kafka-managed.
+
+Severity:
+S1
+
+References:
+- R-KAFKA-BREAKER-01 call sites
+- K-DLQ-001 consumer offset commit contract
+- `src/platform/host/adapters/EnforcementToPolicyFeedbackHandler.cs`
+- Source: `claude/new-rules/20260419-160000-guards.md` + R2.A.D.3b closure (2026-04-19)
+
+### R-CIRCUIT-BREAKER-VOID-EXT-01 — ICircuitBreaker Void-Returning Extension
+
+Definition:
+`CircuitBreakerExtensions.ExecuteAsync(this ICircuitBreaker, Func<CancellationToken, Task>, CancellationToken)` is an ergonomic extension method for side-effect-only operations. Forwards to the core `Task<T>` overload using trivial `int` return. Extension-only — `ICircuitBreaker` contract unchanged.
+
+Severity:
+S3
+
+References:
+- `src/shared/contracts/runtime/CircuitBreakerExtensions.cs`
+- Source: `claude/new-rules/20260419-160000-guards.md`
+
+### R-CHAIN-BREAKER-DELEGATION-01 — WhyceChainPostgresAdapter Consumes ICircuitBreaker
+
+Definition:
+`WhyceChainPostgresAdapter` constructor accepts an injected `ICircuitBreaker`. Inline breaker state (`_breakerLock`, `_consecutiveFailures`, `_openedAt`) and private helper methods REMOVED. `AnchorAsync` DB work wrapped in `_breaker.ExecuteAsync<ChainBlock>(...)`. Transport-failure throw sites preserved — the breaker counts these as failures. Public `IsBreakerOpen` getter retained with adapted semantics (`_breaker.State != CircuitBreakerState.Closed`).
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/WhyceChainPostgresAdapter.cs`
+- `src/platform/host/composition/infrastructure/chain/ChainInfrastructureModule.cs` (plain `ICircuitBreaker` registration under `"chain-anchor"`; adapter consumes via registry)
+- `WbsmArchitectureTests.WhyceChainPostgresAdapter_Delegates_Breaker_State_To_ICircuitBreaker`
+- Source: `claude/new-rules/20260419-150000-guards.md`
+
+### R-CHAIN-BREAKER-BOUNDARY-01 — CircuitBreakerOpenException Does NOT Leak from WhyceChainPostgresAdapter
+
+Definition:
+`WhyceChainPostgresAdapter.AnchorAsync` MUST NOT propagate `CircuitBreakerOpenException` to callers. The typed exception used by the chain adapter is `ChainAnchorUnavailableException` — existing callers (`ChainAnchorService`, API-edge exception handler) depend on that contract. Translation at the adapter boundary copies `RetryAfterSeconds` from breaker to the new exception so Retry-After guidance flows through unchanged. Caller-driven `OperationCanceledException` propagates unchanged (not a chain-store health signal per pre-refactor invariant).
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/WhyceChainPostgresAdapter.cs` (catch `CircuitBreakerOpenException` → throw `ChainAnchorUnavailableException`)
+- `WbsmArchitectureTests.WhyceChainPostgresAdapter_Delegates_Breaker_State_To_ICircuitBreaker` (pins translation pattern)
+- Source: `claude/new-rules/20260419-150000-guards.md`
+
+### R-OPA-BREAKER-DELEGATION-01 — OpaPolicyEvaluator Consumes ICircuitBreaker
+
+Definition:
+`OpaPolicyEvaluator` constructor accepts an injected `ICircuitBreaker`. Inline breaker state (`_breakerLock`, `_consecutiveFailures`, `_openedAt`) and private methods (`IsBreakerOpenInternal`, `RecordSuccess`, `RecordFailure`) REMOVED. HTTP call inside `EvaluateSingleAsync` wrapped in `_breaker.ExecuteAsync<PolicyDecision>(...)`. Transient-failure throw sites (timeout / transport / http_status) preserved — the breaker counts these as failures. Public `IsBreakerOpen` getter retained with adapted semantics (`_breaker.State != CircuitBreakerState.Closed`) for the `IRuntimeStateAggregator` HC-2 consumer.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/OpaPolicyEvaluator.cs`
+- `src/platform/host/composition/infrastructure/policy/PolicyInfrastructureModule.cs` (keyed `ICircuitBreaker` registration under `"opa-policy-evaluator"`)
+- `WbsmArchitectureTests.OpaPolicyEvaluator_Delegates_Breaker_State_To_ICircuitBreaker`
+- Source: `claude/new-rules/20260419-130000-guards.md`
+
+### R-OPA-BREAKER-BOUNDARY-01 — CircuitBreakerOpenException Does NOT Leak from OpaPolicyEvaluator
+
+Definition:
+`OpaPolicyEvaluator.EvaluateAsync` MUST NOT propagate `CircuitBreakerOpenException` to callers. The typed exception used by the OPA adapter is `PolicyEvaluationUnavailableException` — existing callers (PolicyMiddleware retry wrapper, API-edge exception handler) depend on that contract. Translation at the adapter boundary inside `EvaluateSingleAsync` copies `RetryAfterSeconds` from breaker to the new exception so Retry-After guidance flows through. `PolicyEvaluationRetryPatternTests` (6 tests) pass unchanged under the refactor.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/OpaPolicyEvaluator.cs` (catch `CircuitBreakerOpenException` → throw `PolicyEvaluationUnavailableException`)
+- `WbsmArchitectureTests.OpaPolicyEvaluator_Delegates_Breaker_State_To_ICircuitBreaker` (pins the translation pattern)
+- Source: `claude/new-rules/20260419-130000-guards.md`
+
+### R-CIRCUIT-BREAKER-01 — ICircuitBreaker Contract and State Machine
+
+Definition:
+`ICircuitBreaker` exposes `Name`, side-effect-free `State` getter, and `ExecuteAsync<T>(operation, ct)`. Classic three-state machine: Closed → Open (at consecutive `FailureThreshold` failures) → HalfOpen (after `WindowSeconds` elapses) → Closed (trial succeeds) OR Open (trial fails; fresh window). Open-state `ExecuteAsync` throws `CircuitBreakerOpenException` WITHOUT executing `operation`. `State` getter reports HalfOpen when the window has elapsed but does NOT consume the trial slot — the trial transition happens inside the next `ExecuteAsync`. `OperationCanceledException` with the caller's cancellation token is NOT counted as a failure. Every other exception counts.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/ICircuitBreaker.cs`
+- `src/runtime/resilience/DeterministicCircuitBreaker.cs`
+- `DeterministicCircuitBreakerTests` (18 tests)
+- Source: `claude/new-rules/20260419-120000-guards.md`
+
+### R-CIRCUIT-BREAKER-DET-01 — Breaker Decisions Are Replay-Deterministic
+
+Definition:
+State transitions are a pure function of observed operation outcomes and `IClock.UtcNow` reads. Forbidden inside `src/runtime/resilience/DeterministicCircuitBreaker.cs`: `DateTime.UtcNow`, `DateTimeOffset.UtcNow`, `Stopwatch.GetTimestamp`, `Random`. Architecture test `Two_Breakers_With_Same_Clock_And_Outcomes_Reach_Identical_State` pins determinism. Side-effect-freeness of `State` getter verified by `State_Getter_Does_Not_Consume_HalfOpen_Trial_Slot`.
+
+Severity:
+S0 (constitutional extension)
+
+References:
+- `DeterministicCircuitBreakerTests.Two_Breakers_With_Same_Clock_And_Outcomes_Reach_Identical_State`
+- Source: `claude/new-rules/20260419-120000-guards.md`
+
+### R-CIRCUIT-BREAKER-PER-DEPENDENCY-01 — One Breaker Per External Dependency
+
+Definition:
+Per D4 LOCKED (2026-04-19): one `ICircuitBreaker` instance per external dependency — OPA, Postgres pool, Kafka producer, WhyceChain anchor, Redis. Each gets its own options sized for its failure profile. Per-operation breakers (one per outbound command type) are explicitly REJECTED. Breaker INSTANCES are registered in host composition with stable names used as metrics tags.
+
+Severity:
+S2
+
+References:
+- D4 LOCKED in `runtime-upgrade-plan.md`
+- R2.A.D.2 OPA evaluator refactor (first consumer) — pending
+- R2.A.D.3 composition wiring (Kafka / Postgres / Chain / Redis) — pending
+- Source: `claude/new-rules/20260419-120000-guards.md`
+
+### R-LEADER-ELECTION-01 — LeaderElection.RunAsLeaderAsync Composable Helper
+
+Definition:
+`Whycespace.Runtime.Resilience.LeaderElection.RunAsLeaderAsync(leaseProvider, leaseKey, holder, leaderWork, retryInterval, logger, ct)` is the canonical helper for BackgroundService workers that must run at most one instance across N replicas. It acquires the lease, runs `leaderWork` while holding, releases on dispose, retries on contention after `retryInterval`. No TTL arithmetic — lease lifetime is owned by session-level Postgres advisory locks (R-LEASE-CRASH-SAFE-01). Leader-death-to-replacement gap bounded by Postgres TCP keepalive (~30-120s) + `retryInterval`. Workers that cannot tolerate this gap must pick a different pattern (see R-MULTI-INSTANCE-AUDIT-01).
+
+Severity:
+S1
+
+References:
+- `src/runtime/resilience/LeaderElection.cs`
+- `LeaderElectionTests` (10 tests: solo / contention / reacquire / cancellation / exception-retry / input validation)
+- Reference migration: `SystemLockExpirySchedulerWorker`
+- Source: `claude/new-rules/20260419-100000-guards.md`
+
+### R-MULTI-INSTANCE-AUDIT-01 — Per-Worker Safety Audit Before Leader Migration
+
+Definition:
+Before migrating ANY BackgroundService worker from row-lock / idempotency-based multi-instance safety to `LeaderElection.RunAsLeaderAsync`, an audit entry in `claude/new-rules/` MUST confirm: (1) the worker's current N-instance behaviour produces duplicate work (not merely per-instance equivalent state); (2) the leader-death-to-replacement gap is operationally acceptable for the worker's SLA; (3) no existing comment block in the worker explicitly forbids a leader layer. The `KafkaOutboxPublisher` MI-2 comment is the canonical forbid example — do NOT add leader election to workers whose current design documents row-lock sufficiency. Reference migration: `SystemLockExpirySchedulerWorker` (audit verdict recorded in `claude/new-rules/20260419-100000-guards.md`).
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/SystemLockExpirySchedulerWorker.cs` (reference migration)
+- `src/platform/host/adapters/KafkaOutboxPublisher.cs` (canonical forbid example — MI-2 comment block)
+- Source: `claude/new-rules/20260419-100000-guards.md`
+
+### R-LEASE-CONTRACT-01 — IDistributedLeaseProvider Semantics
+
+Definition:
+`IDistributedLeaseProvider.TryAcquireAsync(leaseKey, holder, ct)` returns `ILease?`. Null = another holder has the key (NOT an exception; callers MUST NOT need try/catch around the hot path). `ILease` is the returned handle carrying `Key`, `Holder`, `AcquiredAt` (from `IClock`), plus `IAsyncDisposable`. Handle MUST NOT be shared across threads without external synchronization. Primitive is NOT retryable — callers wrap in `IRetryExecutor` if desired. DIFFERENT from `IExecutionLockProvider` (Redis-backed, short-lived per-command) — this contract is for longer-lived coordination (leadership, per-workflow sequencing, single-writer protection).
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/infrastructure/persistence/IDistributedLeaseProvider.cs`
+- `DistributedLeaseContractTests` (13 tests against in-memory fake)
+- D3 LOCKED (2026-04-19) → Postgres advisory locks
+- Source: `claude/new-rules/20260419-090000-guards.md`
+
+### R-LEASE-POSTGRES-01 — Postgres Advisory-Lock Implementation
+
+Definition:
+`PostgresAdvisoryLeaseProvider` implements `IDistributedLeaseProvider` via `pg_try_advisory_lock(bigint)` at session level. String keys hashed to `bigint` via SHA256-prefix — deterministic across processes. Each active lease holds a dedicated `NpgsqlConnection` from the declared event-store pool for its lifetime; the connection is NOT returned to the pool until `ILease.DisposeAsync` runs. Busy-key path releases the connection before returning null. Callers MUST NOT acquire more leases than the pool's max connection count minus headroom for command traffic. SHA256-prefix collision acceptable at current scale (birthday paradox ≈ 1 in 2^32 for two random keys); future batch may add `(int, int)` pair advisory locks for namespacing if needed.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/PostgresAdvisoryLeaseProvider.cs`
+- SQL: `pg_try_advisory_lock(@key_hash)` acquire / `pg_advisory_unlock(@key_hash)` release
+- Source: `claude/new-rules/20260419-090000-guards.md`
+
+### R-LEASE-CRASH-SAFE-01 — Crash-Safe Recovery via Session Termination
+
+Definition:
+Session-level Postgres advisory locks release automatically when the connection closes. Process crash, network partition, host termination — any event that closes the Postgres session → Postgres releases the lock within the TCP keepalive window (default 30-120s). NO application-level TTL, NO client clock, NO clock-skew failure mode. The lock is held exactly as long as the session is alive. Hung-holder caveat (stuck-but-not-crashed worker with live TCP connection) is NOT detected by this rule — holders must implement liveness independently (heartbeat writes) and release proactively. Hung-holder detection is a future enrichment OUT OF SCOPE for R2.A.C.1. Grep for `TimeSpan.*TTL|expires_at|lease_expiry` inside `PostgresAdvisoryLeaseProvider.cs` MUST return zero hits.
+
+Severity:
+S0 (constitutional — loss of this invariant produces split-brain via competing lease holders with skewed clocks)
+
+References:
+- `src/platform/host/adapters/PostgresAdvisoryLeaseProvider.cs` (no TTL arithmetic)
+- `PostgresAdvisoryLease.DisposeAsync` releases the session connection
+- Integration test (R5): kill process mid-lease → other instance acquires within keepalive window
+- Source: `claude/new-rules/20260419-090000-guards.md`
+
+### R-POL-OPA-RETRY-01 — OPA Unavailability Goes Through IRetryExecutor
+
+Definition:
+`PolicyMiddleware.ExecuteAsync` MUST wrap the `IPolicyEvaluator.EvaluateAsync` call in `IRetryExecutor.ExecuteAsync` (policy `MaxAttempts=3, InitialDelayMs=200`). On `PolicyEvaluationUnavailableException` the retry step is classified as `RuntimeFailureCategory.PolicyEvaluationDeferred` (retryable per R-RETRY-CAT-01). Deterministic backoff+jitter per R-RETRY-DET-01. On `RetryOutcome.Exhausted` / `PermanentFailure`, re-throws a fresh `PolicyEvaluationUnavailableException` with `reason="retry_exhausted:<original>"` and `RetryAfterSeconds` preserved from the last caught exception — the existing API-edge handler still surfaces HTTP 503 + Retry-After. FAIL_OPEN is NEVER applied here (POL-FAIL-CLASS-01 permits it only via explicit fail-open-eligibility which R2.A.OPA does not implement). WhycePolicyEngine is NOT wrapped — it is in-process and its exceptions are real defects. `IRetryExecutor` is an OPTIONAL constructor dependency; null falls back to pre-R2.A.OPA pass-through behaviour for legacy test hosts.
+
+Severity:
+S0 (closes POL-FAIL-CLASS-01's "infinite retry" + "silent bypass" concerns)
+
+References:
+- `src/runtime/middleware/policy/PolicyMiddleware.cs` (`EvaluateOpaWithRetryAsync`)
+- `src/shared/contracts/infrastructure/policy/PolicyEvaluationUnavailableException.cs` (doc comment documents retry path)
+- `src/platform/host/composition/runtime/RuntimeComposition.cs` (DI wiring)
+- `PolicyEvaluationRetryPatternTests` (6 scenario tests)
+- `WbsmArchitectureTests.PolicyMiddleware_Catches_PolicyEvaluationUnavailableException_Inside_Retry_Loop` (integration guard)
+- Source: `claude/new-rules/20260419-080000-guards.md`
+
+### R-DLQ-STORE-CONSUMER-MIRROR-01 — Consumer DLQ Publishes Mirror to Store
+
+Definition:
+Every `GenericKafkaProjectionConsumerWorker.PublishToDeadletterAsync` call MUST mirror the message to `IDeadLetterStore.RecordAsync` after the Kafka producer acknowledges the `.deadletter` publish. Best-effort and non-blocking: store-write failure is caught and logged; the Kafka message remains authoritative. Mirror is idempotent on EventId (multi-replica consumers routing the same poison message collapse to a single row). `IDeadLetterStore` is an optional constructor dependency — legacy composition sites without it fall back to Kafka-only behaviour with no regression.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/GenericKafkaProjectionConsumerWorker.cs` (`PublishToDeadletterAsync`)
+- `src/platform/host/composition/**/projection/**/*Module.cs` (6 sites)
+- Parallels R2A3B-OUTBOX-MIRROR-01 on the outbox side.
+- Source: `claude/new-rules/20260419-070000-guards.md`
+
+### R-DLQ-CATEGORY-POISON-01 — Poison-Message Rejections Carry Canonical Category
+
+Definition:
+Every consumer-side DLQ routing site MUST pass a `RuntimeFailureCategory` to `PublishToDeadletterAsync`. Header-malformation and deserialization-failure sites use `RuntimeFailureCategory.PoisonMessage` (canonical poison classification per `RetryEligibility.IsRetryable(PoisonMessage) == false`). Category is persisted on `DeadLetterEntry.FailureCategory` and surfaced as the `dlq-category` Kafka header so downstream DLQ consumers and operator tooling can filter by root cause without parsing reason strings. Free-text reason strings remain permitted as human-readable context; they do NOT replace the typed category.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/GenericKafkaProjectionConsumerWorker.cs` (6 rejection sites)
+- `src/shared/contracts/runtime/IRetryExecutor.cs` (`RetryEligibility.IsRetryable(PoisonMessage) == false`)
+- Source: `claude/new-rules/20260419-070000-guards.md`
+
+### R-DLQ-STORE-01 — Dead-Letter Persistence Contract
+
+Definition:
+Every message that lands on a `.deadletter` topic MUST be mirrored to durable storage via `IDeadLetterStore.RecordAsync(DeadLetterEntry, ct)`. A Kafka-only deadletter path is insufficient: operator inspection needs queryable storage (R4.B), re-drive controls operate against persisted entries, retention/aging requires durable lineage. `RecordAsync` MUST be idempotent on `DeadLetterEntry.EventId` (multi-instance consumers may both attempt to record the same poison message; duplicates collapse). `IDeadLetterStore` lives in `src/shared/contracts/infrastructure/messaging/` — messaging-fabric concept, not a generic persistence seam.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/infrastructure/messaging/IDeadLetterStore.cs`
+- `src/shared/contracts/infrastructure/messaging/DeadLetterEntry` (record)
+- R2.A.3b will add `PostgresDeadLetterStore` implementation + idempotency integration test.
+- Source: `claude/new-rules/20260419-060000-guards.md`
+
+### POL-FAIL-CLASS-01 — Policy Failure Classification Invariant
+
+Definition:
+Every policy evaluation failure resolves to exactly one of `FAIL_CLOSED` (reject), `FAIL_OPEN` (allow under explicit audited `DegradedPosture.PolicyFailOpen`), or `DEFER` (retry with bounded attempts). Silent bypass under degraded mode is S0. Infinite retry on "policy unavailable" is S0. R2 retry logic distinguishes `PolicyDenied` (terminal) from a new `PolicyEvaluationDeferred` category (retry with cap). `IPolicyEvaluator` MUST return the classification as a first-class field, not embed it in an error string.
+
+Severity:
+S0 (constitutional — WHYCEPOLICY authority)
+
+References:
+- `POL-02` (no unauthorized domain actions)
+- `POL-AUDIT-14` (policy evaluation emits event)
+- `PB-09` (policy → chain link required)
+- Source: `claude/new-rules/20260419-010000-guards.md`
+
+---
+
+## R3.A Workflow Runtime Reliability
+
+### R-WORKFLOW-OBSERVABILITY-01 — Execution + Step Duration Histograms
+
+Definition:
+`T1MWorkflowEngine` emits two histograms on the shared `Whycespace.Workflow` meter (which is also used by `WorkflowAdmissionGate`):
+- `workflow.execution.duration` (Histogram<double>, unit `ms`) — recorded once per `ExecuteAsync` exit on EVERY path. Tags: `{workflow_name, outcome}`.
+- `workflow.step.duration` (Histogram<double>, unit `ms`) — recorded once per step completion on EVERY path. Tags: `{workflow_name, step_name, outcome}`.
+
+Outcome vocabulary is exactly 5 values: `success`, `failed`, `timeout_step`, `timeout_execution`, `cancelled`. Low cardinality by construction — the vocabulary is compile-time constants, not derived from runtime data. Every `throw` / `return` exit path in the engine records an outcome before leaving the method — architecture test `T1MWorkflowEngine_emits_execution_and_step_duration_histograms_plus_completed_counter` pins the signal names exist in source.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs`
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_emits_execution_and_step_duration_histograms_plus_completed_counter`
+- Source: `claude/new-rules/20260420-010000-guards.md`
+
+### R-WORKFLOW-OBSERVABILITY-COMPLETION-COUNTER-01 — Execution Outcome Counter
+
+Definition:
+`workflow.execution.completed` (Counter<long>) on the same `Whycespace.Workflow` meter, incremented exactly once per `ExecuteAsync` return. Tags: `{workflow_name, outcome}` with the same 5-outcome vocabulary. Operators compute per-outcome rates (successes/minute, failure rate) from the counter without deriving from the histogram sample count. Duration histogram + counter emit from the same `RecordExecution` helper so divergence is impossible by construction.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — `RecordExecution` helper
+- Source: `claude/new-rules/20260420-010000-guards.md`
+
+### R-WORKFLOW-OBSERVABILITY-DETERMINISM-NOTE-01 — Stopwatch Permitted for Observability Timing
+
+Definition:
+Replay-determinism discipline (`R-RETRY-DELIVER-AFTER-DETERMINISM-01`, the wider `IClock` rule) targets audit-bearing timestamps — values that flow into domain events, retry headers, idempotency keys, or any replay input. Observability durations are EXPLICITLY out of scope: they are derived from runtime behaviour and never influence replay outcomes. `Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()` is the canonical source for observability timing because it is monotonic and unaffected by wall-clock skew. Using `IClock` here would conflate two orthogonal concerns. Architecture test `T1MWorkflowEngine_contains_no_wall_clock_or_random_entropy_sources` guards against `DateTime.UtcNow` / `DateTimeOffset.UtcNow` / `new Random` / `Random.Shared` accidentally landing in the engine.
+
+Severity:
+S3
+
+References:
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_contains_no_wall_clock_or_random_entropy_sources`
+- Source: `claude/new-rules/20260420-010000-guards.md`
+
+### R-WORKFLOW-STEP-RETRY-01 — Bounded Step Retry Inside ExecuteAsync
+
+Definition:
+`T1MWorkflowEngine.ExecuteAsync` wraps each step invocation in a retry loop bounded by `WorkflowOptions.StepRetryMaxAttempts` (default 1 = one attempt, no retry; N = one initial + up to N-1 retries). Retryable failures: `stepResult.IsSuccess == false` (soft) OR a non-cancel, non-timeout exception (hard). Non-retryable: caller-driven `OperationCanceledException`, per-step timeout, execution-level timeout. Backoff: `delay = min(StepRetryMaxBackoffMs, StepRetryBaseBackoffMs × 2^(attempt-1))` — no jitter (in-process scope). Sleep runs under `executionCts.Token` so caller cancel + `MaxExecutionMs` interrupt waiting retries. Each attempt gets a fresh per-step linked CTS with the full `PerStepTimeoutMs` window.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — retry loop + `SleepBackoffAsync` helper
+- `src/shared/contracts/infrastructure/admission/WorkflowOptions.cs` — `StepRetryMaxAttempts` / `StepRetryBaseBackoffMs` / `StepRetryMaxBackoffMs`
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_step_retry_loop_has_explicit_non_retryable_guards`
+- Source: `claude/new-rules/20260420-020000-guards.md`
+
+### R-WORKFLOW-STEP-RETRY-NON-RETRYABLE-EXCLUSION-01 — Timeouts and Cancellations Never Retry
+
+Definition:
+Caller-driven cancellation (`cancellationToken.IsCancellationRequested`), execution-level timeout (`executionCts.IsCancellationRequested && !stepCts.IsCancellationRequested`), and per-step timeout (`stepCts.IsCancellationRequested`) are explicitly non-retryable. The engine's `catch` filters preserve the pre-R3.A.2 shape — they throw a typed `WorkflowTimeoutException` or re-throw the caller cancel unchanged. The retry loop only engages on soft failure (`!stepResult.IsSuccess`) or hard failure (generic `Exception` after the three filters have been evaluated). Architecture test pins the three filter forms in source.
+
+Severity:
+S1
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — three catch filters
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_step_retry_loop_has_explicit_non_retryable_guards`
+- Source: `claude/new-rules/20260420-020000-guards.md`
+
+### R-WORKFLOW-STEP-RETRY-OBSERVABILITY-01 — Retry-Attempts Counter + Per-Attempt Step-Duration Emissions
+
+Definition:
+`workflow.step.retry_attempts` (Counter<long>) on the existing `Whycespace.Workflow` meter. Tagged `{workflow_name, step_name}` (no outcome tag — the counter counts retries, not final outcomes). Incremented exactly once per retry (every attempt AFTER the first). `workflow.step.duration` continues to emit ONCE PER ATTEMPT with the attempt's outcome, so histogram sample count equals total step attempts. Execution-level signals unchanged — one sample / increment per `ExecuteAsync` exit.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — `StepRetryAttempts` counter
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_emits_execution_and_step_duration_histograms_plus_completed_counter`
+- Source: `claude/new-rules/20260420-020000-guards.md`
+
+### R-WORKFLOW-STEP-RETRY-REPLAY-DETERMINISM-01 — Retries Are Observability, Not Audit
+
+Definition:
+In-execution step retries emit metrics but DO NOT emit new domain lifecycle events. The event stream sees the final outcome: `WorkflowStepCompletedEvent` on success (regardless of attempt count) or `WorkflowExecutionFailedEvent` on exhaustion. Replay reproduces the final outcome; attempt count is NOT a replay input. A replay-rehydrated workflow that resumes via `WorkflowLifecycleEventFactory.Resumed` starts fresh — the retry attempt counter resets to 1 for the step that previously failed. This keeps in-execution retry out of the audit surface; cross-process retry audit-visibility is the `.retry` Kafka tier's concern (R2.A.3d) via `retry-attempt-count` headers on the wire.
+
+Severity:
+S2
+
+References:
+- R2.A.3d `.retry` tier (cross-process retry audit-visibility)
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs`
+- Source: `claude/new-rules/20260420-020000-guards.md`
+
+### R-WORKFLOW-STEP-EXCEPTION-CLASSIFICATION-01 — Step Exceptions Classified Retryable vs Terminal
+
+Definition:
+`WorkflowStepFailureClassifier.Classify(Exception)` at `src/engines/T1M/core/workflow-engine/WorkflowStepFailureClassifier.cs` is the single canonical classifier for workflow step hard-failure exceptions. Pattern-matches BCL exception types to `WorkflowStepFailureClassification.{Retryable, Terminal}`. Terminal set: `ArgumentException`+subclasses (→ ValidationFailed), `UnauthorizedAccessException`+`SecurityException` (→ AuthorizationDenied), `InvalidOperationException`+`NotSupportedException` (→ InvalidState), `OperationCanceledException` (→ Cancellation — defensive; CTS filters should intercept first). All other exception types default to Retryable (conservative — preserves R3.A.2 "retry unknown failures" posture so new exception types don't silently fail-fast). Stateless pure function. Companion `CategoryTag(Exception)` returns a short canonical category string (6 values) for metric tagging.
+
+Layer discipline: the classifier lives in the ENGINE assembly (`Whycespace.Engines`) and duplicates a minimal slice of `RuntimeExceptionMapper`'s logic rather than referencing the runtime assembly. Engines cannot depend on runtime per the dependency graph. The policy remains aligned conceptually with `RuntimeFailureCategory`; BCL-type-based implementation is self-contained. Architecture test `WorkflowStepFailureClassifier_lives_in_engine_layer_without_runtime_dependency` guards this.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowStepFailureClassifier.cs`
+- `src/shared/contracts/runtime/RuntimeFailureCategory.cs` (conceptual alignment)
+- `tests/unit/architecture/WbsmArchitectureTests.WorkflowStepFailureClassifier_lives_in_engine_layer_without_runtime_dependency`
+- Source: `claude/new-rules/20260420-030000-guards.md`
+
+### R-WORKFLOW-STEP-EXCEPTION-ENGINE-WIRING-01 — Engine Fast-Fails on Terminal Classification
+
+Definition:
+In `T1MWorkflowEngine.ExecuteAsync`'s `catch (Exception hardEx)` branch, the engine calls `WorkflowStepFailureClassifier.Classify(hardEx)` BEFORE deciding whether to retry. On `WorkflowStepFailureClassification.Terminal`: record step duration with `failed` outcome, increment `workflow.step.terminal_failures` counter with category tag, record execution outcome, emit `Failed` lifecycle event with classification-aware reason (`"failed terminally with category=X"`), return immediately — do NOT retry, do NOT increment `workflow.step.retry_attempts`. On `Retryable`: existing R3.A.2 backoff loop applies unchanged. Architecture test `T1MWorkflowEngine_classifies_hard_failures_via_WorkflowStepFailureClassifier_before_retry` pins the integration.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — `catch (Exception hardEx)` branch
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_classifies_hard_failures_via_WorkflowStepFailureClassifier_before_retry`
+- Source: `claude/new-rules/20260420-030000-guards.md`
+
+### R-WORKFLOW-STEP-EXCEPTION-COUNTER-01 — Terminal-Failures Counter
+
+Definition:
+`workflow.step.terminal_failures` (Counter<long>) on the existing `Whycespace.Workflow` meter. Tagged `{workflow_name, step_name, category}` where `category` is one of the six `WorkflowStepFailureClassifier.CategoryTag` values (`ValidationFailed`, `AuthorizationDenied`, `InvalidState`, `Cancellation`, `ExecutionFailure`) — bounded cardinality by construction. Incremented exactly once per terminal-classified step failure. Separate from `workflow.step.duration` (which keeps the 5-outcome `failed` vocabulary stable) so operator dashboards can measure terminal-failure rate independently from overall step failure rate.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — `StepTerminalFailures` counter
+- Source: `claude/new-rules/20260420-030000-guards.md`
+
+### R-WORKFLOW-STEP-EXCEPTION-REPLAY-DETERMINISM-01 — Classification Does Not Affect Replay
+
+Definition:
+Classification is a RUNTIME optimization — it affects whether the engine retries in-execution, but the final outcome event (`WorkflowStepCompletedEvent` on success, `WorkflowExecutionFailedEvent` on failure) is identical regardless of whether the failure was classified terminal-or-retryable-then-exhausted. No new domain events introduced. The `Failed` event's reason string carries classification info for operator clarity but this is a human-readable field, not a replay discriminator — two runs landing at the same Failed event are replay-equivalent.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs`
+- Source: `claude/new-rules/20260420-030000-guards.md`
+
+### R-WORKFLOW-CANCELLATION-EVENT-01 — WorkflowExecutionCancelledEvent + Cancelled Status
+
+Definition:
+New domain record `WorkflowExecutionCancelledEvent(AggregateId, string? StepName, string Reason)` at `src/domain/orchestration-system/workflow/execution/event/WorkflowExecutionCancelledEvent.cs`. Companion shared-contract schema `WorkflowExecutionCancelledEventSchema(Guid AggregateId, string? StepName, string Reason)`. `WorkflowExecutionStatus` enum extended with `Cancelled` (ordinal 4, append-only — preserves stored enum integers). Aggregate `Apply` transitions `_status → Cancelled`. `Cancelled` is a TERMINAL state; cannot resume (existing `WorkflowLifecycleEventFactory.Resumed` guard rejects non-Failed statuses covers this case implicitly).
+
+Severity:
+S2
+
+References:
+- `src/domain/orchestration-system/workflow/execution/event/WorkflowExecutionCancelledEvent.cs`
+- `src/domain/orchestration-system/workflow/execution/value-object/WorkflowExecutionStatus.cs`
+- `src/shared/contracts/events/orchestration/workflow/WorkflowExecutionEventSchemas.cs`
+- `src/domain/orchestration-system/workflow/execution/aggregate/WorkflowExecutionAggregate.cs`
+- Source: `claude/new-rules/20260420-040000-guards.md`
+
+### R-WORKFLOW-CANCELLATION-FACTORY-01 — Canonical Construction via Lifecycle Factory
+
+Definition:
+`WorkflowLifecycleEventFactory.Cancelled(Guid workflowExecutionId, string? stepName, string reason)` is the canonical construction site. Mirrors the `Resumed` pattern (E-LIFECYCLE-FACTORY-CALL-SITE-01) — engine-guard rule 3 prohibits T1M from calling aggregate mutation methods, so the factory constructs the event and the runtime persist pipeline lands it via `Apply` on the next replay. The `WorkflowExecutionAggregate` has NO public `Cancel(...)` method.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` — `Cancelled` method
+- Source: `claude/new-rules/20260420-040000-guards.md`
+
+### R-WORKFLOW-CANCELLATION-ENGINE-EMISSION-01 — Engine Emits Before Re-Throwing
+
+Definition:
+`T1MWorkflowEngine.ExecuteAsync`'s `catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)` branch emits `_lifecycleFactory.Cancelled(...)` into `context.EmitEvent(...)` BEFORE the `throw;`. The re-throw contract is preserved — callers still receive the OCE unchanged; cancellation still propagates up. Reason string format: `"caller_cancellation: {ex.GetType().Name}: {ex.Message}"`. Outcome recording (R3.A.1 `cancelled` tag) unchanged — this rule is additive: metrics + NEW domain event + re-throw. Architecture test `T1MWorkflowEngine_emits_cancelled_lifecycle_event_before_rethrow` pins the emit-before-throw ordering via source index comparison.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs` — caller-cancel catch branch
+- `tests/unit/architecture/WbsmArchitectureTests.T1MWorkflowEngine_emits_cancelled_lifecycle_event_before_rethrow`
+- Source: `claude/new-rules/20260420-040000-guards.md`
+
+### R-WORKFLOW-CANCELLATION-SCHEMA-REGISTRATION-01 — Event Deserializer Recognizes the New Schema
+
+Definition:
+`WorkflowExecutionSchemaModule` registers `WorkflowExecutionCancelledEventSchema` alongside the existing 5 lifecycle schemas. Outbound payload mapper maps the domain record to the Kafka-wire schema shape. Projection consumers, event replay, and audit surfaces all recognize the type on the wire. Architecture test `WorkflowExecutionCancelledEvent_registered_in_schema_module` pins the registration.
+
+Severity:
+S2
+
+References:
+- `src/runtime/event-fabric/domain-schemas/WorkflowExecutionSchemaModule.cs`
+- `tests/unit/architecture/WbsmArchitectureTests.WorkflowExecutionCancelledEvent_registered_in_schema_module`
+- Source: `claude/new-rules/20260420-040000-guards.md`
+
+### R-WORKFLOW-CANCELLATION-REPLAY-DETERMINISM-01 — Cancelled Is Terminal
+
+Definition:
+`Cancelled` is a TERMINAL replay state. A cancelled workflow cannot resume; the existing `WorkflowLifecycleEventFactory.Resumed` guard (post-R3.A.3: `Status != Failed && Status != Suspended`) blocks resume from Cancelled. A cancelled workflow that the operator later wants to re-run is a NEW workflow execution (new aggregate id), not a resume — preserves event-sourcing discipline.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` — `Resumed` guard
+- Source: `claude/new-rules/20260420-040000-guards.md`
+
+### R-WORKFLOW-SUSPEND-EVENT-01 — WorkflowExecutionSuspendedEvent + Suspended Status (NON-terminal)
+
+Definition:
+New domain record `WorkflowExecutionSuspendedEvent(AggregateId, string? StepName, string Reason)` at `src/domain/orchestration-system/workflow/execution/event/WorkflowExecutionSuspendedEvent.cs`. Companion shared-contract schema. `WorkflowExecutionStatus.Suspended` appended (ordinal 5, post-R3.A.4's Cancelled at 4). Aggregate `Apply` transitions `_status → Suspended`. Unlike Cancelled/Completed which are TERMINAL, Suspended is NON-terminal — the workflow can resume via `WorkflowExecutionResumedEvent`.
+
+Severity:
+S2
+
+References:
+- `src/domain/orchestration-system/workflow/execution/event/WorkflowExecutionSuspendedEvent.cs`
+- `src/domain/orchestration-system/workflow/execution/value-object/WorkflowExecutionStatus.cs`
+- `src/shared/contracts/events/orchestration/workflow/WorkflowExecutionEventSchemas.cs`
+- `src/domain/orchestration-system/workflow/execution/aggregate/WorkflowExecutionAggregate.cs`
+- Source: `claude/new-rules/20260420-050000-guards.md`
+
+### R-WORKFLOW-SUSPEND-FACTORY-01 — Canonical Construction via Lifecycle Factory; Running-Only Guard
+
+Definition:
+`WorkflowLifecycleEventFactory.Suspended(WorkflowExecutionAggregate aggregate, string? stepName, string reason)` is the canonical construction site. The factory enforces a Running-only precondition: suspending from NotStarted / Completed / Failed / Cancelled / already-Suspended is illegal (`WorkflowExecutionErrors.CannotSuspendUnlessRunning`). Mirrors the `Resumed` pattern — engine-guard rule 3 prohibits T1M from calling aggregate mutation methods. The aggregate has NO public `Suspend(...)` method.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` — `Suspended` method
+- `src/domain/orchestration-system/workflow/execution/error/WorkflowExecutionErrors.cs` — `CannotSuspendUnlessRunning`
+- Source: `claude/new-rules/20260420-050000-guards.md`
+
+### R-WORKFLOW-SUSPEND-RESUME-GUARD-01 — Resume Accepts Failed OR Suspended
+
+Definition:
+`WorkflowLifecycleEventFactory.Resumed` guard is extended: resume is legal from either `WorkflowExecutionStatus.Failed` OR `WorkflowExecutionStatus.Suspended`. Terminal statuses (`Completed`, `Cancelled`) remain un-resumable. Error constant renamed to `WorkflowExecutionErrors.CannotResumeUnlessFailedOrSuspended`; the previous `CannotResumeUnlessFailed` remains as a source-compat alias pointing at the same string value. `WorkflowExecutionResumedEvent` itself is unchanged — it moves the aggregate to Running regardless of which resumable prior state. Architecture test `WorkflowLifecycleEventFactory_Resumed_guard_accepts_Failed_or_Suspended` pins the status-pair check via source scan.
+
+Severity:
+S2
+
+References:
+- `src/engines/T1M/core/lifecycle/WorkflowLifecycleEventFactory.cs` — `Resumed` guard
+- `tests/unit/architecture/WbsmArchitectureTests.WorkflowLifecycleEventFactory_Resumed_guard_accepts_Failed_or_Suspended`
+- Source: `claude/new-rules/20260420-050000-guards.md`
+
+### R-WORKFLOW-SUSPEND-SCHEMA-REGISTRATION-01 — Event Deserializer Recognizes the New Schema
+
+Definition:
+`WorkflowExecutionSchemaModule` registers `WorkflowExecutionSuspendedEventSchema` alongside the existing 6 lifecycle schemas (Started, StepCompleted, Completed, Failed, Resumed, Cancelled). Payload mapper added symmetrically. Architecture test `WorkflowExecutionSuspendedEvent_registered_in_schema_module` pins the registration.
+
+Severity:
+S2
+
+References:
+- `src/runtime/event-fabric/domain-schemas/WorkflowExecutionSchemaModule.cs`
+- `tests/unit/architecture/WbsmArchitectureTests.WorkflowExecutionSuspendedEvent_registered_in_schema_module`
+- Source: `claude/new-rules/20260420-050000-guards.md`
+
+### R-WORKFLOW-SUSPEND-REPLAY-DETERMINISM-01 — Suspend Is a Replay-Stable Non-Terminal State
+
+Definition:
+Replay of a stream ending in `WorkflowExecutionSuspendedEvent` lands at `Status = Suspended` and remains there until a subsequent `WorkflowExecutionResumedEvent`. No new replay discriminator introduced. `StepName` + `Reason` are audit/observability data, not replay-bearing. Two streams landing at the same end state (via arbitrary suspend/resume chains) are replay-equivalent.
+
+Severity:
+S2
+
+References:
+- `src/domain/orchestration-system/workflow/execution/aggregate/WorkflowExecutionAggregate.cs`
+- Source: `claude/new-rules/20260420-050000-guards.md`

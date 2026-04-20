@@ -36,7 +36,7 @@ public sealed class PostgresIdempotencyStoreAdapter : IIdempotencyStore
     /// </summary>
     public async Task<bool> TryClaimAsync(string key, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             """
@@ -59,7 +59,7 @@ public sealed class PostgresIdempotencyStoreAdapter : IIdempotencyStore
     /// </summary>
     public async Task ReleaseAsync(string key, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             "DELETE FROM idempotency_keys WHERE key = @key",
@@ -72,7 +72,7 @@ public sealed class PostgresIdempotencyStoreAdapter : IIdempotencyStore
     [System.Obsolete("phase1.5-S5.2.2 / KC-2: use TryClaimAsync instead.")]
     public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             "SELECT 1 FROM idempotency_keys WHERE key = @key LIMIT 1",
@@ -86,7 +86,7 @@ public sealed class PostgresIdempotencyStoreAdapter : IIdempotencyStore
     [System.Obsolete("phase1.5-S5.2.2 / KC-2: use TryClaimAsync instead.")]
     public async Task MarkAsync(string key, CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             """

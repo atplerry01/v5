@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Whycespace.Platform.Host.Adapters;
 using Whycespace.Shared.Contracts.Infrastructure.Health;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Health;
@@ -84,18 +85,37 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
     private const string RedisHealthCheckName = "redis";
 
     private readonly IEnumerable<IHealthCheck> _healthChecks;
-    private readonly OpaPolicyEvaluator _opaEvaluator;
-    private readonly WhyceChainPostgresAdapter _chainAdapter;
+    // R2.A.D.4 + R2.A.D.3a: both OPA and Chain breakers now flow through
+    // the registry. The concrete WhyceChainPostgresAdapter dependency has
+    // been REMOVED — registry iteration covers chain via the "chain-anchor"
+    // whitelist entry below.
+    private readonly ICircuitBreakerRegistry _breakerRegistry;
     private readonly IOutboxDepthSnapshot _outboxSnapshot;
     private readonly OutboxOptions _outboxOptions;
     private readonly IPostgresPoolSnapshotProvider _postgresPools;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IClock _clock;
 
+    /// <summary>
+    /// R2.A.D.4 / R-BREAKER-HEALTH-POSTURE-01 — canonical mapping from
+    /// breaker Name to health-posture reason. Preserves existing reasons
+    /// so dashboards / alert rules / degraded-mode vocabulary are not
+    /// broken by the registry refactor. Unknown breaker names fall
+    /// through to {normalized_name}_breaker_open.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> CanonicalBreakerReasons =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["opa-policy-evaluator"] = "opa_breaker_open",
+            ["chain-anchor"] = "chain_anchor_breaker_open", // R2.A.D.3a
+            ["kafka-producer"] = "kafka_producer_breaker_open", // R2.A.D.3b
+            ["redis"] = "redis_breaker_open", // R2.A.D.3d
+            ["postgres-pool"] = "postgres_pool_breaker_open", // R2.A.D.3c
+        };
+
     public RuntimeStateAggregator(
         IEnumerable<IHealthCheck> healthChecks,
-        OpaPolicyEvaluator opaEvaluator,
-        WhyceChainPostgresAdapter chainAdapter,
+        ICircuitBreakerRegistry breakerRegistry,
         IOutboxDepthSnapshot outboxSnapshot,
         OutboxOptions outboxOptions,
         IPostgresPoolSnapshotProvider postgresPools,
@@ -103,8 +123,7 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(healthChecks);
-        ArgumentNullException.ThrowIfNull(opaEvaluator);
-        ArgumentNullException.ThrowIfNull(chainAdapter);
+        ArgumentNullException.ThrowIfNull(breakerRegistry);
         ArgumentNullException.ThrowIfNull(outboxSnapshot);
         ArgumentNullException.ThrowIfNull(outboxOptions);
         ArgumentNullException.ThrowIfNull(postgresPools);
@@ -112,14 +131,33 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
         ArgumentNullException.ThrowIfNull(clock);
 
         _healthChecks = healthChecks;
-        _opaEvaluator = opaEvaluator;
-        _chainAdapter = chainAdapter;
+        _breakerRegistry = breakerRegistry;
         _outboxSnapshot = outboxSnapshot;
         _outboxOptions = outboxOptions;
         _postgresPools = postgresPools;
         _lifetime = lifetime;
         _clock = clock;
     }
+
+    /// <summary>
+    /// R2.A.D.4 — emit canonical reason identifiers for every non-Closed
+    /// breaker in the registry. Known names map to pre-existing reason
+    /// strings (backward compat); unknown names produce a normalized
+    /// generic reason.
+    /// </summary>
+    private void AppendBreakerReasons(List<string> reasons)
+    {
+        foreach (var breaker in _breakerRegistry.GetAll())
+        {
+            if (breaker.State == CircuitBreakerState.Closed) continue;
+            reasons.Add(CanonicalBreakerReasons.TryGetValue(breaker.Name, out var canonical)
+                ? canonical
+                : NormalizeBreakerName(breaker.Name) + "_breaker_open");
+        }
+    }
+
+    private static string NormalizeBreakerName(string name) =>
+        name.Replace('-', '_').ToLowerInvariant();
 
     /// <summary>
     /// Stand-alone entry point. Performs the parallel
@@ -252,15 +290,9 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
             foreach (var r in postgresPoolResult.Reasons) reasons.Add(r);
         }
 
-        if (_opaEvaluator.IsBreakerOpen)
-        {
-            reasons.Add("opa_breaker_open");
-        }
-
-        if (_chainAdapter.IsBreakerOpen)
-        {
-            reasons.Add("chain_anchor_breaker_open");
-        }
+        // R2.A.D.4 + R2.A.D.3a — iterate every registered breaker (OPA +
+        // Chain today; Kafka / Postgres / Redis land in R2.A.D.3b/c).
+        AppendBreakerReasons(reasons);
 
         if (_outboxSnapshot.HasObservation
             && _outboxSnapshot.CurrentDepth >= _outboxOptions.HighWaterMark)
@@ -307,11 +339,9 @@ public sealed class RuntimeStateAggregator : IRuntimeStateAggregator
     {
         var candidates = new List<string>(4);
 
-        if (_opaEvaluator.IsBreakerOpen)
-            candidates.Add("opa_breaker_open");
-
-        if (_chainAdapter.IsBreakerOpen)
-            candidates.Add("chain_anchor_breaker_open");
+        // R2.A.D.4 + R2.A.D.3a — same registry iteration as ComputeFromResults
+        // so both paths emit identical reasons for breaker signals.
+        AppendBreakerReasons(candidates);
 
         if (_outboxSnapshot.HasObservation
             && _outboxSnapshot.CurrentDepth >= _outboxOptions.HighWaterMark)

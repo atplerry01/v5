@@ -9,7 +9,19 @@ public sealed record PolicyDecision(
     bool IsAllowed,
     string PolicyId,
     string DecisionHash,
-    string? DenialReason);
+    string? DenialReason)
+{
+    /// <summary>
+    /// R2.A.2 / POL-FAIL-CLASS-01 — classification of the evaluator's
+    /// inability to produce a deterministic allow/deny (OPA outage,
+    /// timeout, network error). NULL for normal allow/deny decisions
+    /// — preserves pre-R2.A.2 behavior and backward-compat for callers
+    /// that haven't been uplifted. When non-null, <see cref="IsAllowed"/>
+    /// MUST be <c>false</c> and the runtime retry / degraded-mode pathway
+    /// handles the decision according to the classification.
+    /// </summary>
+    public PolicyFailureMode? FailureMode { get; init; }
+}
 
 /// <summary>
 /// Per-evaluation context forwarded to <see cref="IPolicyEvaluator"/>.
@@ -73,4 +85,20 @@ public sealed record PolicyContext(
     /// state snapshot. <c>null</c> omits the field.
     /// </summary>
     public Guid? AggregateId { get; init; }
+
+    /// <summary>
+    /// R1 §6 — deployment environment identifier (e.g. "prod", "staging", "dev-eu",
+    /// "dr-site-a"). Serialised into <c>input.environment</c>. Lets rego policies
+    /// carry environment-scoped overlays (e.g. stricter thresholds in prod, wider
+    /// limits in dev). <c>null</c> omits the field.
+    /// </summary>
+    public string? Environment { get; init; }
+
+    /// <summary>
+    /// R1 §6 — jurisdiction overlay identifier (e.g. "US-CA", "EU-DE", "NG").
+    /// Serialised into <c>input.jurisdiction</c>. Lets rego policies carry
+    /// jurisdiction-scoped rules (regulatory thresholds, sanctioned-region gates).
+    /// <c>null</c> omits the field.
+    /// </summary>
+    public string? Jurisdiction { get; init; }
 }

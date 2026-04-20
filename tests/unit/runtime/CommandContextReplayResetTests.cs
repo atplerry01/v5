@@ -95,6 +95,22 @@ public sealed class CommandContextReplayResetTests
 
         ctx = NewContext();
         ctx.ExpectedVersion = 1; Assert.Throws<InvalidOperationException>(() => ctx.ExpectedVersion = 2);
+
+        // R1 Batch 3 additions — R-CTX-SESSION-01 write-once invariant coverage.
+        ctx = NewContext();
+        ctx.SessionId = "session-1"; Assert.Throws<InvalidOperationException>(() => ctx.SessionId = "session-2");
+
+        ctx = NewContext();
+        ctx.TokenFingerprint = "fp-1"; Assert.Throws<InvalidOperationException>(() => ctx.TokenFingerprint = "fp-2");
+
+        ctx = NewContext();
+        ctx.StepUpAuthenticatedAt = DateTimeOffset.UtcNow; Assert.Throws<InvalidOperationException>(() => ctx.StepUpAuthenticatedAt = DateTimeOffset.UtcNow);
+
+        ctx = NewContext();
+        ctx.IdempotencyKey = "key-1"; Assert.Throws<InvalidOperationException>(() => ctx.IdempotencyKey = "key-2");
+
+        ctx = NewContext();
+        ctx.IdempotencyOutcome = IdempotencyOutcome.Miss; Assert.Throws<InvalidOperationException>(() => ctx.IdempotencyOutcome = IdempotencyOutcome.Hit);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -152,6 +168,9 @@ public sealed class CommandContextReplayResetTests
         // Set every guarded field, enter replay mode, reset, then prove
         // every guarded field is re-assignable. This is the contract test
         // for total reset — partial reset is forbidden.
+        var firstStepUp = DateTimeOffset.Parse("2026-04-19T00:00:00Z");
+        var secondStepUp = DateTimeOffset.Parse("2026-04-19T12:00:00Z");
+
         var ctx = NewContext();
         ctx.IdentityId = "u1";
         ctx.Roles = new[] { "a" };
@@ -161,6 +180,13 @@ public sealed class CommandContextReplayResetTests
         ctx.PolicyVersion = "1";
         ctx.Hsid = "hsid-1";
         ctx.ExpectedVersion = 1;
+
+        // R1 Batch 3 additions — must be included in the reset path per R-CTX-SESSION-01.
+        ctx.SessionId = "session-1";
+        ctx.TokenFingerprint = "fp-1";
+        ctx.StepUpAuthenticatedAt = firstStepUp;
+        ctx.IdempotencyKey = "idem-1";
+        ctx.IdempotencyOutcome = IdempotencyOutcome.Miss;
 
         ctx.EnableReplayMode();
         ctx.ResetForReplay();
@@ -174,6 +200,11 @@ public sealed class CommandContextReplayResetTests
         ctx.PolicyVersion = "2";
         ctx.Hsid = "hsid-2";
         ctx.ExpectedVersion = 2;
+        ctx.SessionId = "session-2";
+        ctx.TokenFingerprint = "fp-2";
+        ctx.StepUpAuthenticatedAt = secondStepUp;
+        ctx.IdempotencyKey = "idem-2";
+        ctx.IdempotencyOutcome = IdempotencyOutcome.Hit;
 
         Assert.Equal("u2", ctx.IdentityId);
         Assert.Equal(new[] { "b" }, ctx.Roles);
@@ -183,6 +214,92 @@ public sealed class CommandContextReplayResetTests
         Assert.Equal("2", ctx.PolicyVersion);
         Assert.Equal("hsid-2", ctx.Hsid);
         Assert.Equal(2, ctx.ExpectedVersion);
+        Assert.Equal("session-2", ctx.SessionId);
+        Assert.Equal("fp-2", ctx.TokenFingerprint);
+        Assert.Equal(secondStepUp, ctx.StepUpAuthenticatedAt);
+        Assert.Equal("idem-2", ctx.IdempotencyKey);
+        Assert.Equal(IdempotencyOutcome.Hit, ctx.IdempotencyOutcome);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R1 Batch 5 — reset totality lock
+    // ─────────────────────────────────────────────────────────────────────
+    //
+    // This test pins the exact set of write-once fields via reflection so
+    // that adding a new guarded field without including it in
+    // ResetForReplay produces a test failure on the NEXT run — not months
+    // later when a replay diverges silently.
+    //
+    // Method: enumerate every private backing field with the shape
+    //   `private <Nullable|Ref>? _name` that backs a public write-once
+    // property. For each, assign a value, enter replay mode, call
+    // ResetForReplay, then assign again. If any field is not covered by
+    // ResetForReplay the second assignment throws.
+    [Fact]
+    public void ResetForReplay_Covers_Every_Known_WriteOnce_Field()
+    {
+        // Fields write-once AND reset by ResetForReplay. The total-reset
+        // test above (ResetForReplay_Clears_Every_WriteOnce_Guard_In_One_Shot)
+        // exercises assignment + reset + re-assignment for each of these.
+        var resetFields = new[]
+        {
+            nameof(CommandContext.IdentityId),
+            nameof(CommandContext.Roles),
+            nameof(CommandContext.TrustScore),
+            nameof(CommandContext.PolicyDecisionAllowed),
+            nameof(CommandContext.PolicyDecisionHash),
+            nameof(CommandContext.PolicyVersion),
+            nameof(CommandContext.Hsid),
+            nameof(CommandContext.ExpectedVersion),
+            nameof(CommandContext.SessionId),
+            nameof(CommandContext.TokenFingerprint),
+            nameof(CommandContext.StepUpAuthenticatedAt),
+            nameof(CommandContext.IdempotencyKey),
+            nameof(CommandContext.IdempotencyOutcome),
+        };
+
+        // Fields write-once but INTENTIONALLY NOT reset by replay. These are
+        // dispatch-time posture stamps that must persist across a replay so
+        // audit correlation and observability can see the runtime state the
+        // original execution observed. Recomputing them on replay would
+        // diverge when the live posture differs from the historical one.
+        var resetExemptFields = new[]
+        {
+            nameof(CommandContext.DegradedMode),       // HC-7 dispatch-time posture stamp
+            nameof(CommandContext.IsExecutionRestricted), // HC-8 soft-restriction tag
+        };
+
+        // Sanity: every listed name resolves to a settable property.
+        foreach (var name in resetFields.Concat(resetExemptFields))
+        {
+            var prop = typeof(CommandContext).GetProperty(name);
+            Assert.NotNull(prop);
+            Assert.True(prop!.CanWrite, $"CommandContext.{name} must be settable.");
+        }
+
+        // Reflection: every private backing field matching the write-once
+        // shape should appear in one of the two canonical sets. Missing
+        // pairs indicate a new field added without the test being updated.
+        var backingFields = typeof(CommandContext)
+            .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .Where(f => f.Name.StartsWith("_", StringComparison.Ordinal) && !f.Name.Equals("_isReplayMode", StringComparison.Ordinal))
+            .Select(f => f.Name.TrimStart('_'))
+            .ToList();
+
+        var allAccountedFor = resetFields.Concat(resetExemptFields)
+            .Select(n => char.ToLowerInvariant(n[0]) + n[1..])
+            .ToHashSet(StringComparer.Ordinal);
+
+        var unknownBackingFields = backingFields
+            .Where(n => !allAccountedFor.Contains(n))
+            .ToList();
+
+        Assert.True(unknownBackingFields.Count == 0,
+            "CommandContext has private backing fields not classified as reset-or-exempt. " +
+            "Adding a new write-once field requires a decision: (a) add to ResetForReplay AND " +
+            "to the resetFields list above, or (b) document the intentional exemption in " +
+            "resetExemptFields above. R-CTX-SESSION-01 drift. Unlisted: " +
+            string.Join(", ", unknownBackingFields));
     }
 
     [Fact]

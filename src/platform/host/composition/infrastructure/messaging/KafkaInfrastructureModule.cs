@@ -3,7 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Whycespace.Platform.Host.Adapters;
 using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Resilience;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 using OutboxOptionsRecord = Whycespace.Shared.Contracts.Infrastructure.Messaging.OutboxOptions;
 
@@ -21,6 +23,25 @@ public static class KafkaInfrastructureModule
     {
         var kafkaBootstrapServers = configuration.GetValue<string>("Kafka:BootstrapServers")
             ?? throw new InvalidOperationException("Kafka:BootstrapServers is required. No fallback.");
+
+        // R2.E.4 / R-TOPIC-ALIGNMENT-01: startup-time topic alignment
+        // verifier. Registered FIRST so it runs before projection /
+        // saga / integration workers attach to the broker — a missing
+        // topic fails fast at startup (when FailIfTopicsMissing=true) or
+        // logs WARN (default) instead of degrading to mysterious
+        // UNKNOWN_TOPIC_OR_PARTITION errors at consume time. Topic
+        // CREATION remains the responsibility of
+        // infrastructure/event-fabric/kafka/create-topics.sh — this
+        // service is verification-only.
+        var verifyTopicsOnStartup = configuration.GetValue<bool?>("Kafka:VerifyTopicsOnStartup") ?? true;
+        var failIfTopicsMissing = configuration.GetValue<bool?>("Kafka:FailIfTopicsMissing") ?? false;
+        var topicMetadataTimeoutMs = configuration.GetValue<int?>("Kafka:TopicMetadataTimeoutMs") ?? 10_000;
+        services.AddHostedService(sp => new TopicProvisioningHostedService(
+            kafkaBootstrapServers,
+            verifyTopicsOnStartup,
+            failIfTopicsMissing,
+            TimeSpan.FromMilliseconds(topicMetadataTimeoutMs),
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<TopicProvisioningHostedService>>()));
 
         // --- Outbox adapter (Postgres-backed, Kafka-relayed) ---
         // phase1.5-S5.2.1 / PC-3 (OUTBOX-DEPTH-01): the outbox depth
@@ -51,6 +72,24 @@ public static class KafkaInfrastructureModule
             };
             return new ProducerBuilder<string, string>(config).Build();
         });
+
+        // R2.A.D.3b / R-KAFKA-BREAKER-01: shared "kafka-producer" breaker.
+        // Protects all three ProduceAsync call sites (outbox primary publish,
+        // outbox DLQ publish, consumer DLQ publish). Registered as a plain
+        // ICircuitBreaker contributor so CircuitBreakerRegistry picks it up
+        // alongside OPA + Chain. Defaults: 5 failures / 30s window — tune
+        // via Kafka:BreakerThreshold and Kafka:BreakerWindowSeconds.
+        var kafkaBreakerThreshold = configuration.GetValue<int?>("Kafka:BreakerThreshold") ?? 5;
+        var kafkaBreakerWindowSeconds = configuration.GetValue<int?>("Kafka:BreakerWindowSeconds") ?? 30;
+        services.AddSingleton<ICircuitBreaker>(sp =>
+            new DeterministicCircuitBreaker(
+                new CircuitBreakerOptions
+                {
+                    Name = "kafka-producer",
+                    FailureThreshold = kafkaBreakerThreshold,
+                    WindowSeconds = kafkaBreakerWindowSeconds
+                },
+                sp.GetRequiredService<IClock>()));
 
         // --- Outbox tunables (phase1.6-S1.5 / OUTBOX-CONFIG-01) ---
         // Read from configuration with the OutboxOptions default as the
@@ -122,6 +161,46 @@ public static class KafkaInfrastructureModule
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
                 sp.GetRequiredService<IClock>()));
 
+        // --- R2.A.3d Retry Tier Infrastructure ---
+        // R-RETRY-CONSUMER-WORKER-01: single consumer instance subscribed
+        // to every `.retry` topic declared in KafkaCanonicalTopics.All.
+        // Dedicated consumer group isolates retry-tier offset progress
+        // from projection / saga / integration consumer groups.
+        //
+        // Configuration:
+        //   Kafka:Retry:MaxAttempts             — default 5
+        //   Kafka:Retry:BaseBackoffSeconds      — default 5 (first retry waits ~5s)
+        //   Kafka:Retry:MaxBackoffSeconds       — default 300 (5 min cap)
+        var retryMaxAttempts = configuration.GetValue<int?>("Kafka:Retry:MaxAttempts") ?? 5;
+        var retryBaseBackoffSeconds = configuration.GetValue<int?>("Kafka:Retry:BaseBackoffSeconds") ?? 5;
+        var retryMaxBackoffSeconds = configuration.GetValue<int?>("Kafka:Retry:MaxBackoffSeconds") ?? 300;
+        if (retryMaxAttempts < 1)
+            throw new InvalidOperationException("Kafka:Retry:MaxAttempts must be at least 1.");
+        if (retryBaseBackoffSeconds < 1)
+            throw new InvalidOperationException("Kafka:Retry:BaseBackoffSeconds must be at least 1.");
+        if (retryMaxBackoffSeconds < retryBaseBackoffSeconds)
+            throw new InvalidOperationException("Kafka:Retry:MaxBackoffSeconds must be >= BaseBackoffSeconds.");
+
+        services.AddSingleton(new RetryTierOptions(
+            MaxAttempts: retryMaxAttempts,
+            BaseBackoff: TimeSpan.FromSeconds(retryBaseBackoffSeconds),
+            MaxBackoff: TimeSpan.FromSeconds(retryMaxBackoffSeconds)));
+
+        services.AddHostedService(sp =>
+        {
+            var retryTopics = KafkaCanonicalTopics.All
+                .Where(t => t.EndsWith(".retry", StringComparison.Ordinal))
+                .ToList();
+            return new KafkaRetryConsumerWorker(
+                kafkaBootstrapServers,
+                retryTopics,
+                sp.GetRequiredService<IProducer<string, string>>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<KafkaConsumerOptions>(),
+                sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<KafkaRetryConsumerWorker>>());
+        });
+
         // --- Kafka Outbox Publisher (background relay: Postgres outbox → Kafka) ---
         // phase1.6-S1.6 (DLQ-RESOLVER-01): TopicNameResolver is registered
         // as a singleton by ProjectionComposition; resolve it from DI here
@@ -134,7 +213,15 @@ public static class KafkaInfrastructureModule
                 sp.GetRequiredService<TopicNameResolver>(),
                 sp.GetRequiredService<OutboxOptionsRecord>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
-                sp.GetRequiredService<IClock>()));
+                sp.GetRequiredService<IClock>(),
+                pollInterval: null,
+                logger: sp.GetService<Microsoft.Extensions.Logging.ILogger<KafkaOutboxPublisher>>(),
+                // R2.A.3b: mirror deadletter Kafka publishes to durable store.
+                deadLetterStore: sp.GetService<Whycespace.Shared.Contracts.Infrastructure.Messaging.IDeadLetterStore>(),
+                // R2.A.D.3b / R-KAFKA-BREAKER-01: wrap ProduceAsync in the
+                // shared "kafka-producer" breaker. Resolved via registry
+                // (which picks up the ICircuitBreaker registered above).
+                kafkaBreaker: sp.GetRequiredService<ICircuitBreakerRegistry>().Get("kafka-producer")));
 
         return services;
     }

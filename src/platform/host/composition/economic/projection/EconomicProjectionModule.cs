@@ -99,138 +99,138 @@ public static class EconomicProjectionModule
     {
         // ── Projection stores ────────────────────────────────────
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<RevenueReadModel>("projection_economic_revenue_revenue", "revenue_read_model", "Revenue"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<DistributionReadModel>("projection_economic_revenue_distribution", "distribution_read_model", "Distribution"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<PayoutReadModel>("projection_economic_revenue_payout", "payout_read_model", "Payout"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<VaultAccountReadModel>("projection_economic_vault_account", "vault_account_read_model", "VaultAccount"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<EntryReadModel>("projection_economic_ledger_entry", "entry_read_model", "LedgerEntry"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<LedgerReadModel>("projection_economic_ledger_ledger", "ledger_read_model", "Ledger"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ObligationReadModel>("projection_economic_ledger_obligation", "obligation_read_model", "Obligation"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<TreasuryReadModel>("projection_economic_ledger_treasury", "treasury_read_model", "Treasury"));
         // Phase 8 B2 — compensation-scoped journal projection.
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<JournalReadModel>("projection_economic_ledger_journal", "journal_read_model", "Journal"));
 
         // Capital projection stores (Phase 2 capital wiring — Option C)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalAccountReadModel>("projection_economic_capital_account", "capital_account_read_model", "CapitalAccount"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalAllocationReadModel>("projection_economic_capital_allocation", "capital_allocation_read_model", "CapitalAllocation"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalAssetReadModel>("projection_economic_capital_asset", "capital_asset_read_model", "CapitalAsset"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalBindingReadModel>("projection_economic_capital_binding", "capital_binding_read_model", "CapitalBinding"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalPoolReadModel>("projection_economic_capital_pool", "capital_pool_read_model", "CapitalPool"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalReserveReadModel>("projection_economic_capital_reserve", "capital_reserve_read_model", "CapitalReserve"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<CapitalVaultReadModel>("projection_economic_capital_vault", "capital_vault_read_model", "CapitalVault"));
 
         // Compliance / audit projection store
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<AuditRecordReadModel>("projection_economic_compliance_audit", "audit_record_read_model", "AuditRecord"));
 
         // Enforcement projection stores (rule + violation + escalation)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<EnforcementRuleReadModel>("projection_economic_enforcement_rule", "enforcement_rule_read_model", "EnforcementRule"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ViolationReadModel>("projection_economic_enforcement_violation", "violation_read_model", "Violation"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<EscalationReadModel>("projection_economic_enforcement_escalation", "escalation_read_model", "ViolationEscalation"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<SanctionReadModel>("projection_economic_enforcement_sanction", "sanction_read_model", "Sanction"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<RestrictionReadModel>("projection_economic_enforcement_restriction", "restriction_read_model", "Restriction"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<LockReadModel>("projection_economic_enforcement_lock", "lock_read_model", "Lock"));
 
         // Risk projection store (exposure)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<RiskExposureReadModel>("projection_economic_risk_exposure", "risk_exposure_read_model", "RiskExposure"));
 
         // Routing projection stores (path + execution)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<RoutingPathReadModel>("projection_economic_routing_path", "routing_path_read_model", "RoutingPath"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<RoutingExecutionReadModel>("projection_economic_routing_execution", "routing_execution_read_model", "RoutingExecution"));
 
         // Subject projection store (economic subject bridge)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<EconomicSubjectReadModel>("projection_economic_subject_subject", "economic_subject_read_model", "EconomicSubject"));
 
         // Exchange projection stores (fx + rate)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<FxReadModel>("projection_economic_exchange_fx", "fx_read_model", "Fx"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ExchangeRateReadModel>("projection_economic_exchange_rate", "exchange_rate_read_model", "ExchangeRate"));
 
         // Reconciliation projection stores (process + discrepancy)
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ProcessReadModel>("projection_economic_reconciliation_process", "process_read_model", "ReconciliationProcess"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<DiscrepancyReadModel>("projection_economic_reconciliation_discrepancy", "discrepancy_read_model", "Discrepancy"));
 
         // Transaction projection stores (charge, expense, instruction, limit,
         // settlement, transaction, wallet).
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ChargeReadModel>("projection_economic_transaction_charge", "charge_read_model", "Charge"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ExpenseReadModel>("projection_economic_transaction_expense", "expense_read_model", "Expense"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<InstructionReadModel>("projection_economic_transaction_instruction", "instruction_read_model", "Instruction"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<LimitReadModel>("projection_economic_transaction_limit", "limit_read_model", "Limit"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<SettlementReadModel>("projection_economic_transaction_settlement", "settlement_read_model", "Settlement"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<TransactionReadModel>("projection_economic_transaction_transaction", "transaction_read_model", "Transaction"));
         services.AddSingleton(sp =>
-            new ProjectionStoreFactory(sp.GetRequiredService<ProjectionsDataSource>().Inner)
+            sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<WalletReadModel>("projection_economic_transaction_wallet", "wallet_read_model", "Wallet"));
 
         // ── Projection handlers ──────────────────────────────────
@@ -867,6 +867,14 @@ public static class EconomicProjectionModule
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Messaging.KafkaConsumerOptions>(),
                 sp.GetRequiredService<Whycespace.Shared.Contracts.Infrastructure.Health.IWorkerLivenessRegistry>(),
-                sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>()));
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<GenericKafkaProjectionConsumerWorker>>(),
+                pollTimeout: null,
+                deadLetterStore: sp.GetService<Whycespace.Shared.Contracts.Infrastructure.Messaging.IDeadLetterStore>(),
+                // R2.A.D.3b: consumer DLQ publish flows through shared "kafka-producer" breaker.
+                kafkaBreaker: sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("kafka-producer"),
+                // R2.A.3d: retry tier escalation wiring.
+                topicNameResolver: sp.GetService<Whycespace.Runtime.EventFabric.TopicNameResolver>(),
+                retryOptions: sp.GetService<RetryTierOptions>(),
+                randomProvider: sp.GetService<Whycespace.Shared.Kernel.Domain.IRandomProvider>()));
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Whycespace.Shared.Contracts.Infrastructure.Health;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -128,6 +129,17 @@ public sealed class OutboxDepthSampler : BackgroundService
             {
                 return;
             }
+            catch (CircuitBreakerOpenException ex)
+            {
+                // R2.A.D.3c: shared "postgres-pool" breaker is Open — skip
+                // this iteration so the sampler does not hammer an unavailable
+                // pool. The snapshot retains its last known value; HC-1
+                // freshness guard will reject admission once the snapshot
+                // goes stale, which is the correct fail-safe posture.
+                _logger?.LogWarning(
+                    "OutboxDepthSampler skipping iteration: pool breaker '{Breaker}' open ({RetryAfter}s).",
+                    ex.BreakerName, ex.RetryAfterSeconds);
+            }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "OutboxDepthSampler probe failed; snapshot unchanged.");
@@ -140,7 +152,7 @@ public sealed class OutboxDepthSampler : BackgroundService
 
     private async Task SampleOnceAsync(CancellationToken ct)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName, ct);
+        await using var conn = await _dataSource.OpenAsync(ct);
 
         // phase1.5-S5.2.2 / KC-3: single bounded probe sampling both
         // pending+failed depth (PC-3) and deadletter depth (KC-3).

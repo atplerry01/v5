@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -39,6 +40,7 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
     ];
 
     private const string ConsumerGroup = "whyce.integration.risk-exposure-enforcement";
+    private const string WorkerName = "risk-exposure-enforcement"; // R2.E.1 rebalance-metric tag
 
     private readonly string _kafkaBootstrapServers;
     private readonly EventDeserializer _deserializer;
@@ -47,13 +49,25 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
     private readonly KafkaConsumerOptions _consumerOptions;
     private readonly ILogger<RiskExposureEnforcementWorker>? _logger;
 
+    // R2.A.3d Phase B: retry-tier escalation wiring.
+    private readonly IProducer<string, string>? _producer;
+    private readonly TopicNameResolver? _topicNameResolver;
+    private readonly RetryTierOptions? _retryOptions;
+    private readonly IRandomProvider? _randomProvider;
+    private readonly ICircuitBreaker? _kafkaBreaker;
+
     public RiskExposureEnforcementWorker(
         string kafkaBootstrapServers,
         EventDeserializer deserializer,
         RiskExposureEnforcementHandler handler,
         IClock clock,
         KafkaConsumerOptions consumerOptions,
-        ILogger<RiskExposureEnforcementWorker>? logger = null)
+        ILogger<RiskExposureEnforcementWorker>? logger = null,
+        IProducer<string, string>? producer = null,
+        TopicNameResolver? topicNameResolver = null,
+        RetryTierOptions? retryOptions = null,
+        IRandomProvider? randomProvider = null,
+        ICircuitBreaker? kafkaBreaker = null)
     {
         _kafkaBootstrapServers = kafkaBootstrapServers;
         _deserializer = deserializer;
@@ -61,6 +75,11 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
         _clock = clock;
         _consumerOptions = consumerOptions;
         _logger = logger;
+        _producer = producer;
+        _topicNameResolver = topicNameResolver;
+        _retryOptions = retryOptions;
+        _randomProvider = randomProvider;
+        _kafkaBreaker = kafkaBreaker;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -75,9 +94,12 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
             MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
             MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
             SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
+            PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky, // R2.E.1
         };
 
-        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        var consumerBuilder = new ConsumerBuilder<string, string>(config);
+        KafkaRebalanceObservability.Attach(consumerBuilder, Topics[0], WorkerName, _logger);
+        using var consumer = consumerBuilder.Build();
         consumer.Subscribe(Topics);
 
         _logger?.LogInformation(
@@ -90,6 +112,8 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
             {
                 var result = consumer.Consume(TimeSpan.FromSeconds(1));
                 if (result is null) continue;
+
+                KafkaLagObservability.Record(consumer, result, WorkerName, Topics[0]);
 
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");
@@ -155,18 +179,18 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
                     await _handler.HandleAsync(envelope, stoppingToken);
                     consumer.Commit(result);
                 }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception handlerEx)
                 {
-                    // F3 failure handling: do NOT commit the offset on
-                    // handler failure. Kafka will redeliver on next poll
-                    // (or after a consumer restart). This gives automatic
-                    // retry for transient failures (dispatch policy
-                    // delay, downstream projection lag) without dropping
-                    // the breach signal. Outer catch logs and backs off.
-                    _logger?.LogError(handlerEx,
-                        "RiskExposureEnforcementHandler failed for breach on aggregate {AggregateId}; offset NOT committed, will redeliver.",
-                        envelope.AggregateId);
-                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                    // R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02:
+                    // route through the retry escalator when wired.
+                    // F3 fallback: when retry tier is not wired, do NOT
+                    // commit; Kafka redelivers next poll.
+                    await EscalateOrRedeliverAsync(
+                        consumer, result, parsedEventId, handlerEx, stoppingToken);
                 }
             }
             catch (OperationCanceledException)
@@ -181,6 +205,48 @@ public sealed class RiskExposureEnforcementWorker : BackgroundService
         }
 
         consumer.Close();
+    }
+
+    private async Task EscalateOrRedeliverAsync(
+        IConsumer<string, string> consumer,
+        ConsumeResult<string, string> result,
+        Guid parsedEventId,
+        Exception handlerEx,
+        CancellationToken ct)
+    {
+        if (_producer is null || _topicNameResolver is null || _retryOptions is null
+            || _randomProvider is null || _kafkaBreaker is null)
+        {
+            _logger?.LogError(handlerEx,
+                "RiskExposureEnforcementWorker handler failed on {Topic} p{Partition} o{Offset}; retry tier not wired, will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value);
+            return;
+        }
+
+        var priorAttempt = RetryHeaders.ReadPriorAttemptCount(result.Message.Headers);
+        try
+        {
+            await KafkaRetryEscalator.EscalateAsync(
+                _producer, _topicNameResolver, result.Topic, result.Message,
+                parsedEventId, $"{handlerEx.GetType().Name}: {handlerEx.Message}",
+                priorAttempt, _retryOptions.MaxAttempts,
+                _retryOptions.BaseBackoff, _retryOptions.MaxBackoff,
+                _randomProvider, _clock, _kafkaBreaker, _logger, ct);
+            consumer.Commit(result);
+        }
+        catch (CircuitBreakerOpenException breakerEx)
+        {
+            _logger?.LogWarning(
+                "RiskExposureEnforcementWorker handler failed on {Topic} p{Partition} o{Offset}; retry-escalate blocked by breaker '{Breaker}' ({RetryAfter}s); will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value,
+                breakerEx.BreakerName, breakerEx.RetryAfterSeconds);
+        }
+        catch (Exception escalationEx)
+        {
+            _logger?.LogError(escalationEx,
+                "RiskExposureEnforcementWorker retry escalation failed on {Topic} p{Partition} o{Offset} after handler exception {HandlerException}; will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value, handlerEx.GetType().Name);
+        }
     }
 
     private static string? ExtractHeader(Headers? headers, string key)

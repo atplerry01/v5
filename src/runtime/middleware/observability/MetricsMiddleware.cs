@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Whycespace.Runtime.Middleware;
@@ -7,14 +6,16 @@ using Whycespace.Shared.Contracts.Runtime;
 namespace Whycespace.Runtime.Middleware.Observability;
 
 /// <summary>
-/// Observability middleware: records command execution metrics (duration, count, errors).
-/// Runs inside tracing span so duration excludes trace bookkeeping.
-/// Non-blocking, non-throwing.
+/// Observability middleware: records command execution metrics (duration, count, errors)
+/// via System.Diagnostics.Metrics (OpenTelemetry-compatible). Runs inside the tracing
+/// span so duration excludes trace bookkeeping. Non-blocking, non-throwing.
 ///
-/// E10 production-readiness: exposes per-command-type counters and latency
-/// via System.Diagnostics.Metrics (OpenTelemetry-compatible) alongside the
-/// existing global counters. Instruments are created once per command type
-/// and cached for the process lifetime.
+/// R1 Batch 4 — R-STATE-BOUNDARY-01: prior revisions carried static mutable
+/// counters (<c>_totalCommands</c> et al.) and a <c>ConcurrentDictionary</c>
+/// per-command snapshot exposed via <c>GetCounts</c> / <c>GetPerCommandMetrics</c>.
+/// Both getters had zero callers and the counters duplicated the OpenTelemetry
+/// counters already published below — removed to honor the state-boundary rule
+/// and the clean-code guard.
 /// </summary>
 public sealed class MetricsMiddleware : IMiddleware
 {
@@ -29,12 +30,6 @@ public sealed class MetricsMiddleware : IMiddleware
     private static readonly Histogram<double> CommandDuration =
         RuntimeMeter.CreateHistogram<double>("whyce.runtime.command.duration_ms", "ms", "Command execution latency");
 
-    private static long _totalCommands;
-    private static long _successfulCommands;
-    private static long _failedCommands;
-
-    private static readonly ConcurrentDictionary<string, CommandTypeMetrics> PerCommandMetrics = new();
-
     public async Task<CommandResult> ExecuteAsync(
         CommandContext context,
         object command,
@@ -42,10 +37,6 @@ public sealed class MetricsMiddleware : IMiddleware
         CancellationToken cancellationToken = default)
     {
         var commandType = command.GetType().Name;
-        var metrics = PerCommandMetrics.GetOrAdd(commandType, _ => new CommandTypeMetrics());
-
-        Interlocked.Increment(ref _totalCommands);
-        metrics.IncrementTotal();
 
         var tags = new TagList
         {
@@ -64,71 +55,21 @@ public sealed class MetricsMiddleware : IMiddleware
             var result = await next(cancellationToken);
             sw.Stop();
 
-            var durationMs = sw.Elapsed.TotalMilliseconds;
-            metrics.RecordLatency(durationMs);
-            CommandDuration.Record(durationMs, tags);
+            CommandDuration.Record(sw.Elapsed.TotalMilliseconds, tags);
 
             if (result.IsSuccess)
-            {
-                Interlocked.Increment(ref _successfulCommands);
-                metrics.IncrementSuccess();
                 CommandSuccess.Add(1, tags);
-            }
             else
-            {
-                Interlocked.Increment(ref _failedCommands);
-                metrics.IncrementFailed();
                 CommandFailed.Add(1, tags);
-            }
 
             return result;
         }
         catch
         {
             sw.Stop();
-            var durationMs = sw.Elapsed.TotalMilliseconds;
-            metrics.RecordLatency(durationMs);
-            CommandDuration.Record(durationMs, tags);
-
-            Interlocked.Increment(ref _failedCommands);
-            metrics.IncrementFailed();
+            CommandDuration.Record(sw.Elapsed.TotalMilliseconds, tags);
             CommandFailed.Add(1, tags);
-
             throw;
         }
-    }
-
-    public static (long Total, long Success, long Failed) GetCounts() =>
-        (Interlocked.Read(ref _totalCommands),
-         Interlocked.Read(ref _successfulCommands),
-         Interlocked.Read(ref _failedCommands));
-
-    public static IReadOnlyDictionary<string, CommandTypeSnapshot> GetPerCommandMetrics()
-    {
-        var snapshot = new Dictionary<string, CommandTypeSnapshot>(PerCommandMetrics.Count);
-        foreach (var (key, value) in PerCommandMetrics)
-            snapshot[key] = value.Snapshot();
-        return snapshot;
-    }
-
-    public sealed record CommandTypeSnapshot(long Total, long Success, long Failed, double LastLatencyMs);
-
-    private sealed class CommandTypeMetrics
-    {
-        private long _total;
-        private long _success;
-        private long _failed;
-        private double _lastLatencyMs;
-
-        public void IncrementTotal() => Interlocked.Increment(ref _total);
-        public void IncrementSuccess() => Interlocked.Increment(ref _success);
-        public void IncrementFailed() => Interlocked.Increment(ref _failed);
-        public void RecordLatency(double ms) => Volatile.Write(ref _lastLatencyMs, ms);
-
-        public CommandTypeSnapshot Snapshot() => new(
-            Interlocked.Read(ref _total),
-            Interlocked.Read(ref _success),
-            Interlocked.Read(ref _failed),
-            Volatile.Read(ref _lastLatencyMs));
     }
 }

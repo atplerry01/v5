@@ -55,7 +55,65 @@ public sealed class TopicNameResolver
                 topic.AsSpan(0, topic.Length - ".events".Length),
                 ".deadletter");
 
+        // R2.A.3a (R-TOPIC-TIER-01): retry → deadletter is a canonical
+        // tier transition. A message that exhausts retry attempts flows
+        // from `.retry` to `.deadletter`; callers MUST go through this
+        // method rather than splice strings inline.
+        if (topic.EndsWith(".retry", StringComparison.Ordinal))
+            return string.Concat(
+                topic.AsSpan(0, topic.Length - ".retry".Length),
+                ".deadletter");
+
         return topic + ".deadletter";
+    }
+
+    /// <summary>
+    /// R2.A.3a (R-TOPIC-TIER-01) — resolves the canonical retry topic name
+    /// from a primary `.events` topic. The first tier in the D2 locked
+    /// three-tier shape: `.events` → `.retry` → `.deadletter`.
+    ///
+    /// Behavior:
+    /// <list type="bullet">
+    ///   <item>null / empty / whitespace topic → <see cref="ArgumentException"/></item>
+    ///   <item>topic already ends in <c>.retry</c> → returned unchanged (idempotent)</item>
+    ///   <item>topic ending in <c>.events</c> → suffix replaced with <c>.retry</c></item>
+    ///   <item>topic ending in <c>.deadletter</c> → <see cref="InvalidTopicException"/>
+    ///         (moving backwards from terminal tier is forbidden)</item>
+    ///   <item>topic ending in <c>.commands</c> → <see cref="InvalidTopicException"/>
+    ///         (command-tier retry is not the outbox retry tier; use
+    ///         <c>IRetryExecutor</c> at the command dispatch site instead)</item>
+    ///   <item>any other suffix → <c>.retry</c> appended</item>
+    /// </list>
+    /// Idempotency on the `.retry` suffix mirrors <see cref="ResolveDeadLetter"/>
+    /// so a re-drive of an already-retry-tier message does not produce
+    /// <c>x.retry.retry</c>.
+    /// </summary>
+    public string ResolveRetry(string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+            throw new ArgumentException(
+                "Topic must not be null, empty, or whitespace.", nameof(topic));
+
+        if (topic.EndsWith(".retry", StringComparison.Ordinal))
+            return topic;
+
+        if (topic.EndsWith(".deadletter", StringComparison.Ordinal))
+            throw new InvalidTopicException(
+                $"Cannot resolve retry tier from deadletter topic '{topic}'. " +
+                "Deadletter is terminal; re-drive requires an explicit operator control.");
+
+        if (topic.EndsWith(".commands", StringComparison.Ordinal))
+            throw new InvalidTopicException(
+                $"Cannot resolve retry tier from command topic '{topic}'. " +
+                "Command-dispatch retry belongs to IRetryExecutor at the call site, " +
+                "not to the outbox fabric tier.");
+
+        if (topic.EndsWith(".events", StringComparison.Ordinal))
+            return string.Concat(
+                topic.AsSpan(0, topic.Length - ".events".Length),
+                ".retry");
+
+        return topic + ".retry";
     }
 
     public string Resolve(EventEnvelope envelope, string type)

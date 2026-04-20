@@ -35,6 +35,22 @@ public sealed class PolicyMiddleware : IMiddleware
     private readonly IClock _clock;
     private readonly IAggregateStateLoader _aggregateStateLoader;
 
+    // R2.A.OPA / R-POL-OPA-RETRY-01 — optional retry executor. When registered
+    // (host composition via CoreComposition), OPA unavailable exceptions
+    // (timeout / transport / http_status / breaker_open) are caught and
+    // classified as RuntimeFailureCategory.PolicyEvaluationDeferred inside a
+    // bounded retry loop. Exhausted retries re-throw so the API edge's
+    // existing 503 + Retry-After handler still fires. When null (legacy
+    // tests / background workers without the executor), the pre-R2.A.OPA
+    // behaviour is preserved verbatim — the exception bubbles on the first
+    // attempt.
+    private readonly IRetryExecutor? _retryExecutor;
+    private static readonly RetryPolicy OpaRetryPolicy = new()
+    {
+        MaxAttempts = 3,
+        InitialDelayMs = 200
+    };
+
     public PolicyMiddleware(
         WhyceIdEngine whyceIdEngine,
         WhycePolicyEngine whycePolicyEngine,
@@ -44,6 +60,22 @@ public sealed class PolicyMiddleware : IMiddleware
         ICallerIdentityAccessor callerIdentity,
         IClock clock,
         IAggregateStateLoader aggregateStateLoader)
+        : this(whyceIdEngine, whycePolicyEngine, policyEvaluator, idGenerator,
+               decisionEventFactory, callerIdentity, clock, aggregateStateLoader,
+               retryExecutor: null)
+    {
+    }
+
+    public PolicyMiddleware(
+        WhyceIdEngine whyceIdEngine,
+        WhycePolicyEngine whycePolicyEngine,
+        IPolicyEvaluator policyEvaluator,
+        IIdGenerator idGenerator,
+        IPolicyDecisionEventFactory decisionEventFactory,
+        ICallerIdentityAccessor callerIdentity,
+        IClock clock,
+        IAggregateStateLoader aggregateStateLoader,
+        IRetryExecutor? retryExecutor)
     {
         _whyceIdEngine = whyceIdEngine;
         _whycePolicyEngine = whycePolicyEngine;
@@ -53,6 +85,7 @@ public sealed class PolicyMiddleware : IMiddleware
         _callerIdentity = callerIdentity;
         _clock = clock;
         _aggregateStateLoader = aggregateStateLoader;
+        _retryExecutor = retryExecutor;
     }
 
     public async Task<CommandResult> ExecuteAsync(
@@ -89,7 +122,8 @@ public sealed class PolicyMiddleware : IMiddleware
         if (!authResult.IsAuthenticated)
         {
             return CommandResult.Failure(
-                "Identity resolution failed. Policy enforcement requires valid identity. No bypass allowed.");
+                "Identity resolution failed. Policy enforcement requires valid identity. No bypass allowed.",
+                RuntimeFailureCategory.AuthorizationDenied);
         }
 
         // Step 2: Inject identity into ExecutionContext
@@ -140,9 +174,21 @@ public sealed class PolicyMiddleware : IMiddleware
             context.Domain,
             subjectAttributes);
 
-        var opaContext = PolicyInputBuilder.Enrich(baseContext, command, resourceState, now);
+        // R1 §6 — jurisdiction/environment overlays. Contract-level support
+        // is in place; a dedicated overlay source (host environment name +
+        // tenant → jurisdiction resolver) has not yet been wired, so both
+        // are passed as null for now and the 6-arg overload emits them as
+        // omitted input fields. When overlay sources land, swap the nulls
+        // for the resolved values — rego policies consume `input.environment`
+        // and `input.jurisdiction` via the canonical snake-case envelope.
+        var opaContext = PolicyInputBuilder.Enrich(
+            baseContext, command, resourceState, now,
+            environment: null,
+            jurisdiction: null);
 
-        var opaDecision = await _policyEvaluator.EvaluateAsync(context.PolicyId, command, opaContext);
+        var opaDecision = _retryExecutor is null
+            ? await _policyEvaluator.EvaluateAsync(context.PolicyId, command, opaContext)
+            : await EvaluateOpaWithRetryAsync(context, command, opaContext, cancellationToken);
         if (!opaDecision.IsAllowed)
         {
             // OPA-deny is also a governed decision and MUST emit audit. The
@@ -170,7 +216,8 @@ public sealed class PolicyMiddleware : IMiddleware
             // carries the same token(s) as a dedicated machine-readable field
             // for audit correlation and downstream rego rule attribution.
             return CommandResult.Failure(
-                $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.")
+                $"OPA policy denied: {opaDecision.DenialReason ?? "external policy evaluation failed"}. No bypass allowed.",
+                RuntimeFailureCategory.PolicyDenied)
                 with
                 {
                     AuditEmission = opaDenyEmission,
@@ -223,7 +270,8 @@ public sealed class PolicyMiddleware : IMiddleware
             // OPA-deny branch: Error stays free-form, PolicyDenyReason
             // carries the same token for audit correlation.
             return CommandResult.Failure(
-                $"WHYCEPOLICY denied: {policyResult.DenialReason ?? "execution not permitted"}. No bypass allowed.")
+                $"WHYCEPOLICY denied: {policyResult.DenialReason ?? "execution not permitted"}. No bypass allowed.",
+                RuntimeFailureCategory.PolicyDenied)
                 with
                 {
                     AuditEmission = denyEmission,
@@ -255,5 +303,80 @@ public sealed class PolicyMiddleware : IMiddleware
         // Audit emission overrides any AuditEmission set downstream — policy
         // decision is the canonical audit for this execution.
         return innerResult with { AuditEmission = allowEmission };
+    }
+
+    /// <summary>
+    /// R2.A.OPA / R-POL-OPA-RETRY-01 — bounded retry around the OPA evaluator
+    /// call. On <see cref="PolicyEvaluationUnavailableException"/> the retry
+    /// step is classified as <see cref="RuntimeFailureCategory.PolicyEvaluationDeferred"/>
+    /// which <c>RetryEligibility</c> treats as retryable. On exhaustion, the
+    /// last captured exception is re-thrown with <c>reason="retry_exhausted:&lt;original&gt;"</c>
+    /// and <c>RetryAfterSeconds</c> preserved, so the API edge's existing
+    /// 503 + Retry-After handler surfaces the failure as before. Normal
+    /// allow / deny decisions bypass the retry loop on the first attempt.
+    /// </summary>
+    private async Task<PolicyDecision> EvaluateOpaWithRetryAsync(
+        CommandContext context,
+        object command,
+        PolicyContext opaContext,
+        CancellationToken cancellationToken)
+    {
+        // Captured so we can re-throw with the ORIGINAL RetryAfterSeconds on
+        // exhaustion — RetryStepResult carries only (category, error_string),
+        // not the typed exception.
+        PolicyEvaluationUnavailableException? lastUnavailable = null;
+
+        var retryCtx = new RetryOperationContext
+        {
+            OperationId = $"{context.CorrelationId:N}:opa:{context.PolicyId}",
+            Policy = OpaRetryPolicy,
+            OperationName = "opa-evaluate"
+        };
+
+        var retryResult = await _retryExecutor!.ExecuteAsync<PolicyDecision>(
+            retryCtx,
+            async (attempt, ct) =>
+            {
+                try
+                {
+                    var decision = await _policyEvaluator.EvaluateAsync(
+                        context.PolicyId, command, opaContext);
+                    return RetryStepResult<PolicyDecision>.Success(decision);
+                }
+                catch (PolicyEvaluationUnavailableException ex)
+                {
+                    lastUnavailable = ex;
+                    return RetryStepResult<PolicyDecision>.Failure(
+                        RuntimeFailureCategory.PolicyEvaluationDeferred,
+                        $"{ex.Reason}: {ex.Message}");
+                }
+            },
+            cancellationToken);
+
+        if (retryResult.Outcome == RetryOutcome.Success)
+        {
+            return retryResult.Value!;
+        }
+
+        // R-POL-OPA-RETRY-01 exhaustion path: OPA unavailable for all
+        // attempts → re-throw so API edge 503+Retry-After handler fires.
+        // The POL-FAIL-CLASS-01 FAIL_CLOSED invariant is satisfied via the
+        // rejection path — the engine never sees the command.
+        if (lastUnavailable is not null)
+        {
+            throw new PolicyEvaluationUnavailableException(
+                reason: $"retry_exhausted:{lastUnavailable.Reason}",
+                retryAfterSeconds: lastUnavailable.RetryAfterSeconds,
+                message: $"OPA policy evaluation for '{context.PolicyId}' failed after {retryResult.AttemptsMade} attempts. Last reason: {lastUnavailable.Reason}. {lastUnavailable.Message}",
+                innerException: lastUnavailable);
+        }
+
+        // Unreachable in practice — a non-success outcome without a captured
+        // PolicyEvaluationUnavailableException implies the inner op threw a
+        // non-retryable exception that the executor wrapped as
+        // ExecutionFailure. Preserve the underlying error.
+        throw new InvalidOperationException(
+            $"Policy evaluation retry exhausted without captured unavailable exception. " +
+            $"Outcome={retryResult.Outcome}, AttemptsMade={retryResult.AttemptsMade}, Error={retryResult.FinalError}");
     }
 }

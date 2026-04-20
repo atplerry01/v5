@@ -3,6 +3,7 @@ using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Whycespace.Runtime.Middleware.Policy;
 using Whycespace.Shared.Contracts.Infrastructure.Policy;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -52,18 +53,20 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
     private readonly OpaOptions _options;
     private readonly IClock _clock;
 
-    // Breaker state. The lock is uncontended on the happy path (a single
-    // Interlocked sequence) and only enters the critical section on
-    // failure or state-transition observation.
-    private readonly object _breakerLock = new();
-    private int _consecutiveFailures;
-    private DateTimeOffset? _openedAt;
+    // R2.A.D.2 / R-OPA-BREAKER-DELEGATION-01 — delegated to the canonical
+    // ICircuitBreaker. Inline state (_breakerLock / _consecutiveFailures /
+    // _openedAt) removed per the pre-R2.A.D.2 → post refactor invariant.
+    // The breaker INSTANCE is owned by the host composition root so it can
+    // be registered by name ("opa-policy-evaluator") and surfaced by the
+    // IRuntimeStateAggregator health posture.
+    private readonly ICircuitBreaker _breaker;
 
-    public OpaPolicyEvaluator(HttpClient httpClient, OpaOptions options, IClock clock)
+    public OpaPolicyEvaluator(HttpClient httpClient, OpaOptions options, IClock clock, ICircuitBreaker breaker)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(breaker);
         if (string.IsNullOrWhiteSpace(options.Endpoint))
             throw new ArgumentException("OpaOptions.Endpoint must be set.", nameof(options));
         if (options.RequestTimeoutMs < 1)
@@ -83,24 +86,16 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         _opaEndpoint = options.Endpoint.TrimEnd('/');
         _options = options;
         _clock = clock;
+        _breaker = breaker;
     }
 
     public async Task<PolicyDecision> EvaluateAsync(string policyId, object command, PolicyContext policyContext)
     {
-        // --- Breaker gate (pre-call) ---
-        // Open → throw immediately. HalfOpen window has elapsed → admit a
-        // single trial call (the lock keeps the trial-call decision
-        // single-writer; concurrent callers during HalfOpen still see Open
-        // until the trial commits one way or the other).
-        if (IsBreakerOpenInternal())
-        {
-            BreakerOpenCounter.Add(1,
-                new KeyValuePair<string, object?>("policy_id", policyId));
-            throw new PolicyEvaluationUnavailableException(
-                reason: "breaker_open",
-                retryAfterSeconds: _options.BreakerWindowSeconds,
-                message: $"OPA circuit breaker open for policy '{policyId}'. No bypass allowed.");
-        }
+        // R2.A.D.2 / R-OPA-BREAKER-DELEGATION-01: breaker state is owned by
+        // the injected ICircuitBreaker. The pre-refactor top-level gate is
+        // removed — the breaker's own gate inside ExecuteAsync produces the
+        // same fail-fast behaviour when Open, and we translate its exception
+        // below (see EvaluateSingleAsync catch).
 
         var action = MapCommandTypeToAction(policyContext.CommandType, policyContext.Domain);
         var policyPath = BuildOpaPackagePath(policyId);
@@ -206,137 +201,115 @@ public sealed class OpaPolicyEvaluator : IPolicyEvaluator
         var json = JsonSerializer.Serialize(requestBody, PolicyInputBuilder.SerializerOptions);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-        var stopwatch = Stopwatch.StartNew();
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_options.RequestTimeoutMs));
+        // R2.A.D.2: HTTP call is wrapped in the injected circuit breaker.
+        // Transient failures inside the lambda throw PolicyEvaluationUnavailable-
+        // Exception which the breaker counts as a failure. A successful HTTP
+        // call (including a genuine deny) is a breaker success. On Open, the
+        // breaker throws CircuitBreakerOpenException which we translate to
+        // PolicyEvaluationUnavailableException at the boundary (R-OPA-BREAKER-
+        // BOUNDARY-01) so callers keep seeing the same typed exception.
         try
         {
-            var response = await _httpClient.PostAsync(url, content, cts.Token);
-            if (!response.IsSuccessStatusCode)
+            return await _breaker.ExecuteAsync<PolicyDecision>(async ct =>
             {
-                stopwatch.Stop();
-                EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
-                    new KeyValuePair<string, object?>("policy_id", policyId),
-                    new KeyValuePair<string, object?>("outcome", "http_status"));
-                FailureCounter.Add(1,
-                    new KeyValuePair<string, object?>("policy_id", policyId),
-                    new KeyValuePair<string, object?>("reason", "http_status"));
-                RecordFailure();
-                throw new PolicyEvaluationUnavailableException(
-                    reason: "http_status",
-                    retryAfterSeconds: _options.BreakerWindowSeconds,
-                    message: $"OPA returned {(int)response.StatusCode} for policy '{policyId}'. No bypass allowed.");
-            }
+                var stopwatch = Stopwatch.StartNew();
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromMilliseconds(_options.RequestTimeoutMs));
 
-            var responseBody = await response.Content.ReadAsStringAsync(cts.Token);
-            var opaResult = JsonSerializer.Deserialize<OpaResponse>(responseBody);
+                try
+                {
+                    var response = await _httpClient.PostAsync(url, content, cts.Token);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        stopwatch.Stop();
+                        EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
+                            new KeyValuePair<string, object?>("policy_id", policyId),
+                            new KeyValuePair<string, object?>("outcome", "http_status"));
+                        FailureCounter.Add(1,
+                            new KeyValuePair<string, object?>("policy_id", policyId),
+                            new KeyValuePair<string, object?>("reason", "http_status"));
+                        throw new PolicyEvaluationUnavailableException(
+                            reason: "http_status",
+                            retryAfterSeconds: _options.BreakerWindowSeconds,
+                            message: $"OPA returned {(int)response.StatusCode} for policy '{policyId}'. No bypass allowed.");
+                    }
 
-            stopwatch.Stop();
-            EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
-                new KeyValuePair<string, object?>("policy_id", policyId),
-                new KeyValuePair<string, object?>("outcome", "ok"));
-            RecordSuccess();
+                    var responseBody = await response.Content.ReadAsStringAsync(cts.Token);
+                    var opaResult = JsonSerializer.Deserialize<OpaResponse>(responseBody);
 
-            var isAllowed = opaResult?.Result?.Allow ?? false;
-            var decisionHash = ComputeDecisionHash(policyId, policyContext, isAllowed);
-            var denialReason = isAllowed ? null : ExtractDenyReason(opaResult?.Result);
-            return new PolicyDecision(isAllowed, policyId, decisionHash, denialReason);
+                    stopwatch.Stop();
+                    EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
+                        new KeyValuePair<string, object?>("policy_id", policyId),
+                        new KeyValuePair<string, object?>("outcome", "ok"));
+
+                    var isAllowed = opaResult?.Result?.Allow ?? false;
+                    var decisionHash = ComputeDecisionHash(policyId, policyContext, isAllowed);
+                    var denialReason = isAllowed ? null : ExtractDenyReason(opaResult?.Result);
+                    return new PolicyDecision(isAllowed, policyId, decisionHash, denialReason);
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
+                {
+                    // Per-call timeout fired (NOT caller cancellation). This is
+                    // a dependency signal — the breaker counts it as a failure
+                    // via the thrown typed exception.
+                    stopwatch.Stop();
+                    EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
+                        new KeyValuePair<string, object?>("policy_id", policyId),
+                        new KeyValuePair<string, object?>("outcome", "timeout"));
+                    TimeoutCounter.Add(1,
+                        new KeyValuePair<string, object?>("policy_id", policyId));
+                    FailureCounter.Add(1,
+                        new KeyValuePair<string, object?>("policy_id", policyId),
+                        new KeyValuePair<string, object?>("reason", "timeout"));
+                    throw new PolicyEvaluationUnavailableException(
+                        reason: "timeout",
+                        retryAfterSeconds: _options.BreakerWindowSeconds,
+                        message: $"OPA request for policy '{policyId}' exceeded {_options.RequestTimeoutMs} ms. No bypass allowed.");
+                }
+                catch (HttpRequestException ex)
+                {
+                    stopwatch.Stop();
+                    EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
+                        new KeyValuePair<string, object?>("policy_id", policyId),
+                        new KeyValuePair<string, object?>("outcome", "transport"));
+                    FailureCounter.Add(1,
+                        new KeyValuePair<string, object?>("policy_id", policyId),
+                        new KeyValuePair<string, object?>("reason", "transport"));
+                    throw new PolicyEvaluationUnavailableException(
+                        reason: "transport",
+                        retryAfterSeconds: _options.BreakerWindowSeconds,
+                        message: $"OPA transport failure for policy '{policyId}': {ex.Message}. No bypass allowed.",
+                        innerException: ex);
+                }
+            },
+            cancellationToken: CancellationToken.None);
         }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        catch (CircuitBreakerOpenException breakerEx)
         {
-            stopwatch.Stop();
-            EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
-                new KeyValuePair<string, object?>("policy_id", policyId),
-                new KeyValuePair<string, object?>("outcome", "timeout"));
-            TimeoutCounter.Add(1,
+            // R-OPA-BREAKER-BOUNDARY-01: translate at the adapter edge so
+            // external callers (PolicyMiddleware retry, API-edge 503 handler)
+            // see the same typed exception shape as pre-R2.A.D.2.
+            BreakerOpenCounter.Add(1,
                 new KeyValuePair<string, object?>("policy_id", policyId));
-            FailureCounter.Add(1,
-                new KeyValuePair<string, object?>("policy_id", policyId),
-                new KeyValuePair<string, object?>("reason", "timeout"));
-            RecordFailure();
             throw new PolicyEvaluationUnavailableException(
-                reason: "timeout",
-                retryAfterSeconds: _options.BreakerWindowSeconds,
-                message: $"OPA request for policy '{policyId}' exceeded {_options.RequestTimeoutMs} ms. No bypass allowed.");
-        }
-        catch (HttpRequestException ex)
-        {
-            stopwatch.Stop();
-            EvaluateDuration.Record(stopwatch.Elapsed.TotalMilliseconds,
-                new KeyValuePair<string, object?>("policy_id", policyId),
-                new KeyValuePair<string, object?>("outcome", "transport"));
-            FailureCounter.Add(1,
-                new KeyValuePair<string, object?>("policy_id", policyId),
-                new KeyValuePair<string, object?>("reason", "transport"));
-            RecordFailure();
-            throw new PolicyEvaluationUnavailableException(
-                reason: "transport",
-                retryAfterSeconds: _options.BreakerWindowSeconds,
-                message: $"OPA transport failure for policy '{policyId}': {ex.Message}. No bypass allowed.",
-                innerException: ex);
+                reason: "breaker_open",
+                retryAfterSeconds: breakerEx.RetryAfterSeconds,
+                message: $"OPA circuit breaker open for policy '{policyId}'. No bypass allowed.",
+                innerException: breakerEx);
         }
     }
 
-    // --- Breaker primitives ---
+    // --- Breaker state getter (HC-2 consumer contract preserved) ---
 
     /// <summary>
     /// phase1.5-S5.2.4 / HC-2 (RUNTIME-STATE-AGGREGATION-01):
-    /// side-effect-free public getter for the canonical
-    /// runtime-state aggregator. Returns <c>true</c> when the
-    /// breaker is currently in the Open window (i.e.
-    /// <c>_openedAt</c> is set). Does NOT perform the HalfOpen
-    /// transition that the private call-site
-    /// <see cref="IsBreakerOpenInternal()"/> does — that side-effect is
-    /// reserved for the request-path call site so the aggregator
-    /// poll cannot accidentally admit a trial call.
+    /// side-effect-free public getter for the canonical runtime-state
+    /// aggregator. Returns <c>true</c> when the delegated
+    /// <see cref="ICircuitBreaker"/> is NOT Closed (i.e. Open or HalfOpen),
+    /// preserving the pre-R2.A.D.2 semantics of "breaker has been tripped
+    /// and is within or past its window".
     /// </summary>
-    public bool IsBreakerOpen
-    {
-        get
-        {
-            lock (_breakerLock)
-            {
-                return _openedAt is not null;
-            }
-        }
-    }
-
-    private bool IsBreakerOpenInternal()
-    {
-        lock (_breakerLock)
-        {
-            if (_openedAt is null) return false;
-            var elapsed = _clock.UtcNow - _openedAt.Value;
-            if (elapsed.TotalSeconds < _options.BreakerWindowSeconds)
-                return true;
-            // HalfOpen: allow exactly one trial call by clearing _openedAt
-            // but leaving _consecutiveFailures intact. A successful trial
-            // resets via RecordSuccess; a failed trial re-opens via
-            // RecordFailure (consecutive count is already at threshold).
-            _openedAt = null;
-            return false;
-        }
-    }
-
-    private void RecordSuccess()
-    {
-        lock (_breakerLock)
-        {
-            _consecutiveFailures = 0;
-            _openedAt = null;
-        }
-    }
-
-    private void RecordFailure()
-    {
-        lock (_breakerLock)
-        {
-            _consecutiveFailures++;
-            if (_consecutiveFailures >= _options.BreakerThreshold && _openedAt is null)
-            {
-                _openedAt = _clock.UtcNow;
-            }
-        }
-    }
+    public bool IsBreakerOpen => _breaker.State != CircuitBreakerState.Closed;
 
     // --- Unchanged helpers ---
 

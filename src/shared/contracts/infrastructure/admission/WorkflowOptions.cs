@@ -91,4 +91,42 @@ public sealed record WorkflowOptions
     /// 300000 ms (5 minutes).
     /// </summary>
     public int MaxExecutionMs { get; init; } = 300_000;
+
+    /// <summary>
+    /// R3.A.2 / R-WORKFLOW-STEP-RETRY-01: maximum number of attempts
+    /// the engine will make for a single step before emitting
+    /// <c>WorkflowExecutionFailedEvent</c> and terminating. Value 1
+    /// means "no retry" (one attempt, same as pre-R3.A.2 behaviour);
+    /// value N means one initial attempt plus up to N-1 retries.
+    /// A step is retried if it returns <c>stepResult.IsSuccess == false</c>
+    /// OR throws a non-cancellation, non-timeout exception. Timeouts
+    /// (per-step or execution) and caller-cancellation are NEVER
+    /// retried — the CTS hierarchy already bounds them. Default 1
+    /// so unconfigured deployments preserve the pre-R3.A.2 "fail fast
+    /// on first step failure" posture. Must be at least 1.
+    /// </summary>
+    public int StepRetryMaxAttempts { get; init; } = 1;
+
+    /// <summary>
+    /// R3.A.2: base backoff between step retry attempts in
+    /// milliseconds. Attempt N waits <c>min(MaxBackoff, Base × 2^(N-1))</c>
+    /// before retrying. Backoff delay runs under the execution-level
+    /// CTS so caller cancellation + MaxExecutionMs both interrupt
+    /// waiting retries. No jitter at this tier — in-execution retries
+    /// are scoped to one process; cross-process retry coordination
+    /// (where jitter matters) is the `.retry` Kafka tier's concern.
+    /// Must be at least 1. Default 100 ms.
+    /// </summary>
+    public int StepRetryBaseBackoffMs { get; init; } = 100;
+
+    /// <summary>
+    /// R3.A.2: maximum backoff ceiling between step retry attempts
+    /// in milliseconds. The exponential schedule is clamped at this
+    /// value. Must be at least <see cref="StepRetryBaseBackoffMs"/>.
+    /// Default 5000 ms (5s) — well below the default
+    /// <see cref="PerStepTimeoutMs"/> so even a late retry's sleep
+    /// does not dominate the subsequent attempt window. Engine
+    /// validation enforces the relationship.
+    /// </summary>
+    public int StepRetryMaxBackoffMs { get; init; } = 5_000;
 }

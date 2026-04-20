@@ -51,7 +51,7 @@ public sealed class PostgresProjectionWriter : IPostgresProjectionWriter
 
         var state = JsonSerializer.Serialize(@event, @event.GetType());
 
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(ProjectionsDataSource.PoolName, ct);
+        await using var conn = await _dataSource.OpenAsync(ct);
 
         // Schema/table names cannot be parameterized — they come from constructor config,
         // not from message content, and are validated at bootstrap time.

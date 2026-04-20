@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -31,6 +32,7 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
     ];
 
     private const string ConsumerGroup = "whyce.saga.sanction-activation-enforcement";
+    private const string WorkerName = "sanction-activation-enforcement"; // R2.E.1 rebalance-metric tag
 
     private readonly string _kafkaBootstrapServers;
     private readonly EventDeserializer _deserializer;
@@ -39,13 +41,30 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
     private readonly KafkaConsumerOptions _consumerOptions;
     private readonly ILogger<SanctionActivationEnforcementWorker>? _logger;
 
+    // R2.A.3d Phase B: retry-tier escalation wiring. When all five are
+    // supplied, handler-throw paths route through KafkaRetryEscalator
+    // instead of falling to unbounded Kafka redelivery. Optional so
+    // legacy test harnesses that construct the worker without the
+    // retry tier continue to compile; null branch preserves
+    // pre-R2.A.3d behaviour (log + no-commit + Kafka redeliver).
+    private readonly IProducer<string, string>? _producer;
+    private readonly TopicNameResolver? _topicNameResolver;
+    private readonly RetryTierOptions? _retryOptions;
+    private readonly IRandomProvider? _randomProvider;
+    private readonly ICircuitBreaker? _kafkaBreaker;
+
     public SanctionActivationEnforcementWorker(
         string kafkaBootstrapServers,
         EventDeserializer deserializer,
         SanctionActivationEnforcementHandler handler,
         IClock clock,
         KafkaConsumerOptions consumerOptions,
-        ILogger<SanctionActivationEnforcementWorker>? logger = null)
+        ILogger<SanctionActivationEnforcementWorker>? logger = null,
+        IProducer<string, string>? producer = null,
+        TopicNameResolver? topicNameResolver = null,
+        RetryTierOptions? retryOptions = null,
+        IRandomProvider? randomProvider = null,
+        ICircuitBreaker? kafkaBreaker = null)
     {
         _kafkaBootstrapServers = kafkaBootstrapServers;
         _deserializer = deserializer;
@@ -53,6 +72,11 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
         _clock = clock;
         _consumerOptions = consumerOptions;
         _logger = logger;
+        _producer = producer;
+        _topicNameResolver = topicNameResolver;
+        _retryOptions = retryOptions;
+        _randomProvider = randomProvider;
+        _kafkaBreaker = kafkaBreaker;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,10 +90,13 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
             QueuedMaxMessagesKbytes = _consumerOptions.QueuedMaxMessagesKbytes,
             MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
             MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
-            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs
+            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
+            PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky, // R2.E.1
         };
 
-        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        var consumerBuilder = new ConsumerBuilder<string, string>(config);
+        KafkaRebalanceObservability.Attach(consumerBuilder, Topics[0], WorkerName, _logger);
+        using var consumer = consumerBuilder.Build();
         consumer.Subscribe(Topics);
 
         _logger?.LogInformation(
@@ -83,6 +110,8 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
                 var result = consumer.Consume(TimeSpan.FromSeconds(1));
                 if (result is null)
                     continue;
+
+                KafkaLagObservability.Record(consumer, result, WorkerName, Topics[0]);
 
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");
@@ -121,15 +150,33 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
                     Timestamp = _clock.UtcNow
                 };
 
-                // Background dispatch has no HTTP context — scope to a
-                // known system identity so the downstream dispatcher's
-                // identity middleware can satisfy actor / tenant lookups.
-                using (SystemIdentityScope.Begin(
-                    "system/sanction-activation-enforcement", "system", "system"))
+                // R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02: wrap
+                // the handler dispatch in a dedicated try/catch so handler
+                // exceptions route through the retry escalator (bounded
+                // attempts + exponential backoff) instead of looping
+                // on Kafka redelivery. When the retry tier is not wired,
+                // fall back to pre-Phase-B behaviour (log + no-commit).
+                try
                 {
-                    await _handler.HandleAsync(envelope, stoppingToken);
+                    // Background dispatch has no HTTP context — scope to a
+                    // known system identity so the downstream dispatcher's
+                    // identity middleware can satisfy actor / tenant lookups.
+                    using (SystemIdentityScope.Begin(
+                        "system/sanction-activation-enforcement", "system", "system"))
+                    {
+                        await _handler.HandleAsync(envelope, stoppingToken);
+                    }
+                    consumer.Commit(result);
                 }
-                consumer.Commit(result);
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception handlerEx)
+                {
+                    await EscalateOrRedeliverAsync(
+                        consumer, result, parsedEventId, handlerEx, stoppingToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -138,7 +185,7 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger?.LogError(ex,
-                    "SanctionActivationEnforcementWorker iteration failed; offset un-committed for redelivery.");
+                    "SanctionActivationEnforcementWorker iteration failed outside the retry-escalate path; offset un-committed for redelivery.");
                 // Offset is NOT committed — redelivery after restart will
                 // retry; the handler's IIdempotencyStore claim ensures a
                 // second attempt never produces a duplicate enforcement.
@@ -146,6 +193,75 @@ public sealed class SanctionActivationEnforcementWorker : BackgroundService
         }
 
         consumer.Close();
+    }
+
+    /// <summary>
+    /// R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02: shared
+    /// escalate-or-redeliver post-handler-failure helper. When the
+    /// retry tier is fully wired, route through
+    /// <see cref="KafkaRetryEscalator.EscalateAsync"/> and commit
+    /// the source offset on escalation success. When the escalator
+    /// cannot publish (breaker Open, transport failure), do NOT
+    /// commit — Kafka redelivers when the condition clears. When
+    /// the retry tier is not wired (legacy test harness), fall back
+    /// to pre-Phase-B behaviour (log + no-commit + Kafka redeliver).
+    /// </summary>
+    private async Task EscalateOrRedeliverAsync(
+        IConsumer<string, string> consumer,
+        ConsumeResult<string, string> result,
+        Guid parsedEventId,
+        Exception handlerEx,
+        CancellationToken ct)
+    {
+        if (_producer is null
+            || _topicNameResolver is null
+            || _retryOptions is null
+            || _randomProvider is null
+            || _kafkaBreaker is null)
+        {
+            _logger?.LogError(handlerEx,
+                "SanctionActivationEnforcementWorker handler failed on {Topic} p{Partition} o{Offset}; retry tier not wired, will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value);
+            return;
+        }
+
+        var priorAttempt = RetryHeaders.ReadPriorAttemptCount(result.Message.Headers);
+
+        try
+        {
+            await KafkaRetryEscalator.EscalateAsync(
+                _producer,
+                _topicNameResolver,
+                result.Topic,
+                result.Message,
+                parsedEventId,
+                $"{handlerEx.GetType().Name}: {handlerEx.Message}",
+                priorAttempt,
+                _retryOptions.MaxAttempts,
+                _retryOptions.BaseBackoff,
+                _retryOptions.MaxBackoff,
+                _randomProvider,
+                _clock,
+                _kafkaBreaker,
+                _logger,
+                ct);
+            consumer.Commit(result);
+        }
+        catch (CircuitBreakerOpenException breakerEx)
+        {
+            _logger?.LogWarning(
+                "SanctionActivationEnforcementWorker handler failed on {Topic} p{Partition} o{Offset}; retry-escalate blocked by breaker '{Breaker}' ({RetryAfter}s); will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value,
+                breakerEx.BreakerName, breakerEx.RetryAfterSeconds);
+            // NO commit — Kafka redelivers when breaker recovers.
+        }
+        catch (Exception escalationEx)
+        {
+            _logger?.LogError(escalationEx,
+                "SanctionActivationEnforcementWorker retry escalation failed on {Topic} p{Partition} o{Offset} after handler exception {HandlerException}; will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value, handlerEx.GetType().Name);
+            // NO commit — Kafka redelivers.
+        }
     }
 
     private static string? ExtractHeader(Headers? headers, string key)

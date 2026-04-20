@@ -86,7 +86,9 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         var definition = BuildDefinition(command.WorkflowName);
         if (definition is null)
         {
-            return CommandResult.Failure($"No workflow registered for '{command.WorkflowName}'.");
+            return CommandResult.Failure(
+                $"No workflow registered for '{command.WorkflowName}'.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         // phase1.5-S5.2.2 / KC-6: acquire the workflow admission lease
@@ -136,7 +138,8 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         if (state is null)
         {
             return CommandResult.Failure(
-                $"No workflow execution events found for '{workflowExecutionId}'.");
+                $"No workflow execution events found for '{workflowExecutionId}'.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         // phase1.5-S5.2.2 / KC-6: resume is also gated. The lease is
@@ -156,7 +159,8 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         {
             return CommandResult.Failure(
                 $"Workflow '{workflowExecutionId}' is not in a resumable state (status: {state.Status}). " +
-                "Resume is only valid from Failed.");
+                "Resume is only valid from Failed.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         // Reconstruct the definition the SAME way ExecuteWorkflowAsync does so
@@ -164,13 +168,16 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         var definition = BuildDefinition(state.WorkflowName);
         if (definition is null)
         {
-            return CommandResult.Failure($"No workflow registered for '{state.WorkflowName}'.");
+            return CommandResult.Failure(
+                $"No workflow registered for '{state.WorkflowName}'.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         if (state.NextStepIndex >= definition.Steps.Count)
         {
             return CommandResult.Failure(
-                $"Workflow '{workflowExecutionId}' has no remaining steps to resume (cursor {state.NextStepIndex} of {definition.Steps.Count}).");
+                $"Workflow '{workflowExecutionId}' has no remaining steps to resume (cursor {state.NextStepIndex} of {definition.Steps.Count}).",
+                RuntimeFailureCategory.InvalidState);
         }
 
         // Resume context: WorkflowId, Payload, ExecutionHash, and StepOutputs
@@ -261,7 +268,9 @@ public sealed class RuntimeCommandDispatcher : ICommandDispatcher
         var engineType = _engineRegistry.ResolveEngine(command.GetType());
         if (engineType is null)
         {
-            return CommandResult.Failure($"No engine registered for {command.GetType().Name}.");
+            return CommandResult.Failure(
+                $"No engine registered for {command.GetType().Name}.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         var engine = (IEngine)_serviceProvider.GetRequiredService(engineType);

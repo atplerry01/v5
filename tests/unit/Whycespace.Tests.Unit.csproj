@@ -10,17 +10,24 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\domain\Whycespace.Domain.csproj" />
+    <ProjectReference Include="..\..\src\runtime\Whycespace.Runtime.csproj" />
     <ProjectReference Include="..\shared\Whycespace.Tests.Shared.csproj" />
   </ItemGroup>
 
   <!--
-    Files below transitively depend on Whycespace.Shared or Whycespace.Engines,
-    which are intentionally not referenced so tests/unit is isolated from the
-    engines layer. Files remain on disk; excluded from compilation only.
-    Re-enable by deleting this ItemGroup when those projects are ready.
+    R1 Batch 5 (2026-04-19): re-enabled tests/unit/runtime/** compilation. The 5
+    pre-existing tests there only import Whycespace.Shared.Contracts.* (already
+    transitively available via Tests.Shared) so they compile unchanged; the
+    R1-era CommandContextReplayResetTests extension and the new
+    IdempotencyConcurrencyStressTests additionally exercise the runtime
+    middleware layer, which now has a direct ProjectReference above. Removing
+    the blanket `<Compile Remove="runtime\**\*.cs" />` closes the pre-existing
+    "disabled test suite" drift captured in claude/new-rules/.
+
+    Remaining excludes: files transitively requiring Projections (not yet
+    referenced here) or engine-internal test harnesses. Each is documented.
   -->
   <ItemGroup>
-    <Compile Remove="runtime\**\*.cs" />
     <Compile Remove="orchestration\**\*.cs" />
     <Compile Remove="operational\sandbox\todo\TodoEngineTests.cs" />
     <Compile Remove="operational\sandbox\todo\TodoAggregateTests.cs" />

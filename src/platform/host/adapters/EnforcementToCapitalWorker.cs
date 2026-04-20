@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -31,6 +32,7 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
 {
     private const string SourceTopic = "whyce.economic.enforcement.violation.events";
     private const string ConsumerGroup = "whyce.integration.enforcement-to-capital";
+    private const string WorkerName = "enforcement-to-capital"; // R2.E.1 rebalance-metric tag
 
     private readonly string _kafkaBootstrapServers;
     private readonly EventDeserializer _deserializer;
@@ -39,13 +41,25 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
     private readonly KafkaConsumerOptions _consumerOptions;
     private readonly ILogger<EnforcementToCapitalWorker>? _logger;
 
+    // R2.A.3d Phase B: retry-tier escalation wiring.
+    private readonly IProducer<string, string>? _producer;
+    private readonly TopicNameResolver? _topicNameResolver;
+    private readonly RetryTierOptions? _retryOptions;
+    private readonly IRandomProvider? _randomProvider;
+    private readonly ICircuitBreaker? _kafkaBreaker;
+
     public EnforcementToCapitalWorker(
         string kafkaBootstrapServers,
         EventDeserializer deserializer,
         EnforcementToCapitalIntegrationHandler handler,
         IClock clock,
         KafkaConsumerOptions consumerOptions,
-        ILogger<EnforcementToCapitalWorker>? logger = null)
+        ILogger<EnforcementToCapitalWorker>? logger = null,
+        IProducer<string, string>? producer = null,
+        TopicNameResolver? topicNameResolver = null,
+        RetryTierOptions? retryOptions = null,
+        IRandomProvider? randomProvider = null,
+        ICircuitBreaker? kafkaBreaker = null)
     {
         _kafkaBootstrapServers = kafkaBootstrapServers;
         _deserializer = deserializer;
@@ -53,6 +67,11 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
         _clock = clock;
         _consumerOptions = consumerOptions;
         _logger = logger;
+        _producer = producer;
+        _topicNameResolver = topicNameResolver;
+        _retryOptions = retryOptions;
+        _randomProvider = randomProvider;
+        _kafkaBreaker = kafkaBreaker;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,10 +85,13 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
             QueuedMaxMessagesKbytes = _consumerOptions.QueuedMaxMessagesKbytes,
             MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
             MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
-            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs
+            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
+            PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky, // R2.E.1
         };
 
-        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        var consumerBuilder = new ConsumerBuilder<string, string>(config);
+        KafkaRebalanceObservability.Attach(consumerBuilder, SourceTopic, WorkerName, _logger);
+        using var consumer = consumerBuilder.Build();
         consumer.Subscribe(SourceTopic);
 
         _logger?.LogInformation(
@@ -83,6 +105,8 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
                 var result = consumer.Consume(TimeSpan.FromSeconds(1));
                 if (result is null)
                     continue;
+
+                KafkaLagObservability.Record(consumer, result, WorkerName, SourceTopic);
 
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");
@@ -121,8 +145,21 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
                     Timestamp = _clock.UtcNow
                 };
 
-                await _handler.HandleAsync(envelope, stoppingToken);
-                consumer.Commit(result);
+                // R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02
+                try
+                {
+                    await _handler.HandleAsync(envelope, stoppingToken);
+                    consumer.Commit(result);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception handlerEx)
+                {
+                    await EscalateOrRedeliverAsync(
+                        consumer, result, parsedEventId, handlerEx, stoppingToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -130,11 +167,53 @@ public sealed class EnforcementToCapitalWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "EnforcementToCapitalWorker iteration failed; will continue.");
+                _logger?.LogError(ex, "EnforcementToCapitalWorker iteration failed outside the retry-escalate path; will continue.");
             }
         }
 
         consumer.Close();
+    }
+
+    private async Task EscalateOrRedeliverAsync(
+        IConsumer<string, string> consumer,
+        ConsumeResult<string, string> result,
+        Guid parsedEventId,
+        Exception handlerEx,
+        CancellationToken ct)
+    {
+        if (_producer is null || _topicNameResolver is null || _retryOptions is null
+            || _randomProvider is null || _kafkaBreaker is null)
+        {
+            _logger?.LogError(handlerEx,
+                "EnforcementToCapitalWorker handler failed on {Topic} p{Partition} o{Offset}; retry tier not wired, will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value);
+            return;
+        }
+
+        var priorAttempt = RetryHeaders.ReadPriorAttemptCount(result.Message.Headers);
+        try
+        {
+            await KafkaRetryEscalator.EscalateAsync(
+                _producer, _topicNameResolver, result.Topic, result.Message,
+                parsedEventId, $"{handlerEx.GetType().Name}: {handlerEx.Message}",
+                priorAttempt, _retryOptions.MaxAttempts,
+                _retryOptions.BaseBackoff, _retryOptions.MaxBackoff,
+                _randomProvider, _clock, _kafkaBreaker, _logger, ct);
+            consumer.Commit(result);
+        }
+        catch (CircuitBreakerOpenException breakerEx)
+        {
+            _logger?.LogWarning(
+                "EnforcementToCapitalWorker handler failed on {Topic} p{Partition} o{Offset}; retry-escalate blocked by breaker '{Breaker}' ({RetryAfter}s); will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value,
+                breakerEx.BreakerName, breakerEx.RetryAfterSeconds);
+        }
+        catch (Exception escalationEx)
+        {
+            _logger?.LogError(escalationEx,
+                "EnforcementToCapitalWorker retry escalation failed on {Topic} p{Partition} o{Offset} after handler exception {HandlerException}; will redeliver.",
+                result.Topic, result.Partition.Value, result.Offset.Value, handlerEx.GetType().Name);
+        }
     }
 
     private static string? ExtractHeader(Headers? headers, string key)

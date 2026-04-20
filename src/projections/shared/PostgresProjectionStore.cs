@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Npgsql;
+using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Projections.Shared;
 
@@ -46,17 +47,26 @@ public sealed class PostgresProjectionStore<TState> where TState : class
     private readonly string _loadSql;
     private readonly string _upsertSql;
 
+    // R2.A.D.3c / R-POSTGRES-POOL-BREAKER-01: optional shared
+    // "postgres-pool" breaker. When supplied, every connection acquisition
+    // is routed through the breaker's ExecuteAsync. Optional because the
+    // projections assembly is consumed from test harnesses that do not
+    // build the full host composition root.
+    private readonly ICircuitBreaker? _poolBreaker;
+
     public PostgresProjectionStore(
         NpgsqlDataSource dataSource,
         string schema,
         string table,
-        string aggregateType)
+        string aggregateType,
+        ICircuitBreaker? poolBreaker = null)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         _dataSource = dataSource;
         _aggregateType = aggregateType;
         _loadSql = ProjectionSqlProvider.GetLoadSql(schema, table);
         _upsertSql = ProjectionSqlProvider.GetUpsertSql(schema, table);
+        _poolBreaker = poolBreaker;
     }
 
     public async Task<TState?> LoadAsync(Guid aggregateId, CancellationToken cancellationToken)
@@ -104,11 +114,25 @@ public sealed class PostgresProjectionStore<TState> where TState : class
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task<NpgsqlConnection> OpenInstrumentedAsync()
+    private Task<NpgsqlConnection> OpenInstrumentedAsync()
+    {
+        // R2.A.D.3c / R-POSTGRES-POOL-BREAKER-01: route through the shared
+        // breaker when supplied. CircuitBreakerOpenException propagates to
+        // the caller (UpsertAsync / LoadAsync), whose outer KafkaProjection
+        // consumer already handles poison messages and transient failures
+        // via the existing per-message retry path.
+        if (_poolBreaker is null)
+        {
+            return AcquireAsync(default);
+        }
+        return _poolBreaker.ExecuteAsync(AcquireAsync, default);
+    }
+
+    private async Task<NpgsqlConnection> AcquireAsync(CancellationToken ct)
     {
         try
         {
-            var conn = await _dataSource.OpenConnectionAsync();
+            var conn = await _dataSource.OpenConnectionAsync(ct);
             PoolAcquisitions.Add(1, new KeyValuePair<string, object?>("pool", PoolName));
             return conn;
         }

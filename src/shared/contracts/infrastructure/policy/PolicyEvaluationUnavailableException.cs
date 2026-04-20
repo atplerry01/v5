@@ -16,10 +16,24 @@ namespace Whycespace.Shared.Contracts.Infrastructure.Policy;
 /// <see cref="ConcurrencyConflictException"/>.
 ///
 /// Policy primacy ($8) is preserved by construction: this exception is
-/// never caught inside the policy middleware, never converted to an
-/// implicit allow, and never produces a successful <see cref="object"/>
-/// command result. The only path is throw → bubble → exception handler →
-/// 503.
+/// caught ONLY inside <c>PolicyMiddleware</c> as the first step of the
+/// R-POL-OPA-RETRY-01 retry integration (R2.A.OPA, 2026-04-19). It is
+/// never converted to an implicit allow and never produces a successful
+/// command result. The retry path is:
+///
+///     throw → PolicyMiddleware.ExecuteAsync catches →
+///             classifies as RuntimeFailureCategory.PolicyEvaluationDeferred →
+///             IRetryExecutor.ExecuteAsync retries with deterministic backoff →
+///       ┌─ succeeds on a later attempt → normal decision flow (allow/deny)
+///       └─ exhausts MaxAttempts → re-throw PolicyEvaluationUnavailableException
+///                                 with reason="retry_exhausted:&lt;original&gt;"
+///                                 and RetryAfterSeconds preserved → API edge
+///                                 surfaces HTTP 503 + Retry-After as before.
+///
+/// Outside the middleware (API edge, background workers with no executor
+/// registered), the exception still bubbles to the 503 exception handler
+/// — the pre-R2.A behaviour. The retry path is an enrichment, never a
+/// semantic weakening.
 /// </summary>
 public sealed class PolicyEvaluationUnavailableException : Exception
 {

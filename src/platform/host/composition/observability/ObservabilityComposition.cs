@@ -62,7 +62,11 @@ public static class ObservabilityComposition
         services.AddSingleton(sp =>
             new RedisHealthSnapshotProvider(
                 sp.GetRequiredService<IConnectionMultiplexer>(),
-                sp.GetRequiredService<IClock>()));
+                sp.GetRequiredService<IClock>(),
+                // R2.A.D.3d / R-REDIS-BREAKER-01: ping wrapped in shared
+                // "redis" breaker. Registry resolves null-tolerantly so
+                // tests that don't wire the registry still compile.
+                sp.GetService<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>()?.TryGet("redis")));
 
         services.AddSingleton<IHealthCheck>(_ =>
         {
@@ -123,6 +127,16 @@ public static class ObservabilityComposition
         // existing IPolicyEvaluator / IChainAnchor interface
         // registrations forward to the same singletons so all other
         // consumers continue to use the interfaces unchanged.
+        // R2.A.D.4 / R-BREAKER-REGISTRY-01: compose the registry from every
+        // registered ICircuitBreaker. The registry iterates sp.GetServices
+        // so any module that registers a breaker (PolicyInfrastructureModule
+        // today; Kafka/Postgres/Chain/Redis modules in R2.A.D.3) is picked
+        // up automatically. RuntimeStateAggregator consumes this registry
+        // to emit health-posture reasons uniformly.
+        services.AddSingleton<Whycespace.Shared.Contracts.Runtime.ICircuitBreakerRegistry>(sp =>
+            new Whycespace.Runtime.Resilience.CircuitBreakerRegistry(
+                sp.GetServices<Whycespace.Shared.Contracts.Runtime.ICircuitBreaker>()));
+
         services.AddSingleton<RuntimeStateAggregator>();
         services.AddSingleton<IRuntimeStateAggregator>(sp => sp.GetRequiredService<RuntimeStateAggregator>());
         // phase1.5-S5.2.4 / HC-8 (MAINTENANCE-MODE-ENFORCEMENT-01):

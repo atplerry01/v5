@@ -237,6 +237,103 @@ public sealed record CommandContext
         }
     }
 
+    // --- R1 §7 Session / token context (write-once) ---
+
+    private string? _sessionId;
+    /// <summary>
+    /// R1 §7 — opaque session identifier carried from the edge. Used by
+    /// authorization middleware to bind audit evidence to a session and by
+    /// sensitive-operation paths to require step-up within the same session.
+    /// Write-once; replay-safe.
+    /// </summary>
+    public string? SessionId
+    {
+        get => _sessionId;
+        set
+        {
+            if (_sessionId is not null)
+                throw new InvalidOperationException(
+                    "SessionId is write-once. Already locked.");
+            _sessionId = value;
+        }
+    }
+
+    private string? _tokenFingerprint;
+    /// <summary>
+    /// R1 §7 — deterministic fingerprint (SHA256 prefix) of the bearer token
+    /// or service credential used to authorize this command. NEVER the raw
+    /// token. Carried for audit correlation only. Write-once.
+    /// </summary>
+    public string? TokenFingerprint
+    {
+        get => _tokenFingerprint;
+        set
+        {
+            if (_tokenFingerprint is not null)
+                throw new InvalidOperationException(
+                    "TokenFingerprint is write-once. Already locked.");
+            _tokenFingerprint = value;
+        }
+    }
+
+    private DateTimeOffset? _stepUpAuthenticatedAt;
+    /// <summary>
+    /// R1 §7 — timestamp of the most recent step-up / fresh authentication
+    /// event for this session. Consumed by <see cref="SensitiveOperationAttribute"/>
+    /// paths to enforce freshness windows. <c>null</c> means no step-up has
+    /// been performed. Write-once.
+    /// </summary>
+    public DateTimeOffset? StepUpAuthenticatedAt
+    {
+        get => _stepUpAuthenticatedAt;
+        set
+        {
+            if (_stepUpAuthenticatedAt is not null)
+                throw new InvalidOperationException(
+                    "StepUpAuthenticatedAt is write-once. Already locked.");
+            _stepUpAuthenticatedAt = value;
+        }
+    }
+
+    // --- R1 §8 Idempotency evidence (write-once) ---
+
+    private string? _idempotencyKey;
+    /// <summary>
+    /// R1 §8 — idempotency key carried with the command. Populated at the
+    /// edge (API layer) or by the producer for consumer deduplication.
+    /// <c>null</c> means the command is not idempotency-tracked. Write-once.
+    /// </summary>
+    public string? IdempotencyKey
+    {
+        get => _idempotencyKey;
+        set
+        {
+            if (_idempotencyKey is not null)
+                throw new InvalidOperationException(
+                    "IdempotencyKey is write-once. Already locked.");
+            _idempotencyKey = value;
+        }
+    }
+
+    private IdempotencyOutcome? _idempotencyOutcome;
+    /// <summary>
+    /// R1 §8 — outcome of the idempotency check performed by
+    /// <c>IdempotencyMiddleware</c>. Write-once; surfaces hit / miss /
+    /// not-evaluated to audit and metrics without requiring middleware
+    /// chaining. <c>null</c> means idempotency was not consulted.
+    /// </summary>
+    public IdempotencyOutcome? IdempotencyOutcome
+    {
+        get => _idempotencyOutcome;
+        set
+        {
+            if (_idempotencyOutcome is not null)
+                throw new InvalidOperationException(
+                    "IdempotencyOutcome is write-once. Already locked.");
+            _idempotencyOutcome = value;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // phase1.6-S1.4 — REPLAY RESET SEAM (internal-only, gated)
     // ─────────────────────────────────────────────────────────────────────
@@ -331,5 +428,23 @@ public sealed record CommandContext
         _policyVersion = null;
         _hsid = null;
         _expectedVersion = null;
+        _sessionId = null;
+        _tokenFingerprint = null;
+        _stepUpAuthenticatedAt = null;
+        _idempotencyKey = null;
+        _idempotencyOutcome = null;
     }
+}
+
+/// <summary>
+/// R1 §8 — idempotency check outcome. Surfaced on <see cref="CommandContext"/>
+/// and <see cref="CommandResult"/> so audit and metrics can measure hit rate
+/// without parsing error strings or introspecting middleware state.
+/// </summary>
+public enum IdempotencyOutcome
+{
+    NotEvaluated = 0,
+    Miss,
+    Hit,
+    Conflict
 }

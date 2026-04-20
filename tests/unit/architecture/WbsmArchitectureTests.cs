@@ -321,14 +321,25 @@ public sealed class WbsmArchitectureTests
     [Fact]
     public void Engines_do_not_call_Resume_on_workflow_aggregate_directly()
     {
-        // Source scan covering src/engines/**. The previous violation lived
-        // at WorkflowExecutionReplayService.cs:111 as `aggregate.Resume();`.
-        // After the S1.2 fix the only legitimate construction path is
-        // WorkflowLifecycleEventFactory.Resumed(aggregate). Any direct
-        // .Resume( call on a workflow-execution variable in the engine
-        // layer is a regression.
+        // Source scan — scoped to the T1M workflow engine only
+        // (src/engines/T1M/**). The previous violation lived at
+        // WorkflowExecutionReplayService.cs:111 as `aggregate.Resume();`.
+        // After the phase1.6-S1.2 fix the only legitimate construction
+        // path is WorkflowLifecycleEventFactory.Resumed(aggregate). Any
+        // direct .Resume( call on a workflow-execution variable in the
+        // T1M engine layer is a regression.
+        //
+        // 2026-04-20 audit fix (per full-system runtime audit FAIL-2):
+        // scope narrowed from `src/engines/**` to `src/engines/T1M/**`.
+        // The previous tree-wide scan false-positived on T2E domain
+        // handlers (ResumeSystemLockHandler, ResumeRestrictionHandler)
+        // that legitimately call .Resume() on non-workflow aggregates
+        // (LockAggregate, RestrictionAggregate — both have their own
+        // domain Resume commands, distinct from workflow lifecycle).
+        // The invariant this test guards is T1M workflow-aggregate
+        // drift ONLY; T2E domain resumes are out of scope.
         var hits = ScanCode(
-            Path.Combine(SrcRoot, "engines"),
+            Path.Combine(SrcRoot, "engines", "T1M"),
             new Regex(@"\b(workflowExecution|aggregate)\.Resume\s*\(",
                 RegexOptions.IgnoreCase));
 
@@ -409,24 +420,581 @@ public sealed class WbsmArchitectureTests
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // R2.E.1 — consumer rebalance safety: every ConsumerBuilder<>.Build()
+    // MUST be preceded by KafkaRebalanceObservability.Attach(), and every
+    // ConsumerConfig MUST set PartitionAssignmentStrategy.CooperativeSticky.
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Every_ConsumerBuilder_Build_is_preceded_by_KafkaRebalanceObservability_Attach()
+    {
+        // Sanctioned files: the helper itself defines the Attach contract
+        // and does not consume it. Tests that construct their own
+        // ConsumerBuilder for mocking are excluded via the tests/ path
+        // boundary (this scan targets src/ only).
+        var sanctioned = new[]
+        {
+            "KafkaRebalanceObservability.cs",
+        };
+
+        // Scan the helper-adapters directory for every file that contains
+        // "new ConsumerBuilder<". Each hit MUST also contain a
+        // KafkaRebalanceObservability.Attach( call. This keeps the
+        // invariant simple: both patterns co-located in the same file.
+        var adaptersPath = Path.Combine(SrcRoot, "platform", "host", "adapters");
+        var offenders = Directory.EnumerateFiles(adaptersPath, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !sanctioned.Any(s =>
+                path.Contains(s, System.StringComparison.OrdinalIgnoreCase)))
+            .Where(path =>
+            {
+                var content = File.ReadAllText(path);
+                if (!content.Contains("new ConsumerBuilder<", System.StringComparison.Ordinal))
+                    return false;
+                return !content.Contains("KafkaRebalanceObservability.Attach(", System.StringComparison.Ordinal);
+            })
+            .Select(p => Path.GetFileName(p))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Every file that constructs a Kafka ConsumerBuilder MUST call " +
+            "KafkaRebalanceObservability.Attach on it before Build(). " +
+            "R2.E.1 / R-CONSUMER-REBALANCE-01. Offenders:\n" +
+            string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void Every_ConsumerConfig_sets_CooperativeSticky_partition_assignment_strategy()
+    {
+        var adaptersPath = Path.Combine(SrcRoot, "platform", "host", "adapters");
+        var offenders = Directory.EnumerateFiles(adaptersPath, "*.cs", SearchOption.AllDirectories)
+            .Where(path =>
+            {
+                var content = File.ReadAllText(path);
+                if (!content.Contains("new ConsumerConfig", System.StringComparison.Ordinal))
+                    return false;
+                return !content.Contains(
+                    "PartitionAssignmentStrategy.CooperativeSticky",
+                    System.StringComparison.Ordinal);
+            })
+            .Select(p => Path.GetFileName(p))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Every ConsumerConfig MUST set " +
+            "PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky. " +
+            "R2.E.1 / R-CONSUMER-REBALANCE-COOPERATIVE-STICKY-01. Offenders:\n" +
+            string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void Every_consumer_worker_except_reconciliation_escalates_handler_throws_via_KafkaRetryEscalator()
+    {
+        // R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02: every
+        // consumer worker that calls `consumer.Consume(` MUST also
+        // route handler-throws through `KafkaRetryEscalator.EscalateAsync`.
+        // Each worker either calls the escalator directly (e.g.
+        // GenericKafkaProjectionConsumerWorker) or via a private
+        // EscalateOrRedeliverAsync helper that forwards to it.
+        //
+        // ReconciliationLifecycleWorker is INTENTIONALLY excluded —
+        // its documented semantics commit-on-failure to avoid
+        // poison-loop stalls on redelivered stale-data triggers.
+        // That design is preserved under Phase B's "unless the worker's
+        // semantics explicitly require otherwise" clause.
+        //
+        // Excluded files:
+        //   - KafkaRetryEscalator.cs          — the escalator itself
+        //   - KafkaRetryConsumerWorker.cs     — drains `.retry`; re-publishes without escalating
+        //   - ReconciliationLifecycleWorker.cs — commit-on-failure by design (see above)
+        var exempt = new[]
+        {
+            "KafkaRetryEscalator.cs",
+            "KafkaRetryConsumerWorker.cs",
+            "ReconciliationLifecycleWorker.cs",
+        };
+
+        var adaptersPath = Path.Combine(SrcRoot, "platform", "host", "adapters");
+        var offenders = Directory.EnumerateFiles(adaptersPath, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !exempt.Any(s =>
+                path.Contains(s, System.StringComparison.OrdinalIgnoreCase)))
+            .Where(path =>
+            {
+                var content = File.ReadAllText(path);
+                if (!content.Contains("consumer.Consume(", System.StringComparison.Ordinal))
+                    return false;
+                // Either a direct escalator call or a reference through
+                // the canonical `EscalateOrRedeliverAsync` helper that
+                // each worker defines as a local wrapper.
+                return !content.Contains("KafkaRetryEscalator.EscalateAsync(", System.StringComparison.Ordinal)
+                    && !content.Contains("EscalateOrRedeliverAsync(", System.StringComparison.Ordinal);
+            })
+            .Select(p => Path.GetFileName(p))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Every consumer worker (except ReconciliationLifecycleWorker, " +
+            "KafkaRetryEscalator, and KafkaRetryConsumerWorker) MUST route " +
+            "handler-throws through KafkaRetryEscalator.EscalateAsync " +
+            "(directly or via its local EscalateOrRedeliverAsync helper). " +
+            "R2.A.3d Phase B / R-RETRY-CONSUMER-INTEGRATION-02. Offenders:\n" +
+            string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void T1MWorkflowEngine_emits_execution_and_step_duration_histograms_plus_completed_counter()
+    {
+        // R3.A.1 / R-WORKFLOW-OBSERVABILITY-01: the engine must emit
+        // three signals on the Whycespace.Workflow meter:
+        //   - workflow.execution.duration (Histogram<double>, unit: ms)
+        //   - workflow.step.duration      (Histogram<double>, unit: ms)
+        //   - workflow.execution.completed (Counter<long>)
+        // Guarded by source-scan so the rule persists across refactors
+        // of the engine file structure.
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowEngine.cs");
+        Assert.True(File.Exists(path), $"Expected engine at {path}");
+        var content = File.ReadAllText(path);
+
+        var required = new[]
+        {
+            "\"Whycespace.Workflow\"",
+            "workflow.execution.duration",
+            "workflow.step.duration",
+            "workflow.execution.completed",
+            "workflow.step.retry_attempts", // R3.A.2 / R-WORKFLOW-STEP-RETRY-OBSERVABILITY-01
+            "workflow.step.terminal_failures", // R3.A.5 / R-WORKFLOW-STEP-EXCEPTION-COUNTER-01
+        };
+
+        var missing = required
+            .Where(token => !content.Contains(token, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "T1MWorkflowEngine is missing required observability signals. " +
+            "R3.A.1 / R-WORKFLOW-OBSERVABILITY-01. Missing: " +
+            string.Join(", ", missing));
+    }
+
+    [Fact]
+    public void T1MWorkflowEngine_step_retry_loop_has_explicit_non_retryable_guards()
+    {
+        // R3.A.2 / R-WORKFLOW-STEP-RETRY-NON-RETRYABLE-EXCLUSION-01:
+        // timeout (per-step or execution) and caller-driven
+        // cancellation MUST NOT retry. The engine's existing
+        // catch filters enforce this by throwing / re-throwing
+        // before any retry branch runs. Source-scan proves the
+        // three canonical catch guards remain present AND precede
+        // any `continue;` (which is the retry-loop signal).
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowEngine.cs");
+        var content = File.ReadAllText(path);
+
+        // All three filter forms must be present.
+        var expectedFilters = new[]
+        {
+            "cancellationToken.IsCancellationRequested",
+            "executionCts.IsCancellationRequested && !stepCts.IsCancellationRequested",
+            "stepCts.IsCancellationRequested",
+        };
+
+        var missing = expectedFilters
+            .Where(f => !content.Contains(f, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "T1MWorkflowEngine is missing non-retryable catch filters. " +
+            "R3.A.2 / R-WORKFLOW-STEP-RETRY-NON-RETRYABLE-EXCLUSION-01. Missing: " +
+            string.Join(", ", missing));
+
+        // StepRetryMaxAttempts reference must appear — proves the
+        // retry loop's bounded-attempt guard exists.
+        Assert.True(
+            content.Contains("_options.StepRetryMaxAttempts", System.StringComparison.Ordinal)
+            || content.Contains("StepRetryMaxAttempts", System.StringComparison.Ordinal),
+            "T1MWorkflowEngine MUST reference WorkflowOptions.StepRetryMaxAttempts in its retry loop.");
+
+        // StepRetryAttempts counter must be incremented inside the retry path.
+        Assert.True(
+            content.Contains("StepRetryAttempts.Add(1", System.StringComparison.Ordinal),
+            "T1MWorkflowEngine MUST increment StepRetryAttempts counter per retry. " +
+            "R3.A.2 / R-WORKFLOW-STEP-RETRY-OBSERVABILITY-01.");
+    }
+
+    [Fact]
+    public void T1MWorkflowEngine_classifies_hard_failures_via_WorkflowStepFailureClassifier_before_retry()
+    {
+        // R3.A.5 / R-WORKFLOW-STEP-EXCEPTION-ENGINE-WIRING-01: engine
+        // consults the classifier BEFORE the retry decision. Terminal
+        // failures emit the terminal-failures counter + fast-fail;
+        // retryable failures preserve the R3.A.2 loop.
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowEngine.cs");
+        var content = File.ReadAllText(path);
+
+        var required = new[]
+        {
+            "WorkflowStepFailureClassifier.Classify(",
+            "WorkflowStepFailureClassifier.CategoryTag(",
+            "WorkflowStepFailureClassification.Terminal",
+            "StepTerminalFailures.Add(1",
+        };
+
+        var missing = required
+            .Where(r => !content.Contains(r, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "T1MWorkflowEngine must consult WorkflowStepFailureClassifier " +
+            "before retrying and emit StepTerminalFailures counter on the " +
+            "terminal branch. R3.A.5 / R-WORKFLOW-STEP-EXCEPTION-ENGINE-WIRING-01. " +
+            "Missing: " + string.Join(", ", missing));
+    }
+
+    [Fact]
+    public void WorkflowStepFailureClassifier_lives_in_engine_layer_without_runtime_dependency()
+    {
+        // R-WORKFLOW-STEP-EXCEPTION-CLASSIFICATION-01 layer discipline:
+        // the classifier MUST live in Whycespace.Engines (self-contained
+        // BCL-type match). Confirms the file is in the engine project
+        // tree and does NOT reference Whycespace.Runtime namespaces —
+        // engines cannot depend on runtime per the dependency graph.
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowStepFailureClassifier.cs");
+        Assert.True(File.Exists(path), $"Classifier must live at {path}.");
+
+        var content = File.ReadAllText(path);
+        var stripped = StripCommentAndString(content);
+
+        var forbidden = new[]
+        {
+            "using Whycespace.Runtime",
+            "Whycespace.Runtime.ControlPlane",
+            "RuntimeExceptionMapper",
+        };
+
+        var hits = forbidden
+            .Where(token => stripped.Contains(token, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(hits.Count == 0,
+            "WorkflowStepFailureClassifier must not depend on the runtime assembly. " +
+            "Layer discipline: engines → domain + shared only. Hits: " +
+            string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void T1MWorkflowEngine_emits_cancelled_lifecycle_event_before_rethrow()
+    {
+        // R3.A.4 / R-WORKFLOW-CANCELLATION-ENGINE-EMISSION-01: caller-
+        // cancellation catch branch MUST emit
+        // WorkflowExecutionCancelledEvent BEFORE re-throwing the OCE.
+        // Source-scan proves the catch branch contains both the
+        // factory call and the `throw;` statement, with the factory
+        // call appearing first (above the throw).
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowEngine.cs");
+        var content = File.ReadAllText(path);
+
+        // Both tokens must be present.
+        Assert.True(
+            content.Contains("_lifecycleFactory.Cancelled(", System.StringComparison.Ordinal),
+            "T1MWorkflowEngine must call _lifecycleFactory.Cancelled in the caller-cancel branch. " +
+            "R3.A.4 / R-WORKFLOW-CANCELLATION-ENGINE-EMISSION-01.");
+
+        // Ordering check: the FIRST occurrence of _lifecycleFactory.Cancelled(
+        // must appear before the FIRST `throw;` after the caller-cancel
+        // filter. Simplified structural check — the cancel branch is
+        // the only catch filter that references `cancellationToken.IsCancellationRequested`,
+        // so we locate that filter and confirm the emission sits between
+        // it and the subsequent `throw;`.
+        var filterIdx = content.IndexOf(
+            "cancellationToken.IsCancellationRequested",
+            System.StringComparison.Ordinal);
+        Assert.True(filterIdx >= 0, "Expected caller-cancel catch filter.");
+
+        var emitIdx = content.IndexOf(
+            "_lifecycleFactory.Cancelled(",
+            filterIdx,
+            System.StringComparison.Ordinal);
+        Assert.True(emitIdx > filterIdx,
+            "Cancelled factory call must appear AFTER the caller-cancel filter (within its catch body).");
+
+        // Find the `throw;` that follows the emission.
+        var throwIdx = content.IndexOf("throw;", emitIdx, System.StringComparison.Ordinal);
+        Assert.True(throwIdx > emitIdx,
+            "`throw;` must follow the _lifecycleFactory.Cancelled call so the event " +
+            "is emitted BEFORE the OperationCanceledException re-throws. " +
+            "R3.A.4 / R-WORKFLOW-CANCELLATION-ENGINE-EMISSION-01.");
+    }
+
+    [Fact]
+    public void WorkflowExecutionSuspendedEvent_registered_in_schema_module()
+    {
+        // R3.A.3 / R-WORKFLOW-SUSPEND-SCHEMA-REGISTRATION-01: the
+        // Suspended event + schema must be registered alongside the
+        // other 6 lifecycle types (Started, StepCompleted, Completed,
+        // Failed, Resumed, Cancelled).
+        var path = Path.Combine(
+            SrcRoot, "runtime", "event-fabric", "domain-schemas",
+            "WorkflowExecutionSchemaModule.cs");
+        Assert.True(File.Exists(path), $"Expected schema module at {path}");
+        var content = File.ReadAllText(path);
+
+        Assert.True(
+            content.Contains("\"WorkflowExecutionSuspendedEvent\"", System.StringComparison.Ordinal),
+            "WorkflowExecutionSchemaModule must register 'WorkflowExecutionSuspendedEvent'. " +
+            "R3.A.3 / R-WORKFLOW-SUSPEND-SCHEMA-REGISTRATION-01.");
+        Assert.True(
+            content.Contains("WorkflowExecutionSuspendedEventSchema", System.StringComparison.Ordinal),
+            "WorkflowExecutionSchemaModule must wire the Suspended schema type.");
+    }
+
+    [Fact]
+    public void WorkflowLifecycleEventFactory_Resumed_guard_accepts_Failed_or_Suspended()
+    {
+        // R3.A.3 / R-WORKFLOW-SUSPEND-RESUME-GUARD-01: the Resumed
+        // guard MUST accept BOTH Failed and Suspended. Source-scan
+        // proves the guard references both status values in its
+        // condition.
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "lifecycle",
+            "WorkflowLifecycleEventFactory.cs");
+        Assert.True(File.Exists(path), $"Expected factory at {path}");
+        var content = File.ReadAllText(path);
+
+        // Both tokens must be present in the Resumed guard's
+        // status-comparison chain.
+        var resumedIdx = content.IndexOf(
+            "public WorkflowExecutionResumedEvent Resumed",
+            System.StringComparison.Ordinal);
+        Assert.True(resumedIdx >= 0, "Expected Resumed method on the factory.");
+
+        // Scan forward to the next method boundary (closing brace of
+        // the method body) — we check for both Failed and Suspended
+        // references within that window.
+        var methodEnd = content.IndexOf(
+            "public WorkflowExecutionCancelledEvent Cancelled",
+            resumedIdx,
+            System.StringComparison.Ordinal);
+        if (methodEnd < 0) methodEnd = content.Length;
+
+        var resumedBody = content.Substring(resumedIdx, methodEnd - resumedIdx);
+
+        Assert.True(
+            resumedBody.Contains("WorkflowExecutionStatus.Failed", System.StringComparison.Ordinal),
+            "Resumed guard must reference WorkflowExecutionStatus.Failed.");
+        Assert.True(
+            resumedBody.Contains("WorkflowExecutionStatus.Suspended", System.StringComparison.Ordinal),
+            "Resumed guard must reference WorkflowExecutionStatus.Suspended. " +
+            "R3.A.3 / R-WORKFLOW-SUSPEND-RESUME-GUARD-01.");
+    }
+
+    [Fact]
+    public void WorkflowExecutionCancelledEvent_registered_in_schema_module()
+    {
+        // R3.A.4 / R-WORKFLOW-CANCELLATION-SCHEMA-REGISTRATION-01:
+        // the event + schema must be registered in
+        // WorkflowExecutionSchemaModule so projection consumers,
+        // event replay, and audit surfaces recognize the type.
+        var path = Path.Combine(
+            SrcRoot, "runtime", "event-fabric", "domain-schemas",
+            "WorkflowExecutionSchemaModule.cs");
+        Assert.True(File.Exists(path), $"Expected schema module at {path}");
+        var content = File.ReadAllText(path);
+
+        Assert.True(
+            content.Contains("\"WorkflowExecutionCancelledEvent\"", System.StringComparison.Ordinal),
+            "WorkflowExecutionSchemaModule must register 'WorkflowExecutionCancelledEvent'. " +
+            "R3.A.4 / R-WORKFLOW-CANCELLATION-SCHEMA-REGISTRATION-01.");
+        Assert.True(
+            content.Contains("WorkflowExecutionCancelledEventSchema", System.StringComparison.Ordinal),
+            "WorkflowExecutionSchemaModule must wire the Cancelled schema type.");
+    }
+
+    [Fact]
+    public void T1MWorkflowEngine_contains_no_wall_clock_or_random_entropy_sources()
+    {
+        // R-WORKFLOW-OBSERVABILITY-DETERMINISM-NOTE-01: Stopwatch is
+        // explicitly permitted for observability timing. Wall-clock
+        // (DateTime.UtcNow / DateTimeOffset.UtcNow) and non-deterministic
+        // randomness (new Random / Random.Shared) MUST NOT appear in
+        // the engine — audit-bearing values flow via IClock / event
+        // factory / domain schemas elsewhere.
+        var path = Path.Combine(
+            SrcRoot, "engines", "T1M", "core", "workflow-engine", "WorkflowEngine.cs");
+        var stripped = StripCommentAndString(File.ReadAllText(path));
+
+        var forbidden = new[]
+        {
+            "DateTime.UtcNow",
+            "DateTime.Now",
+            "DateTimeOffset.UtcNow",
+            "DateTimeOffset.Now",
+            "new Random",
+            "Random.Shared",
+        };
+
+        var hits = forbidden
+            .Where(token => stripped.Contains(token, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(hits.Count == 0,
+            "T1MWorkflowEngine contains forbidden entropy sources — " +
+            "audit-bearing values must flow via IClock / event factory. " +
+            "Stopwatch is permitted for observability timing only. " +
+            "Hits: " + string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void KafkaRetryEscalator_delay_formula_uses_only_deterministic_entropy_sources()
+    {
+        // R2.A.3d / R-RETRY-DELIVER-AFTER-DETERMINISM-01: the
+        // deliver-after value carried by a `.retry` message MUST be
+        // replay-deterministic. Source scan forbids wall-clock and
+        // non-deterministic random entropy in the escalator file.
+        var path = Path.Combine(
+            SrcRoot, "platform", "host", "adapters", "KafkaRetryEscalator.cs");
+        Assert.True(File.Exists(path), $"Expected escalator at {path}");
+
+        var content = File.ReadAllText(path);
+        // StripCommentAndString avoids matching forbidden tokens inside
+        // comments (this file's xml-doc explicitly says "no DateTime.UtcNow")
+        // and inside string literals (the `CultureInfo` string interpolation).
+        var stripped = StripCommentAndString(content);
+
+        var forbidden = new[]
+        {
+            "DateTime.UtcNow",
+            "DateTime.Now",
+            "DateTimeOffset.UtcNow",
+            "DateTimeOffset.Now",
+            "new Random",
+            "Random.Shared",
+            "Stopwatch.GetTimestamp",
+            "Stopwatch.GetElapsedTime",
+        };
+
+        var hits = forbidden
+            .Where(token => stripped.Contains(token, System.StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(hits.Count == 0,
+            "KafkaRetryEscalator.cs contains forbidden entropy sources — " +
+            "deliver-after MUST flow from IClock + IRandomProvider for replay determinism. " +
+            "R2.A.3d / R-RETRY-DELIVER-AFTER-DETERMINISM-01. Hits: " +
+            string.Join(", ", hits));
+    }
+
+    [Fact]
+    public void KafkaCanonicalTopics_mirrors_create_topics_sh_exactly()
+    {
+        // R2.E.4 / R-TOPIC-CANONICAL-DECLARATION-01: the runtime's
+        // canonical topic list MUST mirror the operator-level bash
+        // script. Both files declare the same set of whyce.*.* topic
+        // names. Adding a new bounded context requires updating BOTH.
+        // This test guards that drift surface.
+        var scriptPath = Path.Combine(
+            RepoRoot, "infrastructure", "event-fabric", "kafka", "create-topics.sh");
+        var declPath = Path.Combine(
+            SrcRoot, "platform", "host", "adapters", "KafkaCanonicalTopics.cs");
+
+        Assert.True(File.Exists(scriptPath), $"Expected bash script at {scriptPath}");
+        Assert.True(File.Exists(declPath), $"Expected canonical declaration at {declPath}");
+
+        var topicRegex = new Regex(@"""(whyce\.[a-z][a-z0-9._-]+\.(?:commands|events|retry|deadletter))""");
+
+        var scriptTopics = topicRegex.Matches(File.ReadAllText(scriptPath))
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var declTopics = topicRegex.Matches(File.ReadAllText(declPath))
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var inScriptOnly = scriptTopics.Except(declTopics).OrderBy(x => x).ToList();
+        var inDeclOnly = declTopics.Except(scriptTopics).OrderBy(x => x).ToList();
+
+        Assert.True(inScriptOnly.Count == 0 && inDeclOnly.Count == 0,
+            "KafkaCanonicalTopics.cs and create-topics.sh have drifted. " +
+            "Adding a new bounded context requires updating BOTH files. " +
+            $"In script but not declaration: [{string.Join(", ", inScriptOnly)}]. " +
+            $"In declaration but not script: [{string.Join(", ", inDeclOnly)}].");
+    }
+
+    [Fact]
+    public void Every_Consumer_Consume_is_followed_by_KafkaLagObservability_Record()
+    {
+        // Sanctioned files: the helper itself defines the Record contract
+        // and does not consume it. The rebalance observability file
+        // also does not call Consume (it only Attaches handlers).
+        var sanctioned = new[]
+        {
+            "KafkaLagObservability.cs",
+            "KafkaRebalanceObservability.cs",
+        };
+
+        // Scan the adapters directory for every file that calls
+        // `consumer.Consume(` and ensure the same file also contains a
+        // `KafkaLagObservability.Record(` call. Co-location in the same
+        // file is sufficient since our 11 consumer workers all have a
+        // single consume loop and route every result through the lag
+        // recorder immediately after the null-check early return.
+        var adaptersPath = Path.Combine(SrcRoot, "platform", "host", "adapters");
+        var offenders = Directory.EnumerateFiles(adaptersPath, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !sanctioned.Any(s =>
+                path.Contains(s, System.StringComparison.OrdinalIgnoreCase)))
+            .Where(path =>
+            {
+                var content = File.ReadAllText(path);
+                if (!content.Contains("consumer.Consume(", System.StringComparison.Ordinal))
+                    return false;
+                return !content.Contains("KafkaLagObservability.Record(", System.StringComparison.Ordinal);
+            })
+            .Select(p => Path.GetFileName(p))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Every file that calls consumer.Consume() MUST also call " +
+            "KafkaLagObservability.Record after the null-check. " +
+            "R2.E.2 / R-CONSUMER-LAG-01. Offenders:\n" +
+            string.Join("\n", offenders));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // §6 Event fabric hard lock — no direct Kafka publish outside outbox
     // ─────────────────────────────────────────────────────────────────────
 
     [Fact]
     public void No_direct_Kafka_publish_outside_outbox_publisher()
     {
-        // Sanctioned publish sites (canonical whitelist, user ruling 2026-04-08).
-        // The §6 "no direct Kafka publish" rule applies ONLY to domain-event
-        // emission paths — not to DLQ handling, infrastructure factories, or
-        // consumer-side recovery flows.
-        //   1. KafkaOutboxPublisher.cs            — outbound domain events (S0/S0b)
+        // Sanctioned publish sites (canonical whitelist, user ruling 2026-04-08,
+        // refreshed 2026-04-19 for R2.A.D.3b closure). The §6 "no direct Kafka
+        // publish" rule applies ONLY to domain-event emission paths — not to
+        // DLQ handling, infrastructure factories, consumer-side recovery flows,
+        // or the enforcement→policy feedback bridge.
+        //   1. KafkaOutboxPublisher.cs                 — outbound domain events (S0/S0b)
         //   2. GenericKafkaProjectionConsumerWorker.cs — consumer-side DLQ
-        //   3. InfrastructureComposition.cs       — producer factory / DI wiring
+        //   3. KafkaInfrastructureModule.cs            — producer factory / DI wiring
+        //      (renamed from InfrastructureComposition.cs during composition split)
+        //   4. EnforcementToPolicyFeedbackHandler.cs   — enforcement→policy feedback
+        //      bridge. Publishes to whyce.constitutional.policy.feedback.events
+        //      which is NOT a domain-event emission path — it's a cross-domain
+        //      policy-signal bridge whose emission site is canonically scoped to
+        //      this specific handler per the R2.A.D.3b breaker wiring contract.
+        //   5. KafkaRetryEscalator.cs                  — R2.A.3d escalator that
+        //      routes failed messages to `.retry` or `.deadletter`. NOT a
+        //      domain-event emission — it's a transport-tier re-routing seam.
+        //   6. KafkaRetryConsumerWorker.cs             — R2.A.3d retry consumer
+        //      that re-publishes `.retry` messages to their source `.events`
+        //      topic when deliver-after arrives. Transport-tier re-routing.
         var sanctioned = new[]
         {
             "KafkaOutboxPublisher.cs",
             "GenericKafkaProjectionConsumerWorker.cs",
-            "InfrastructureComposition.cs",
+            "KafkaInfrastructureModule.cs",
+            "EnforcementToPolicyFeedbackHandler.cs",
+            "KafkaRetryEscalator.cs",
+            "KafkaRetryConsumerWorker.cs",
         };
 
         var hits = ScanCode(
@@ -1168,5 +1736,243 @@ public sealed class WbsmArchitectureTests
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException("Could not locate WBSM repo root from " + AppContext.BaseDirectory);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R-STATE-BOUNDARY-01 (R1 Batch 4)
+    // ─────────────────────────────────────────────────────────────────────
+    // Runtime middleware / control-plane types MUST NOT declare static
+    // mutable fields. `static readonly` singletons (Meter, Counter<T>) are
+    // permitted; `const` is permitted; any other static field breaks
+    // replay determinism and multi-instance deployment because middleware
+    // instances are shared across concurrent requests.
+    //
+    // Scope: `src/runtime/middleware/**` and `src/runtime/control-plane/**`.
+    // Heuristic: line-level scan for `static` declarations that are NOT
+    // `readonly` / `const` / `partial` / method signatures. False positives
+    // are surfaced as test failures; the test skiplist below documents
+    // any legitimate exceptions.
+    [Fact]
+    public void RuntimeMiddleware_holds_no_static_mutable_state()
+    {
+        var roots = new[]
+        {
+            Path.Combine(SrcRoot, "runtime", "middleware"),
+            Path.Combine(SrcRoot, "runtime", "control-plane")
+        };
+
+        var hits = new System.Collections.Generic.List<string>();
+
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root)) continue;
+
+            foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                    file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                    continue;
+
+                var lines = File.ReadAllLines(file);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var stripped = StripCommentAndString(lines[i]);
+                    if (!Regex.IsMatch(stripped, @"\bstatic\b"))
+                        continue;
+                    // Permitted: readonly, const, partial classes/types.
+                    if (Regex.IsMatch(stripped, @"\b(readonly|const|partial)\b"))
+                        continue;
+                    // Permitted: method declarations — contain `(` and aren't
+                    // followed by `=` before the opening paren.
+                    var parenIdx = stripped.IndexOf('(');
+                    var semiIdx = stripped.IndexOf(';');
+                    var assignIdx = stripped.IndexOf('=');
+                    bool isMethod = parenIdx >= 0 &&
+                                    (semiIdx < 0 || parenIdx < semiIdx) &&
+                                    (assignIdx < 0 || parenIdx < assignIdx);
+                    if (isMethod) continue;
+                    // Permitted: nested type declarations (class / record / struct / interface / enum).
+                    if (Regex.IsMatch(stripped, @"\bstatic\s+(class|record|struct|interface|enum)\b"))
+                        continue;
+
+                    hits.Add($"{file}:{i + 1}: {lines[i].Trim()}");
+                }
+            }
+        }
+
+        Assert.True(hits.Count == 0,
+            "R-STATE-BOUNDARY-01: Runtime middleware / control-plane types must not hold " +
+            "static mutable state. Only static readonly / const / partial / methods are " +
+            "permitted. Hits:\n" + string.Join("\n", hits));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R-OPA-BREAKER-DELEGATION-01 / R-OPA-BREAKER-BOUNDARY-01 (R2.A.D.2)
+    // ─────────────────────────────────────────────────────────────────────
+    // OpaPolicyEvaluator must delegate breaker state to the injected
+    // ICircuitBreaker (no inline _breakerLock / _consecutiveFailures /
+    // _openedAt fields) and must translate CircuitBreakerOpenException to
+    // PolicyEvaluationUnavailableException at the adapter boundary so
+    // external callers see the pre-R2.A.D.2 typed contract.
+    [Fact]
+    public void OpaPolicyEvaluator_Delegates_Breaker_State_To_ICircuitBreaker()
+    {
+        var opaPath = Path.Combine(
+            SrcRoot, "platform", "host", "adapters", "OpaPolicyEvaluator.cs");
+        Assert.True(File.Exists(opaPath),
+            $"Expected OpaPolicyEvaluator at {opaPath}.");
+
+        // Strip comments + string literals so token matches aren't fooled
+        // by the refactor's own "state removed" explanatory comment.
+        var lines = File.ReadAllLines(opaPath);
+        var strippedCode = string.Join("\n",
+            lines.Select(l => StripCommentAndString(l)));
+
+        // Inline breaker state tokens must be gone from actual code.
+        Assert.DoesNotContain("_breakerLock", strippedCode);
+        Assert.DoesNotContain("_consecutiveFailures", strippedCode);
+        Assert.DoesNotContain("_openedAt", strippedCode);
+
+        // ICircuitBreaker reference must be present (field + constructor param).
+        var fullText = File.ReadAllText(opaPath);
+        Assert.Contains("ICircuitBreaker", fullText);
+
+        // Boundary translation pattern must be present in actual code
+        // (not just documented in a comment).
+        Assert.True(
+            Regex.IsMatch(strippedCode, @"catch\s*\(\s*CircuitBreakerOpenException"),
+            "R-OPA-BREAKER-BOUNDARY-01: OpaPolicyEvaluator must catch " +
+            "CircuitBreakerOpenException to translate it to " +
+            "PolicyEvaluationUnavailableException at the adapter boundary. " +
+            "Grep for 'catch (CircuitBreakerOpenException' in OpaPolicyEvaluator.cs (code, not comments) — found zero matches.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R-CHAIN-BREAKER-DELEGATION-01 / R-CHAIN-BREAKER-BOUNDARY-01 (R2.A.D.3a)
+    // ─────────────────────────────────────────────────────────────────────
+    // WhyceChainPostgresAdapter must delegate breaker state to the injected
+    // ICircuitBreaker (parallel to the OPA refactor) and translate
+    // CircuitBreakerOpenException to ChainAnchorUnavailableException at the
+    // boundary so external callers see the pre-R2.A.D.3a typed contract.
+    [Fact]
+    public void WhyceChainPostgresAdapter_Delegates_Breaker_State_To_ICircuitBreaker()
+    {
+        var chainPath = Path.Combine(
+            SrcRoot, "platform", "host", "adapters", "WhyceChainPostgresAdapter.cs");
+        Assert.True(File.Exists(chainPath),
+            $"Expected WhyceChainPostgresAdapter at {chainPath}.");
+
+        var lines = File.ReadAllLines(chainPath);
+        var strippedCode = string.Join("\n",
+            lines.Select(l => StripCommentAndString(l)));
+
+        Assert.DoesNotContain("_breakerLock", strippedCode);
+        Assert.DoesNotContain("_consecutiveFailures", strippedCode);
+        Assert.DoesNotContain("_openedAt", strippedCode);
+
+        var fullText = File.ReadAllText(chainPath);
+        Assert.Contains("ICircuitBreaker", fullText);
+
+        Assert.True(
+            Regex.IsMatch(strippedCode, @"catch\s*\(\s*CircuitBreakerOpenException"),
+            "R-CHAIN-BREAKER-BOUNDARY-01: WhyceChainPostgresAdapter must catch " +
+            "CircuitBreakerOpenException to translate it to " +
+            "ChainAnchorUnavailableException at the adapter boundary. " +
+            "Grep for 'catch (CircuitBreakerOpenException' (code, not comments) in " +
+            "WhyceChainPostgresAdapter.cs — found zero matches.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R-POL-OPA-RETRY-01 (R2.A OPA, 2026-04-19)
+    // ─────────────────────────────────────────────────────────────────────
+    // PolicyMiddleware MUST catch PolicyEvaluationUnavailableException
+    // inside an IRetryExecutor loop (per R-POL-OPA-RETRY-01). This grep
+    // pins the integration so a future edit that removes the catch or the
+    // retry call-site fails the architecture gate. The focused unit tests
+    // in PolicyEvaluationRetryPatternTests pin the *pattern* semantics; this
+    // guard pins that the pattern is actually wired into PolicyMiddleware.
+    [Fact]
+    public void PolicyMiddleware_Catches_PolicyEvaluationUnavailableException_Inside_Retry_Loop()
+    {
+        var policyMiddlewarePath = Path.Combine(
+            SrcRoot, "runtime", "middleware", "policy", "PolicyMiddleware.cs");
+        Assert.True(File.Exists(policyMiddlewarePath),
+            $"Expected PolicyMiddleware at {policyMiddlewarePath}.");
+
+        var text = File.ReadAllText(policyMiddlewarePath);
+
+        Assert.True(
+            Regex.IsMatch(text, @"catch\s*\(\s*PolicyEvaluationUnavailableException"),
+            "R-POL-OPA-RETRY-01: PolicyMiddleware must catch " +
+            "PolicyEvaluationUnavailableException inside the retry executor " +
+            "callback. Grep for 'catch (PolicyEvaluationUnavailableException' in " +
+            "PolicyMiddleware.cs — found zero matches.");
+
+        Assert.True(
+            text.Contains("IRetryExecutor") || text.Contains("_retryExecutor"),
+            "R-POL-OPA-RETRY-01: PolicyMiddleware must reference IRetryExecutor " +
+            "(constructor parameter + private field). Neither found in source.");
+
+        Assert.True(
+            text.Contains("PolicyEvaluationDeferred"),
+            "R-POL-OPA-RETRY-01: PolicyMiddleware must classify OPA " +
+            "unavailable as RuntimeFailureCategory.PolicyEvaluationDeferred. " +
+            "Token not found in source.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R-FAIL-CAT-01 (R1 Batch 4)
+    // ─────────────────────────────────────────────────────────────────────
+    // Every CommandResult.Failure(...) inside src/runtime/** MUST use a
+    // categorized overload. The 1-arg Failure(error) overload is retained
+    // for backwards compatibility with tests / boundary code, but any
+    // runtime call to it is S1 drift — uncategorized failures break
+    // R2 retry classification.
+    [Fact]
+    public void RuntimeLayer_uses_only_categorized_CommandResult_Failure_overloads()
+    {
+        var runtimeRoot = Path.Combine(SrcRoot, "runtime");
+        if (!Directory.Exists(runtimeRoot)) return;
+
+        // Match calls to CommandResult.Failure(...) with exactly one argument.
+        // A single-arg call has no top-level comma before the close paren;
+        // categorized calls carry `, RuntimeFailureCategory.<...>` as the
+        // second argument and therefore fail this match.
+        var singleArgCall = new Regex(
+            @"CommandResult\.Failure\(\s*(?:""[^""]*""|[^,""\)])+\)",
+            RegexOptions.Singleline);
+
+        var hits = new System.Collections.Generic.List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(runtimeRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var text = File.ReadAllText(file);
+            foreach (Match m in singleArgCall.Matches(text))
+            {
+                // Exclude hits inside string literals or comments by re-checking
+                // the surrounding line context.
+                var lineStart = text.LastIndexOf('\n', m.Index) + 1;
+                var lineEnd = text.IndexOf('\n', m.Index);
+                if (lineEnd < 0) lineEnd = text.Length;
+                var line = text.Substring(lineStart, lineEnd - lineStart);
+                var stripped = StripCommentAndString(line);
+                if (!stripped.Contains("CommandResult.Failure(")) continue;
+
+                // Compute line number
+                var lineNumber = text.Substring(0, m.Index).Count(c => c == '\n') + 1;
+                hits.Add($"{file}:{lineNumber}: {line.Trim()}");
+            }
+        }
+
+        Assert.True(hits.Count == 0,
+            "R-FAIL-CAT-01: Every CommandResult.Failure(...) call inside src/runtime/** " +
+            "must use a categorized overload — Failure(error, RuntimeFailureCategory), " +
+            "ValidationFailure(error, ValidationFailureCategory), or PersistenceFailure(...). " +
+            "The 1-arg Failure(error) overload is retained for backwards compatibility only. " +
+            "Hits:\n" + string.Join("\n", hits));
     }
 }

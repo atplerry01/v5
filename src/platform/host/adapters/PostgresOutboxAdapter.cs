@@ -120,7 +120,7 @@ public sealed class PostgresOutboxAdapter : IOutbox
         // BeginTransactionAsync, the per-row ExecuteNonQueryAsync, and
         // the final CommitAsync. The high-water-mark refusal path
         // (PC-3) and the SQL itself are unchanged.
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
         await using var tx = await conn.BeginTransactionAsync(cancellationToken);
 
         for (var i = 0; i < events.Count; i++)

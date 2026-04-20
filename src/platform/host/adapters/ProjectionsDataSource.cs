@@ -1,4 +1,5 @@
 using Npgsql;
+using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Platform.Host.Adapters;
 
@@ -19,6 +20,9 @@ namespace Whycespace.Platform.Host.Adapters;
 /// declared pools without keyed-service plumbing. Pool sizing flows
 /// from <c>Postgres.Pools.Projections.*</c> configuration via
 /// <c>BuildDataSource</c>.
+///
+/// R2.A.D.3c / R-POSTGRES-POOL-BREAKER-01: shares the canonical
+/// <see cref="OpenAsync"/> acquire shape with the other two wrappers.
 /// </summary>
 public sealed class ProjectionsDataSource
 {
@@ -26,9 +30,23 @@ public sealed class ProjectionsDataSource
 
     public NpgsqlDataSource Inner { get; }
 
-    public ProjectionsDataSource(NpgsqlDataSource inner)
+    private readonly ICircuitBreaker? _poolBreaker;
+
+    public ProjectionsDataSource(NpgsqlDataSource inner, ICircuitBreaker? poolBreaker = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         Inner = inner;
+        _poolBreaker = poolBreaker;
+    }
+
+    public Task<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken = default)
+    {
+        if (_poolBreaker is null)
+        {
+            return Inner.OpenInstrumentedAsync(PoolName, cancellationToken);
+        }
+        return _poolBreaker.ExecuteAsync(
+            ct => Inner.OpenInstrumentedAsync(PoolName, ct),
+            cancellationToken);
     }
 }

@@ -100,7 +100,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
     {
         var events = new List<object>();
 
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
 
         await using var cmd = new NpgsqlCommand(
             "SELECT event_type, payload FROM events WHERE aggregate_id = @id ORDER BY version ASC",
@@ -137,7 +137,7 @@ public sealed class PostgresEventStoreAdapter : IEventStore
         int expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName);
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
         await using var tx = await conn.BeginTransactionAsync(cancellationToken);
 
         // phase1-gate-H8a: per-aggregate exclusive advisory lock. Two-key form

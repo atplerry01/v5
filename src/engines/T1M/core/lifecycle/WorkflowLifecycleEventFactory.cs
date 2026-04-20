@@ -66,13 +66,70 @@ public sealed class WorkflowLifecycleEventFactory
     public WorkflowExecutionResumedEvent Resumed(WorkflowExecutionAggregate aggregate)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
+        // R3.A.3 / R-WORKFLOW-SUSPEND-RESUME-GUARD-01: resume is legal
+        // from BOTH Failed and Suspended. Terminal statuses
+        // (Completed, Cancelled) remain un-resumable.
         Guard.Against(
-            aggregate.Status != WorkflowExecutionStatus.Failed,
-            WorkflowExecutionErrors.CannotResumeUnlessFailed);
+            aggregate.Status != WorkflowExecutionStatus.Failed
+                && aggregate.Status != WorkflowExecutionStatus.Suspended,
+            WorkflowExecutionErrors.CannotResumeUnlessFailedOrSuspended);
 
         return new WorkflowExecutionResumedEvent(
             new AggregateId(aggregate.Id.Value),
             aggregate.FailedStepName ?? string.Empty,
             aggregate.FailureReason ?? string.Empty);
+    }
+
+    /// <summary>
+    /// R3.A.4 / R-WORKFLOW-CANCELLATION-FACTORY-01 — canonical
+    /// construction site for <see cref="WorkflowExecutionCancelledEvent"/>.
+    /// Called by <c>T1MWorkflowEngine</c> from the caller-cancellation
+    /// catch branch BEFORE the propagating
+    /// <see cref="System.OperationCanceledException"/> re-throws to
+    /// the caller. Mirrors the <see cref="Resumed"/> shape —
+    /// engine-guard rule 3 prohibits T1M from calling aggregate
+    /// mutation methods, so the factory constructs the event and
+    /// the runtime persist pipeline lands it via <c>Apply</c> on the
+    /// next replay.
+    ///
+    /// <paramref name="stepName"/> is nullable because cancellation
+    /// MAY arrive before any step began (the caller-cancel catch sits
+    /// inside the step loop so the step is usually defined, but the
+    /// nullability is preserved for forward compat with a future
+    /// pre-step cancel surface).
+    /// </summary>
+    public WorkflowExecutionCancelledEvent Cancelled(
+        Guid workflowExecutionId, string? stepName, string reason)
+        => new(new AggregateId(workflowExecutionId), stepName, reason);
+
+    /// <summary>
+    /// R3.A.3 / R-WORKFLOW-SUSPEND-FACTORY-01 — canonical construction
+    /// site for <see cref="WorkflowExecutionSuspendedEvent"/>. Guards
+    /// the Running-only precondition: suspending from any other status
+    /// (NotStarted / Completed / Failed / Cancelled / already-Suspended)
+    /// is illegal.
+    ///
+    /// Symmetric with <see cref="Resumed"/> in discipline — engine-guard
+    /// rule 3 prohibits T1M from calling aggregate mutation methods, so
+    /// the factory constructs the event and the runtime persist pipeline
+    /// lands it via <c>Apply</c> on the next replay. The aggregate has
+    /// NO public <c>Suspend(...)</c> method.
+    ///
+    /// <paramref name="stepName"/> is nullable so workflow-level suspend
+    /// (pre-first-step or post-last-step) is expressible alongside
+    /// mid-step suspend. <paramref name="reason"/> is audit-only, not a
+    /// replay discriminator — two streams that land at the same end
+    /// state are replay-equivalent regardless of reason.
+    /// </summary>
+    public WorkflowExecutionSuspendedEvent Suspended(
+        WorkflowExecutionAggregate aggregate, string? stepName, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+        Guard.Against(
+            aggregate.Status != WorkflowExecutionStatus.Running,
+            WorkflowExecutionErrors.CannotSuspendUnlessRunning);
+
+        return new WorkflowExecutionSuspendedEvent(
+            new AggregateId(aggregate.Id.Value), stepName, reason);
     }
 }

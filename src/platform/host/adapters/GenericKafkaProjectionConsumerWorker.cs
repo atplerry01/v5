@@ -7,6 +7,7 @@ using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.Projection;
 using Whycespace.Shared.Contracts.Infrastructure.Health;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -78,6 +79,27 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
     private readonly TimeSpan _pollTimeout;
     private readonly KafkaConsumerOptions _consumerOptions;
     private readonly IWorkerLivenessRegistry _liveness;
+    // R2.A.3c / R-DLQ-STORE-CONSUMER-MIRROR-01: optional durable mirror for
+    // Kafka `.deadletter` publishes. When registered (host composition,
+    // PostgresInfrastructureModule) every poison message is recorded to
+    // `dead_letter_entries` after the Kafka ack. Best-effort + non-blocking
+    // — store-write failure does not abort the consumer. Null in legacy
+    // tests → Kafka-only behaviour, no regression.
+    private readonly IDeadLetterStore? _deadLetterStore;
+
+    // R2.A.D.3b / R-KAFKA-BREAKER-01: shared "kafka-producer" breaker. Wraps
+    // the DLQ publish ProduceAsync. Optional for backwards compat with tests
+    // that don't register the breaker.
+    private readonly ICircuitBreaker? _kafkaBreaker;
+
+    // R2.A.3d / R-RETRY-CONSUMER-INTEGRATION-01: retry tier escalation.
+    // When all four are supplied, handler-throw paths route through
+    // KafkaRetryEscalator.EscalateAsync (into `.retry` for attempts
+    // within budget; `.deadletter` when exhausted). When any is null,
+    // pre-R2.A.3d fallback: log + no-commit + rely on Kafka redelivery.
+    private readonly TopicNameResolver? _topicNameResolver;
+    private readonly RetryTierOptions? _retryOptions;
+    private readonly IRandomProvider? _randomProvider;
 
     // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): canonical worker
     // name reported into the IWorkerLivenessRegistry after each loop
@@ -105,7 +127,12 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         KafkaConsumerOptions consumerOptions,
         IWorkerLivenessRegistry liveness,
         ILogger<GenericKafkaProjectionConsumerWorker>? logger = null,
-        TimeSpan? pollTimeout = null)
+        TimeSpan? pollTimeout = null,
+        IDeadLetterStore? deadLetterStore = null,
+        ICircuitBreaker? kafkaBreaker = null,
+        TopicNameResolver? topicNameResolver = null,
+        RetryTierOptions? retryOptions = null,
+        IRandomProvider? randomProvider = null)
     {
         ArgumentNullException.ThrowIfNull(consumerOptions);
         ArgumentNullException.ThrowIfNull(liveness);
@@ -137,6 +164,11 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         _liveness = liveness;
         _logger = logger;
         _pollTimeout = pollTimeout ?? TimeSpan.FromSeconds(1);
+        _deadLetterStore = deadLetterStore;
+        _kafkaBreaker = kafkaBreaker;
+        _topicNameResolver = topicNameResolver;
+        _retryOptions = retryOptions;
+        _randomProvider = randomProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -162,6 +194,16 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
             MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
             SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
+            // R2.E.1 / R-CONSUMER-REBALANCE-COOPERATIVE-STICKY-01:
+            // cooperative-sticky reassigns only the delta across
+            // rebalance events so instances that stay in the consumer
+            // group keep their existing partitions — cuts rebalance
+            // blast radius compared to the default Range / RoundRobin
+            // strategies which revoke-and-reassign all partitions.
+            // Safe here because per-message consumer.Commit(result) is
+            // our canonical commit pattern; no cross-message batch
+            // buffer needs different flush semantics between strategies.
+            PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky,
         };
 
         // phase1.5-S5.2.1 / PC-6: log the applied prefetch/session
@@ -191,7 +233,13 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         var producerConfig = new ProducerConfig { BootstrapServers = _kafkaBootstrapServers };
         using var deadletterProducer = new ProducerBuilder<string, string>(producerConfig).Build();
 
-        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        // R2.E.1 / R-CONSUMER-REBALANCE-01: rebalance-event handlers wired
+        // via the canonical KafkaRebalanceObservability helper before
+        // Build() so every assign/revoke/lost transition is observable
+        // on the Whycespace.Kafka.Consumer meter.
+        var consumerBuilder = new ConsumerBuilder<string, string>(config);
+        KafkaRebalanceObservability.Attach(consumerBuilder, _topic, WorkerName, _logger);
+        using var consumer = consumerBuilder.Build();
         consumer.Subscribe(_topic);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -209,6 +257,13 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     _liveness.RecordSuccess(WorkerName, _clock.UtcNow);
                     continue;
                 }
+
+                // R2.E.2 / R-CONSUMER-LAG-01: record per-partition lag
+                // as early as possible after the Consume — poison
+                // messages / DLQ-routed messages still emit lag before
+                // commit because the signal means "we saw this offset;
+                // how far behind are we?" regardless of routing outcome.
+                KafkaLagObservability.Record(consumer, result, WorkerName, _topic);
 
                 // phase1.6-S2.3: distinguish missing vs explicitly-empty headers.
                 // ExtractHeader now returns null when the key is absent and an
@@ -229,7 +284,9 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 {
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
-                        "absent event-type header", stoppingToken);
+                        "absent event-type header",
+                        RuntimeFailureCategory.PoisonMessage,
+                        stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
@@ -237,7 +294,9 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 {
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
-                        "empty event-type header (present but blank)", stoppingToken);
+                        "empty event-type header (present but blank)",
+                        RuntimeFailureCategory.PoisonMessage,
+                        stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
@@ -247,6 +306,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
                         $"absent event-id/aggregate-id headers (event-type={eventType})",
+                        RuntimeFailureCategory.PoisonMessage,
                         stoppingToken);
                     consumer.Commit(result);
                     continue;
@@ -256,6 +316,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
                         $"empty event-id/aggregate-id headers (present but blank, event-type={eventType})",
+                        RuntimeFailureCategory.PoisonMessage,
                         stoppingToken);
                     consumer.Commit(result);
                     continue;
@@ -267,6 +328,7 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     await PublishToDeadletterAsync(
                         deadletterProducer, deadletterTopic, result.Message,
                         $"unparseable event-id/aggregate-id headers (event-type={eventType})",
+                        RuntimeFailureCategory.PoisonMessage,
                         stoppingToken);
                     consumer.Commit(result);
                     continue;
@@ -310,7 +372,9 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                         "Poisoned payload on {Topic} p{Partition} o{Offset} event-type={EventType}; routing to DLQ and committing offset",
                         _topic, result.Partition.Value, result.Offset.Value, eventType);
                     await PublishToDeadletterAsync(
-                        deadletterProducer, deadletterTopic, result.Message, reason, stoppingToken);
+                        deadletterProducer, deadletterTopic, result.Message, reason,
+                        RuntimeFailureCategory.PoisonMessage,
+                        stoppingToken);
                     consumer.Commit(result);
                     continue;
                 }
@@ -332,32 +396,120 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                     Timestamp = _clock.UtcNow
                 };
 
-                var handlers = _projectionRegistry.ResolveHandlers(eventType).ToList();
-                foreach (var handler in handlers)
+                // R2.A.3d / R-RETRY-CONSUMER-INTEGRATION-01: handler +
+                // writer wrapped in a dedicated try/catch so transient
+                // handler failures route through the retry tier
+                // escalator (bounded attempts with exponential backoff)
+                // instead of hot-looping on Kafka redelivery or going
+                // straight to `.deadletter`. When the retry tier is not
+                // wired (legacy composition, test harnesses), falls back
+                // to pre-R2.A.3d behaviour: do NOT commit, log + sleep,
+                // let Kafka redeliver (unbounded attempts).
+                try
                 {
-                    HandlerInvokedCounter.Add(1,
-                        new KeyValuePair<string, object?>("event_type", eventType),
-                        new KeyValuePair<string, object?>("handler", handler.GetType().Name));
-                    // phase1.5-S5.2.3 / TC-6 (PROJECTION-CT-CONTRACT-01):
-                    // forward the worker stoppingToken into the handler so
-                    // a hung handler is unblocked at the database round-trip
-                    // when the host is shutting down, instead of waiting for
-                    // Kafka poll/session limits to intervene. No per-handler
-                    // CTS / declared timeout is introduced in this pass —
-                    // that is a future workstream once the contract carries
-                    // the token end-to-end.
-                    await handler.HandleAsync(envelope, stoppingToken);
-                }
+                    var handlers = _projectionRegistry.ResolveHandlers(eventType).ToList();
+                    foreach (var handler in handlers)
+                    {
+                        HandlerInvokedCounter.Add(1,
+                            new KeyValuePair<string, object?>("event_type", eventType),
+                            new KeyValuePair<string, object?>("handler", handler.GetType().Name));
+                        // phase1.5-S5.2.3 / TC-6 (PROJECTION-CT-CONTRACT-01):
+                        // forward the worker stoppingToken into the handler so
+                        // a hung handler is unblocked at the database round-trip
+                        // when the host is shutting down, instead of waiting for
+                        // Kafka poll/session limits to intervene. No per-handler
+                        // CTS / declared timeout is introduced in this pass —
+                        // that is a future workstream once the contract carries
+                        // the token end-to-end.
+                        await handler.HandleAsync(envelope, stoppingToken);
+                    }
 
-                // When a domain handler is registered for this event type, the handler
-                // owns the merged state write. Skip the generic raw-payload writer to
-                // avoid clobbering the materialized read model.
-                if (handlers.Count == 0)
+                    // When a domain handler is registered for this event type, the handler
+                    // owns the merged state write. Skip the generic raw-payload writer to
+                    // avoid clobbering the materialized read model.
+                    if (handlers.Count == 0)
+                    {
+                        // phase1.6-S2.3: writer expects a non-null correlation id
+                        // string. Absent correlation header is non-fatal here —
+                        // the writer parses Guid.Empty out of an empty string.
+                        await _writer.WriteAsync(eventType, @event, correlationId ?? string.Empty, stoppingToken);
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    // phase1.6-S2.3: writer expects a non-null correlation id
-                    // string. Absent correlation header is non-fatal here —
-                    // the writer parses Guid.Empty out of an empty string.
-                    await _writer.WriteAsync(eventType, @event, correlationId ?? string.Empty, stoppingToken);
+                    // Host shutdown — caller-driven cancellation. Re-throw
+                    // so the outer catch handles loop exit.
+                    throw;
+                }
+                catch (Exception handlerEx)
+                {
+                    if (_topicNameResolver is not null
+                        && _retryOptions is not null
+                        && _randomProvider is not null
+                        && _kafkaBreaker is not null)
+                    {
+                        // R-RETRY-CONSUMER-INTEGRATION-01: escalate via
+                        // the retry tier. Read prior attempt count from
+                        // incoming headers so a message that has already
+                        // bounced through `.retry` increments correctly.
+                        var priorAttempt = RetryHeaders.ReadPriorAttemptCount(result.Message.Headers);
+
+                        try
+                        {
+                            await KafkaRetryEscalator.EscalateAsync(
+                                deadletterProducer,
+                                _topicNameResolver,
+                                _topic,
+                                result.Message,
+                                parsedEventId,
+                                $"{handlerEx.GetType().Name}: {handlerEx.Message}",
+                                priorAttempt,
+                                _retryOptions.MaxAttempts,
+                                _retryOptions.BaseBackoff,
+                                _retryOptions.MaxBackoff,
+                                _randomProvider,
+                                _clock,
+                                _kafkaBreaker,
+                                _logger,
+                                stoppingToken);
+
+                            // Escalation succeeded — commit source offset.
+                            // The message now lives on either `.retry` (if
+                            // within attempt budget) or `.deadletter` (if
+                            // exhausted); either way, the source offset is
+                            // safe to advance.
+                            consumer.Commit(result);
+                        }
+                        catch (CircuitBreakerOpenException breakerEx)
+                        {
+                            // Kafka producer breaker Open during escalate.
+                            // Do NOT commit — Kafka redelivers when breaker
+                            // recovers. Matches R-KAFKA-BREAKER-OPEN-BEHAVIOR-01
+                            // outbox posture (skip tick, preserve row).
+                            _logger?.LogWarning(
+                                "Handler failed on {Topic} p{Partition} o{Offset}; retry-escalate blocked by breaker '{Breaker}' ({RetryAfter}s); will redeliver.",
+                                _topic, result.Partition.Value, result.Offset.Value,
+                                breakerEx.BreakerName, breakerEx.RetryAfterSeconds);
+                        }
+                        catch (Exception escalationEx)
+                        {
+                            _logger?.LogError(escalationEx,
+                                "Retry escalation failed for {Topic} p{Partition} o{Offset} after handler exception {HandlerException}; will redeliver.",
+                                _topic, result.Partition.Value, result.Offset.Value, handlerEx.GetType().Name);
+                        }
+                    }
+                    else
+                    {
+                        // Pre-R2.A.3d fallback: retry tier not wired. Do
+                        // NOT commit — rely on Kafka redelivery (unbounded
+                        // attempts). The outer catch-Exception block below
+                        // will handle logging + back-off.
+                        _logger?.LogError(handlerEx,
+                            "Handler failed on {Topic} p{Partition} o{Offset}; retry tier not wired, will redeliver.",
+                            _topic, result.Partition.Value, result.Offset.Value);
+                    }
+                    // Skip the success-path commit + lag recording below.
+                    continue;
                 }
 
                 // phase1.5-S5.2.1 / PC-7 (PROJECTION-LAG-01): record
@@ -447,6 +599,10 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         return Encoding.UTF8.GetString(header.GetValueBytes());
     }
 
+    // R2.A.3d Phase B: ReadPriorAttemptCount promoted to
+    // RetryHeaders.ReadPriorAttemptCount so all 11 consumer workers share
+    // the same header-parse discipline.
+
     /// <summary>
     /// phase1-gate-S3: publishes a malformed inbound message to the deadletter
     /// topic preserving original key/value/headers and adding diagnostic
@@ -465,8 +621,15 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
         string deadletterTopic,
         Message<string, string> original,
         string reason,
+        RuntimeFailureCategory category,
         CancellationToken ct)
     {
+        var aggregateIdHeader = ExtractHeader(original.Headers ?? new Headers(), "aggregate-id");
+        var eventIdHeader = ExtractHeader(original.Headers ?? new Headers(), "event-id");
+        var correlationHeader = ExtractHeader(original.Headers ?? new Headers(), "correlation-id");
+        var causationHeader = ExtractHeader(original.Headers ?? new Headers(), "causation-id");
+        var eventTypeHeader = ExtractHeader(original.Headers ?? new Headers(), "event-type");
+
         try
         {
             var headers = new Headers();
@@ -477,6 +640,10 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             }
             headers.Add("dlq-reason",       Encoding.UTF8.GetBytes(reason));
             headers.Add("dlq-source-topic", Encoding.UTF8.GetBytes(_topic));
+            // R2.A.3c / R-DLQ-CATEGORY-POISON-01: surface the canonical
+            // category on the Kafka record too, so downstream DLQ
+            // consumers can route by category without parsing the reason.
+            headers.Add("dlq-category",     Encoding.UTF8.GetBytes(category.ToString()));
 
             // phase1-gate-H7a: enforce per-aggregate Kafka ordering. Prefer the
             // aggregate-id header (set by KafkaOutboxPublisher); fall back to the
@@ -486,7 +653,6 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
             // headers (vs empty for present-but-blank). Treat both as
             // "not usable as a partition key" and fall through to
             // original.Key so the DLQ row still routes to a partition.
-            var aggregateIdHeader = ExtractHeader(original.Headers ?? new Headers(), "aggregate-id");
             var dlqKey = !string.IsNullOrEmpty(aggregateIdHeader) ? aggregateIdHeader : original.Key;
             var dlqMessage = new Message<string, string>
             {
@@ -495,13 +661,29 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 Headers = headers
             };
 
-            await producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            // R2.A.D.3b / R-KAFKA-BREAKER-01: DLQ publish flows through the
+            // shared "kafka-producer" breaker. Open-state re-throws a
+            // CircuitBreakerOpenException; the existing outer catch of this
+            // method re-throws to the consume loop, which honors K-DLQ-001
+            // (never commit the source offset on DLQ publish failure) so
+            // Kafka re-delivers on the next poll. No behaviour change at
+            // the offset-commit boundary.
+            if (_kafkaBreaker is null)
+            {
+                await producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            }
+            else
+            {
+                await _kafkaBreaker.ExecuteAsync(async c =>
+                    await producer.ProduceAsync(deadletterTopic, dlqMessage, c), ct);
+            }
             DlqRoutedCounter.Add(1,
                 new KeyValuePair<string, object?>("source_topic", _topic),
-                new KeyValuePair<string, object?>("reason", reason));
+                new KeyValuePair<string, object?>("reason", reason),
+                new KeyValuePair<string, object?>("category", category.ToString()));
             _logger?.LogWarning(
-                "Routed message from {SourceTopic} to {DeadletterTopic}: {Reason}",
-                _topic, deadletterTopic, reason);
+                "Routed message from {SourceTopic} to {DeadletterTopic} (category={Category}): {Reason}",
+                _topic, deadletterTopic, category, reason);
         }
         catch (Exception ex)
         {
@@ -518,5 +700,73 @@ public sealed class GenericKafkaProjectionConsumerWorker : BackgroundService
                 deadletterTopic);
             throw;
         }
+
+        // R2.A.3c / R-DLQ-STORE-CONSUMER-MIRROR-01: mirror to durable store
+        // so operator inspection + re-drive + retention queries can see
+        // this entry. Best-effort + non-blocking — store failure is
+        // caught, logged, and swallowed. The Kafka `.deadletter` record
+        // above is the authoritative path; the store is the queryable view.
+        // If the store rejects the write, the source offset has ALREADY
+        // been acknowledged upstream by the time we return (every caller
+        // commits on the line after this method returns), so a store
+        // failure can only degrade the operator-inspection surface, not
+        // lose the message.
+        if (_deadLetterStore is null) return;
+
+        try
+        {
+            var eventId = Guid.TryParse(eventIdHeader, out var parsedEventId) && parsedEventId != Guid.Empty
+                ? parsedEventId
+                // No event-id header (or unparseable) — derive a deterministic id from
+                // the source topic + value-hash so the DLQ store still has a primary
+                // key, idempotent on retry of the same poison record.
+                : DeriveFallbackEventId(original);
+
+            Guid? causationId = Guid.TryParse(causationHeader, out var parsedCausation)
+                ? parsedCausation
+                : null;
+            var correlationId = Guid.TryParse(correlationHeader, out var parsedCorrelation)
+                ? parsedCorrelation
+                : Guid.Empty;
+
+            var entry = new DeadLetterEntry
+            {
+                EventId = eventId,
+                SourceTopic = _topic,
+                EventType = eventTypeHeader ?? "unknown",
+                CorrelationId = correlationId,
+                CausationId = causationId,
+                EnqueuedAt = _clock.UtcNow,
+                FailureCategory = category,
+                LastError = reason,
+                AttemptCount = 0, // poison routes go direct to DLQ per R-TOPIC-TIER-01
+                Payload = Encoding.UTF8.GetBytes(original.Value ?? string.Empty)
+            };
+
+            await _deadLetterStore.RecordAsync(entry, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(
+                ex,
+                "FAILED to mirror consumer-poison message from {SourceTopic} to IDeadLetterStore. Kafka deadletter has the record; operator inspection surface degraded but no data lost.",
+                _topic);
+        }
+    }
+
+    /// <summary>
+    /// R2.A.3c — fallback EventId derivation for poison messages whose
+    /// event-id header is absent or unparseable. SHA256 of the source
+    /// topic + payload gives a deterministic key so the DLQ store remains
+    /// idempotent on retry of the identical poison bytes.
+    /// </summary>
+    private static Guid DeriveFallbackEventId(Message<string, string> message)
+    {
+        var input = string.Concat(message.Key ?? string.Empty, "|", message.Value ?? string.Empty);
+        Span<byte> hash = stackalloc byte[32];
+        System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(input), hash);
+        Span<byte> guidBytes = stackalloc byte[16];
+        hash[..16].CopyTo(guidBytes);
+        return new Guid(guidBytes);
     }
 }

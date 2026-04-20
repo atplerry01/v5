@@ -115,6 +115,19 @@ public sealed class WorkflowExecutionAggregate : AggregateRoot
             case WorkflowExecutionResumedEvent:
                 _status = WorkflowExecutionStatus.Running;
                 break;
+            case WorkflowExecutionCancelledEvent:
+                // R3.A.4 / R-WORKFLOW-CANCELLATION-EVENT-01: terminal
+                // state. Status-only mutation — the cancel reason is
+                // observability/audit data, not a replay-bearing value.
+                _status = WorkflowExecutionStatus.Cancelled;
+                break;
+            case WorkflowExecutionSuspendedEvent:
+                // R3.A.3 / R-WORKFLOW-SUSPEND-EVENT-01: NON-terminal
+                // state. Status-only mutation. Resume is legal via
+                // WorkflowLifecycleEventFactory.Resumed (which accepts
+                // BOTH Failed and Suspended post-R3.A.3).
+                _status = WorkflowExecutionStatus.Suspended;
+                break;
         }
     }
 

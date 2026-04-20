@@ -5,6 +5,7 @@ using Npgsql;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Health;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;
+using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -37,6 +38,10 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     private readonly int _maxRetryCount;
     private readonly IWorkerLivenessRegistry _liveness;
     private readonly IClock _clock;
+    private readonly IDeadLetterStore? _deadLetterStore;
+    // R2.A.D.3b / R-KAFKA-BREAKER-01: shared Kafka producer breaker. Optional
+    // for backwards compat with tests that don't register the breaker.
+    private readonly ICircuitBreaker? _kafkaBreaker;
     private readonly ILogger<KafkaOutboxPublisher>? _logger;
 
     // phase1.5-S5.2.4 / HC-5 (WORKER-LIVENESS-01): canonical worker
@@ -61,6 +66,14 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     // and retry-update transactions now flow through the declared
     // event-store NpgsqlDataSource. Polling cadence, batch size, and
     // retry semantics are unchanged.
+    // R2.A.3b (2026-04-19): IDeadLetterStore optional dep. When registered
+    // (host composition) every message promoted to the `.deadletter` Kafka
+    // topic is also mirrored to durable storage per R-DLQ-STORE-01 so
+    // operator inspection / re-drive / retention operate on queryable
+    // state. When null (legacy tests without the store registered), the
+    // deadletter path falls back to the Kafka-only behaviour that preceded
+    // R2.A.3b — the DB outbox row still flips to status='deadletter' so
+    // no events are lost, just no dedicated DLQ-store row is written.
     public KafkaOutboxPublisher(
         EventStoreDataSource dataSource,
         IProducer<string, string> producer,
@@ -69,7 +82,9 @@ public sealed class KafkaOutboxPublisher : BackgroundService
         IWorkerLivenessRegistry liveness,
         IClock clock,
         TimeSpan? pollInterval = null,
-        ILogger<KafkaOutboxPublisher>? logger = null)
+        ILogger<KafkaOutboxPublisher>? logger = null,
+        IDeadLetterStore? deadLetterStore = null,
+        ICircuitBreaker? kafkaBreaker = null)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(topicNameResolver);
@@ -89,6 +104,8 @@ public sealed class KafkaOutboxPublisher : BackgroundService
         _maxRetryCount = options.MaxRetry;
         _liveness = liveness;
         _clock = clock;
+        _deadLetterStore = deadLetterStore;
+        _kafkaBreaker = kafkaBreaker;
         _logger = logger;
     }
 
@@ -114,6 +131,19 @@ public sealed class KafkaOutboxPublisher : BackgroundService
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 return;
+            }
+            catch (CircuitBreakerOpenException ex)
+            {
+                // R2.A.D.3c / R-POSTGRES-POOL-BREAKER-OPEN-SEMANTICS-01:
+                // shared pool breaker Open at connection acquisition.
+                // Skip this poll tick; the next one will retry. Rows
+                // stay in the outbox with status='pending' and will
+                // drain naturally when the breaker recovers.
+                _logger?.LogWarning(
+                    "KafkaOutboxPublisher skipping tick: breaker '{Breaker}' open ({RetryAfter}s).",
+                    ex.BreakerName, ex.RetryAfterSeconds);
+                try { await Task.Delay(_pollInterval, stoppingToken); }
+                catch (OperationCanceledException) { return; }
             }
             catch (Exception ex)
             {
@@ -193,7 +223,7 @@ public sealed class KafkaOutboxPublisher : BackgroundService
     // start failing, MI-2 has been broken at the database level.
     private async Task<int> PublishBatchAsync(CancellationToken ct)
     {
-        await using var conn = await _dataSource.Inner.OpenInstrumentedAsync(EventStoreDataSource.PoolName, ct);
+        await using var conn = await _dataSource.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
         // Fetch pending + previously-failed-but-under-retry-budget rows with
@@ -282,10 +312,39 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                     "Publishing outbox row {OutboxId} ({EventType}) to topic {Topic}",
                     entry.Id, entry.EventType, entry.Topic);
 
-                await _producer.ProduceAsync(entry.Topic, message, ct);
+                // R2.A.D.3b / R-KAFKA-BREAKER-01: wrap ProduceAsync in the
+                // shared "kafka-producer" breaker when registered. Broker
+                // failures inside the lambda throw ProduceException which
+                // the breaker counts. Breaker-open short-circuits without
+                // touching Kafka; see the CircuitBreakerOpenException catch
+                // below for the per-call-site open-state behaviour
+                // (R-KAFKA-BREAKER-OPEN-BEHAVIOR-01).
+                if (_kafkaBreaker is null)
+                {
+                    await _producer.ProduceAsync(entry.Topic, message, ct);
+                }
+                else
+                {
+                    await _kafkaBreaker.ExecuteAsync(async c =>
+                        await _producer.ProduceAsync(entry.Topic, message, c), ct);
+                }
                 await MarkAsPublishedAsync(conn, tx, entry.Id, ct);
                 publishedCount++;
                 PublishedCounter.Add(1, new KeyValuePair<string, object?>("topic", entry.Topic));
+            }
+            catch (CircuitBreakerOpenException breakerEx)
+            {
+                // R-KAFKA-BREAKER-OPEN-BEHAVIOR-01 (outbox publish): skip
+                // the row without advancing retry_count. Broker outage is
+                // not a per-row failure; the row stays at its prior status
+                // and will retry on the next poll when the breaker transitions
+                // back toward Closed. Preserves per-row retry budget across
+                // outage windows.
+                _logger?.LogWarning(
+                    breakerEx,
+                    "Kafka breaker open; skipping outbox row {OutboxId} on topic {Topic} without advancing retry_count. Retry-After={RetryAfterSeconds}s.",
+                    entry.Id, entry.Topic, breakerEx.RetryAfterSeconds);
+                continue;
             }
             catch (ProduceException<string, string> ex)
             {
@@ -409,11 +468,34 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                 }
             };
 
-            await _producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            // R2.A.D.3b / R-KAFKA-BREAKER-01: DLQ publish also flows through
+            // the shared "kafka-producer" breaker.
+            if (_kafkaBreaker is null)
+            {
+                await _producer.ProduceAsync(deadletterTopic, dlqMessage, ct);
+            }
+            else
+            {
+                await _kafkaBreaker.ExecuteAsync(async c =>
+                    await _producer.ProduceAsync(deadletterTopic, dlqMessage, c), ct);
+            }
             DlqPublishedCounter.Add(1, new KeyValuePair<string, object?>("topic", deadletterTopic));
             _logger?.LogError(
                 "Outbox row {OutboxId} routed to deadletter topic {DeadletterTopic} after {Attempts} attempts: {Reason}",
                 entry.Id, deadletterTopic, entry.RetryCount + 1, reason);
+        }
+        catch (CircuitBreakerOpenException breakerEx)
+        {
+            // R-KAFKA-BREAKER-OPEN-BEHAVIOR-01 (outbox DLQ publish): skip
+            // the DLQ attempt. The DB outbox row already moved to
+            // status='deadletter' via RecordFailureAsync on the primary
+            // publish failure; Kafka DLQ visibility is degraded but no
+            // data loss because R2.A.3b DLQ store still records the entry
+            // below. Do not re-throw — the publisher loop continues.
+            _logger?.LogWarning(
+                breakerEx,
+                "Kafka breaker open; skipping DLQ publish for outbox row {OutboxId} to {DeadletterTopic}. DB row remains status='deadletter'. Retry-After={RetryAfterSeconds}s.",
+                entry.Id, deadletterTopic, breakerEx.RetryAfterSeconds);
         }
         catch (Exception ex)
         {
@@ -421,6 +503,42 @@ public sealed class KafkaOutboxPublisher : BackgroundService
                 ex,
                 "FAILED to publish outbox row {OutboxId} to deadletter topic {DeadletterTopic}. DB row remains status='deadletter' for manual recovery.",
                 entry.Id, deadletterTopic);
+        }
+
+        // R2.A.3b / R-DLQ-STORE-01: mirror to durable DLQ store so
+        // operator inspection + re-drive controls + retention sweeps
+        // can query the entry. Best-effort, non-blocking — a store
+        // failure must not crash the publisher loop ($12). Idempotent
+        // on EventId so duplicate records from multi-instance consumers
+        // collapse. The DB outbox row's status='deadletter' remains the
+        // belt-and-braces authoritative record; the DLQ store is the
+        // operator-queryable view.
+        if (_deadLetterStore is not null)
+        {
+            try
+            {
+                var dlqEntry = new DeadLetterEntry
+                {
+                    EventId = entry.EventId,
+                    SourceTopic = entry.Topic,
+                    EventType = entry.EventType,
+                    CorrelationId = entry.CorrelationId,
+                    EnqueuedAt = _clock.UtcNow,
+                    FailureCategory = null, // publisher-tier doesn't classify; R2.A.3c consumer path will.
+                    LastError = reason ?? "unknown",
+                    AttemptCount = entry.RetryCount + 1,
+                    Payload = System.Text.Encoding.UTF8.GetBytes(entry.Payload)
+                };
+
+                await _deadLetterStore.RecordAsync(dlqEntry, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(
+                    ex,
+                    "FAILED to mirror outbox row {OutboxId} to IDeadLetterStore. Kafka deadletter topic has the message; DB outbox row remains status='deadletter'. No data lost, but operator inspection surface degraded.",
+                    entry.Id);
+            }
         }
     }
 

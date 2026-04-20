@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
+using Whycespace.Runtime.Resilience;
 using Whycespace.Shared.Contracts.Enforcement;
 using Whycespace.Shared.Contracts.Infrastructure.Health;
+using Whycespace.Shared.Contracts.Infrastructure.Persistence;
 using Whycespace.Shared.Kernel.Domain;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -57,6 +59,15 @@ public sealed class SanctionExpirySchedulerWorker : BackgroundService
     private readonly int _batchSize;
     private readonly ILogger<SanctionExpirySchedulerWorker>? _logger;
 
+    // R2.A.C.2.5 / R-LEADER-ELECTION-01 — optional distributed lease.
+    // Direct parallel to SystemLockExpirySchedulerWorker (R2.A.C.2 reference
+    // migration). When registered, exactly one replica scans; followers
+    // idle at the lease gate. When null, legacy N-way scan (correct via
+    // idempotency middleware at the dispatch boundary, wasteful at the
+    // scan boundary). Audit verdict: claude/new-rules/20260419-110000-guards.md.
+    private readonly IDistributedLeaseProvider? _leaseProvider;
+    private static readonly TimeSpan LeaderRetryInterval = TimeSpan.FromSeconds(30);
+
     public SanctionExpirySchedulerWorker(
         IExpirableSanctionQuery query,
         SanctionExpirySchedulerHandler handler,
@@ -65,6 +76,19 @@ public sealed class SanctionExpirySchedulerWorker : BackgroundService
         int intervalSeconds,
         int batchSize,
         ILogger<SanctionExpirySchedulerWorker>? logger = null)
+        : this(query, handler, clock, liveness, intervalSeconds, batchSize, logger, leaseProvider: null)
+    {
+    }
+
+    public SanctionExpirySchedulerWorker(
+        IExpirableSanctionQuery query,
+        SanctionExpirySchedulerHandler handler,
+        IClock clock,
+        IWorkerLivenessRegistry liveness,
+        int intervalSeconds,
+        int batchSize,
+        ILogger<SanctionExpirySchedulerWorker>? logger,
+        IDistributedLeaseProvider? leaseProvider)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(handler);
@@ -84,14 +108,37 @@ public sealed class SanctionExpirySchedulerWorker : BackgroundService
         _interval = TimeSpan.FromSeconds(intervalSeconds);
         _batchSize = batchSize;
         _logger = logger;
+        _leaseProvider = leaseProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger?.LogInformation(
-            "SanctionExpirySchedulerWorker started: interval={IntervalSeconds}s batch={BatchSize}.",
-            (int)_interval.TotalSeconds, _batchSize);
+            "SanctionExpirySchedulerWorker started: interval={IntervalSeconds}s batch={BatchSize} leaderMode={LeaderMode}.",
+            (int)_interval.TotalSeconds, _batchSize, _leaseProvider is null ? "off" : "on");
 
+        if (_leaseProvider is null)
+        {
+            await ScanLoopAsync(stoppingToken);
+        }
+        else
+        {
+            var holder = $"{Environment.MachineName}:{Environment.ProcessId}";
+            await LeaderElection.RunAsLeaderAsync(
+                _leaseProvider,
+                leaseKey: WorkerName,
+                holder: holder,
+                leaderWork: ScanLoopAsync,
+                retryInterval: LeaderRetryInterval,
+                logger: _logger,
+                cancellationToken: stoppingToken);
+        }
+
+        _logger?.LogInformation("SanctionExpirySchedulerWorker stopping.");
+    }
+
+    private async Task ScanLoopAsync(CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -112,8 +159,6 @@ public sealed class SanctionExpirySchedulerWorker : BackgroundService
             try { await Task.Delay(_interval, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
-
-        _logger?.LogInformation("SanctionExpirySchedulerWorker stopping.");
     }
 
     private async Task ScanOnceAsync(CancellationToken cancellationToken)

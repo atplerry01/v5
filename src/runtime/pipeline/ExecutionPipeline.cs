@@ -1,3 +1,4 @@
+using Whycespace.Runtime.ControlPlane;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.Middleware;
 using Whycespace.Shared.Contracts.Runtime;
@@ -35,9 +36,11 @@ public sealed class ExecutionPipeline
     {
         // Step 1: Open execution scope — validate pre-conditions
         if (command is null)
-            return CommandResult.Failure("Execution pipeline: command is null.");
+            return CommandResult.ValidationFailure(
+                "Execution pipeline: command is null.", ValidationFailureCategory.InputSchema);
         if (context.CorrelationId == Guid.Empty)
-            return CommandResult.Failure("Execution pipeline: CorrelationId is required.");
+            return CommandResult.ValidationFailure(
+                "Execution pipeline: CorrelationId is required.", ValidationFailureCategory.CommandPrecondition);
 
         // Step 2: Build and execute middleware pipeline
         // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): mirror
@@ -61,8 +64,11 @@ public sealed class ExecutionPipeline
         }
         catch (Exception ex)
         {
-            // Step 6: Handle failure — structured error, no partial completion
-            return CommandResult.Failure($"Execution pipeline failure: {ex.Message}");
+            // Step 6: Handle failure — structured error, no partial completion.
+            // R-EXC-MAP-01: category sourced from RuntimeExceptionMapper so
+            // retry logic (R2) sees a canonical classification.
+            var mapped = RuntimeExceptionMapper.Map(ex);
+            return CommandResult.Failure($"Execution pipeline failure: {ex.Message}", mapped.Category);
         }
 
         // Step 3: Collect emitted events
@@ -73,7 +79,8 @@ public sealed class ExecutionPipeline
         if (result.EventsRequirePersistence && result.EmittedEvents.Count == 0)
         {
             return CommandResult.Failure(
-                "Execution pipeline: events required for persistence but none emitted.");
+                "Execution pipeline: events required for persistence but none emitted.",
+                RuntimeFailureCategory.InvalidState);
         }
 
         // Step 5: Call EventFabric (single, non-bypassable)
@@ -85,7 +92,10 @@ public sealed class ExecutionPipeline
             }
             catch (Exception ex)
             {
-                return CommandResult.Failure($"Event fabric failure: {ex.Message}");
+                // R-EXC-MAP-01: persistence-path exceptions classified via mapper
+                // so DbException→PersistenceFailure/ConcurrencyConflict etc flow through.
+                var mapped = RuntimeExceptionMapper.Map(ex);
+                return CommandResult.Failure($"Event fabric failure: {ex.Message}", mapped.Category);
             }
         }
 

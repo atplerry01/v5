@@ -34,6 +34,7 @@ public sealed class ReconciliationLifecycleWorker : BackgroundService
     ];
 
     private const string ConsumerGroup = "whyce.integration.reconciliation-lifecycle";
+    private const string WorkerName = "reconciliation-lifecycle"; // R2.E.1 rebalance-metric tag
 
     private readonly string _kafkaBootstrapServers;
     private readonly EventDeserializer _deserializer;
@@ -80,10 +81,13 @@ public sealed class ReconciliationLifecycleWorker : BackgroundService
             QueuedMaxMessagesKbytes = _consumerOptions.QueuedMaxMessagesKbytes,
             MessageMaxBytes = _consumerOptions.FetchMessageMaxBytes,
             MaxPollIntervalMs = _consumerOptions.MaxPollIntervalMs,
-            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs
+            SessionTimeoutMs = _consumerOptions.SessionTimeoutMs,
+            PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky, // R2.E.1
         };
 
-        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        var consumerBuilder = new ConsumerBuilder<string, string>(config);
+        KafkaRebalanceObservability.Attach(consumerBuilder, Topics[0], WorkerName, _logger);
+        using var consumer = consumerBuilder.Build();
         consumer.Subscribe(Topics);
 
         _logger?.LogInformation(
@@ -97,6 +101,8 @@ public sealed class ReconciliationLifecycleWorker : BackgroundService
                 var result = consumer.Consume(TimeSpan.FromSeconds(1));
                 if (result is null)
                     continue;
+
+                KafkaLagObservability.Record(consumer, result, WorkerName, Topics[0]);
 
                 var eventType = ExtractHeader(result.Message.Headers, "event-type");
                 var eventIdHeader = ExtractHeader(result.Message.Headers, "event-id");

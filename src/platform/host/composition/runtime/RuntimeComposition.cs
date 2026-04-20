@@ -115,7 +115,13 @@ public static class RuntimeComposition
                 sp.GetRequiredService<IPolicyDecisionEventFactory>(),
                 sp.GetRequiredService<ICallerIdentityAccessor>(),
                 sp.GetRequiredService<IClock>(),
-                sp.GetRequiredService<IAggregateStateLoader>());
+                sp.GetRequiredService<IAggregateStateLoader>(),
+                // R2.A.OPA / R-POL-OPA-RETRY-01: thread the retry executor so
+                // OPA unavailability is caught and retried with bounded
+                // attempts instead of bubbling immediately to the API edge.
+                // sp.GetService (not GetRequiredService) tolerates legacy test
+                // hosts that haven't registered the executor.
+                retryExecutor: sp.GetService<Whycespace.Shared.Contracts.Runtime.IRetryExecutor>());
 
             var idempotencyMiddleware = new IdempotencyMiddleware(
                 sp.GetRequiredService<IIdempotencyStore>());

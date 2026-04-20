@@ -72,6 +72,35 @@ public static class PolicyInputBuilder
     }
 
     /// <summary>
+    /// R1 §6 — variant that additionally stamps <c>input.environment</c> and
+    /// <c>input.jurisdiction</c>. Callers supply strings resolved from host
+    /// configuration (environment) and command / tenant metadata (jurisdiction).
+    /// <c>null</c> on either passes through and causes rego to omit the field,
+    /// preserving backward-compat with policies that don't consume the overlay.
+    /// </summary>
+    public static PolicyContext Enrich(
+        PolicyContext baseContext,
+        object command,
+        object? resourceState,
+        DateTimeOffset now,
+        string? environment,
+        string? jurisdiction)
+    {
+        ArgumentNullException.ThrowIfNull(baseContext);
+        ArgumentNullException.ThrowIfNull(command);
+
+        return baseContext with
+        {
+            Command = command,
+            ResourceState = resourceState,
+            Now = now,
+            AggregateId = TryResolveAggregateId(command),
+            Environment = environment,
+            Jurisdiction = jurisdiction
+        };
+    }
+
+    /// <summary>
     /// Lifts the aggregate id off the command when it implements
     /// <see cref="IHasAggregateId"/>. Returns <c>null</c> for commands
     /// without a stream anchor (workflow-level commands, etc.) so the
