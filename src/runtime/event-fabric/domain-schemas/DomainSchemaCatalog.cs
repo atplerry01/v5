@@ -31,4 +31,8 @@ public static class DomainSchemaCatalog
 
     public static void RegisterEconomicTransaction(EventSchemaRegistry registry)
         => new TransactionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>R3.B.1 — integration/outbound-effect lifecycle schema bindings.</summary>
+    public static void RegisterIntegrationOutboundEffect(EventSchemaRegistry registry)
+        => new OutboundEffectSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.ServiceOffering;
+
+public sealed record ServiceOfferingActivatedEvent(ServiceOfferingId ServiceOfferingId);

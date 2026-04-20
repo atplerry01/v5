@@ -987,6 +987,13 @@ public sealed class WbsmArchitectureTests
         //   6. KafkaRetryConsumerWorker.cs             — R2.A.3d retry consumer
         //      that re-publishes `.retry` messages to their source `.events`
         //      topic when deliver-after arrives. Transport-tier re-routing.
+        //   7. KafkaDeadLetterRedrivePublisher.cs      — R4.B admin DLQ re-drive
+        //      adapter. Operator-initiated re-publish of a poison message back
+        //      to its original source topic through the sanctioned
+        //      IDeadLetterRedriveService seam (eligibility gate + audit
+        //      emission live in the service, NOT in the adapter). NOT a
+        //      domain-event emission — a transport-tier re-routing seam
+        //      parallel to KafkaRetryConsumerWorker.
         var sanctioned = new[]
         {
             "KafkaOutboxPublisher.cs",
@@ -995,6 +1002,7 @@ public sealed class WbsmArchitectureTests
             "EnforcementToPolicyFeedbackHandler.cs",
             "KafkaRetryEscalator.cs",
             "KafkaRetryConsumerWorker.cs",
+            "KafkaDeadLetterRedrivePublisher.cs",
         };
 
         var hits = ScanCode(

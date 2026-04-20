@@ -1,0 +1,205 @@
+# R5.C.2 Phase 1 — Chaos Observability-Loop Catalog
+#
+# Binds each R5.B certified failure mode to its full observability signal
+# chain: fault → exception → handler → HTTP status → feeding metric →
+# R4.A alert → R5.A span family → log-scope contract.
+#
+# This is the executable contract an on-call operator relies on: when a
+# canonical fault fires in production, the FULL loop below MUST light up,
+# or the observability package is broken at that link.
+#
+# loop_proof_status semantics:
+#   cataloged    — the contract is declared + cross-reference-validated;
+#                  not yet proven against live infrastructure.
+#   live_proven  — R5.C.2 Phase 2 has executed the loop end-to-end under
+#                  load + fault injection against running services.
+#
+# R5.C.2 Phase 1 populates every entry as `cataloged`. Phase 2 flips
+# them to `live_proven` as the chaos harness executes each scenario.
+#
+# Canonical log-scope keys (R-TRACE-LOG-CORRELATION-01) apply to EVERY
+# entry: `trace_id`, `span_id`, `correlation_id`, optionally `tenant_id`.
+# Listed at the top so per-entry blocks stay terse.
+
+version: 1
+
+canonical_log_scope_keys:
+  required:
+    - trace_id
+    - span_id
+    - correlation_id
+  optional:
+    - tenant_id
+
+loops:
+  - id: opa-unavailable-loop
+    failure_mode: opa-unavailable
+    exception: PolicyEvaluationUnavailableException
+    handler: PolicyEvaluationUnavailableExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:policy-evaluation-unavailable"
+    feeding_metric: policy_evaluate_breaker_open_total
+    r4a_alert: RuntimePolicyBreakerOpenRate
+    span_family: runtime.command.dispatch
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      Fault surfaces inside PolicyMiddleware; the exception propagates
+      to the dispatch span, which records Error + outcome=exception.
+      The admin policy breaker metric increments on every breaker-open
+      short-circuit; the R4.A alert fires at >0/s sustained. Log lines
+      emitted inside the middleware inherit trace_id from the parent
+      activity.
+
+  - id: outbox-saturated-loop
+    failure_mode: outbox-saturated
+    exception: OutboxSaturatedException
+    handler: OutboxSaturatedExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:outbox-saturated"
+    feeding_metric: outbox_depth
+    r4a_alert: OutboxDepthHigh
+    span_family: event.fabric.process
+    span_expected_status: Error
+    loop_proof_status: live_proven
+    proof_test: tests/integration/chaos/OutboxSaturatedChaosLoopTest.cs
+    rationale: |
+      Fault surfaces inside the outbox admission check during
+      EventFabric.ProcessAsync (Phase 2 event.fabric.process span).
+      The outbox_depth gauge sampled by OutboxDepthSampler exceeds
+      the admission high-water-mark; the OutboxDepthHigh alert fires
+      at >10K rows sustained. R5.C.2 Phase 2 proves the
+      exception → handler → 503 + ProblemDetails + Activity Error
+      chain end-to-end in-memory; live-metric / live-alert
+      observation deferred to Phase 3.
+
+  - id: chain-anchor-wait-timeout-loop
+    failure_mode: chain-anchor-wait-timeout
+    exception: ChainAnchorWaitTimeoutException
+    handler: ChainAnchorWaitTimeoutExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:chain-anchor-wait-timeout"
+    feeding_metric: chain_anchor_wait_ms_bucket
+    r4a_alert: ChainAnchorWaitP95High
+    span_family: event.fabric.process
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      Fault fires when the single-permit commit-serializer wait
+      exceeds the configured timeout. Chain anchor hold/wait meter
+      drives the p95 alert. The fabric span records Error with
+      the exception type name.
+
+  - id: chain-anchor-unavailable-loop
+    failure_mode: chain-anchor-unavailable
+    exception: ChainAnchorUnavailableException
+    handler: ChainAnchorUnavailableExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:chain-anchor-unavailable"
+    feeding_metric: null
+    r4a_alert: null
+    span_family: event.fabric.process
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      No dedicated R4.A alert — the failure surfaces via the generic
+      HttpFiveHundredRateHigh catch-all plus the degraded-reason
+      path (chain_anchor_breaker_open on /ready). The span link
+      remains executable proof; the metric+alert link is "operational-only"
+      per R5.B's catalog (matches the chain-anchor-unavailable
+      failure-mode entry, which has empty r4a_alerts).
+
+  - id: workflow-saturated-loop
+    failure_mode: workflow-saturated
+    exception: WorkflowSaturatedException
+    handler: WorkflowSaturatedExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:workflow-saturated"
+    feeding_metric: workflow_rejected_total
+    r4a_alert: WorkflowAdmissionRejectionSustained
+    span_family: runtime.command.dispatch
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      Admission gate refusal fires on the dispatch span BEFORE the
+      engine is invoked. workflow_rejected_total increments on the
+      gate metric. Alert fires at >1/s sustained.
+
+  - id: workflow-timeout-loop
+    failure_mode: workflow-timeout
+    exception: WorkflowTimeoutException
+    handler: WorkflowTimeoutExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:workflow-timeout"
+    feeding_metric: workflow_execution_duration_count
+    r4a_alert: WorkflowTimeoutRateHigh
+    span_family: runtime.command.dispatch
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      Timeout surfaces from the engine up to the dispatch span. The
+      outcome-tagged execution-duration counter increments with
+      outcome=timeout_step | timeout_execution; the alert fires at
+      >0.1/s sustained. Per-step workflow span coverage is deferred
+      to R5.A Phase 4 (R-TRACE-WORKFLOW-ENGINE-SPAN-DEFERRED-01); the
+      dispatch-span link is the stable observable contract today.
+
+  - id: postgres-pool-exhaustion-loop
+    failure_mode: postgres-pool-exhaustion
+    exception: null
+    handler: null
+    http_status: null
+    type_uri: null
+    feeding_metric: postgres_pool_acquisition_failures_total
+    r4a_alert: PostgresPoolAcquisitionFailuresHigh
+    span_family: event.fabric.process
+    span_expected_status: Error
+    loop_proof_status: cataloged
+    rationale: |
+      Pool exhaustion surfaces without a dedicated exception type per
+      the R5.B failure-mode catalog — the native Npgsql exception
+      propagates to the fabric span (Error status) while the
+      RuntimeStateAggregator flips /ready to 503 via the
+      postgres_high_wait degraded reason. Metric + alert link is
+      the primary operator signal; span link records the individual
+      failed request.
+
+  - id: concurrency-conflict-loop
+    failure_mode: concurrency-conflict
+    exception: ConcurrencyConflictException
+    handler: ConcurrencyConflictExceptionHandler
+    http_status: 409
+    type_uri: "urn:whyce:error:concurrency-conflict"
+    feeding_metric: event_store_append_advisory_lock_wait_ms_bucket
+    r4a_alert: EventStoreAdvisoryWaitP95High
+    span_family: event.fabric.process
+    span_expected_status: Error
+    loop_proof_status: live_proven
+    proof_test: tests/integration/chaos/ConcurrencyConflictChaosLoopTest.cs
+    rationale: |
+      Conflict-rate itself is a domain-behavior signal, not a runtime
+      posture signal per R5.B. The proxy alert is the advisory-wait
+      p95 on the event store append — sustained contention precedes
+      conflicts. R5.C.2 Phase 2 proves the exception → 409 + type URI
+      + Activity Error chain end-to-end in-memory; live metric +
+      alert firing is deferred to Phase 3.
+
+  - id: domain-invariant-violation-loop
+    failure_mode: domain-invariant-violation
+    exception: DomainException
+    handler: DomainExceptionHandler
+    http_status: 400
+    type_uri: "urn:whyce:error:domain-invariant"
+    feeding_metric: null
+    r4a_alert: null
+    span_family: runtime.command.dispatch
+    span_expected_status: Error
+    loop_proof_status: live_proven
+    proof_test: tests/integration/chaos/DomainInvariantChaosLoopTest.cs
+    rationale: |
+      Domain-invariant violations are caller-correctable (400, not 500)
+      — surfacing them as a runtime-posture metric+alert would be
+      vanity per R4.A. R5.C.2 Phase 2 proves the exception → 400 +
+      type URI + dispatch-span Error chain end-to-end in-memory;
+      metric+alert link is intentionally empty (operational-only
+      per R5.B).

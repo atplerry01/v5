@@ -1,5 +1,6 @@
 using Whycespace.Platform.Host.Composition.Constitutional.Policy;
 using Whycespace.Platform.Host.Composition.Economic;
+using Whycespace.Platform.Host.Composition.Integration.OutboundEffect;
 using Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban;
 using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo;
 using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
@@ -21,6 +22,7 @@ public static class BootstrapModuleCatalog
         new TodoCompositionRoot(),
         new KanbanCompositionRoot(),
         new EconomicCompositionRoot(),
-        new WorkflowExecutionBootstrap()
+        new WorkflowExecutionBootstrap(),
+        new OutboundEffectsBootstrap()
     ];
 }

@@ -1,0 +1,75 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "title": "Runtime — Kafka Consumer Fabric",
+  "tags": ["whycespace", "kafka", "consumer", "r4a"],
+  "timezone": "utc",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Kafka consumer fabric — lag, rebalance, partition skew, throughput, projection consumer health. Source meters: Whycespace.Kafka.Consumer, Whycespace.Projection.Consumer. Tag shape {topic, worker, partition} is the canonical low-cardinality set; partition-level dimensions stay bounded by actual partition count.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Consumer lag — p50 / p95 / p99 (messages)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, topic) (rate(consumer_lag_messages_bucket[5m])))", "legendFormat": "p50 {{topic}}" },
+        { "expr": "histogram_quantile(0.95, sum by (le, topic) (rate(consumer_lag_messages_bucket[5m])))", "legendFormat": "p95 {{topic}}" },
+        { "expr": "histogram_quantile(0.99, sum by (le, topic) (rate(consumer_lag_messages_bucket[5m])))", "legendFormat": "p99 {{topic}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Consumer lag unknown (post-rebalance pre-fetch)",
+      "description": "Sustained non-zero values mean we couldn't compute lag — distinct from 'healthy zero lag'. Typical cause: post-rebalance before first metadata fetch completes.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (topic, worker) (rate(consumer_lag_unknown_total[5m]))", "legendFormat": "{{topic}} / {{worker}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Rebalance events (assigned / revoked / lost)",
+      "description": "'lost' > 0 is a strong signal — the group coordinator considered the worker dead. Correlate with runtime restarts, GC pauses, or network partitions.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (topic) (rate(consumer_rebalance_assigned_total[5m]))", "legendFormat": "assigned {{topic}}" },
+        { "expr": "sum by (topic) (rate(consumer_rebalance_revoked_total[5m]))", "legendFormat": "revoked {{topic}}" },
+        { "expr": "sum by (topic) (rate(consumer_rebalance_lost_total[5m]))", "legendFormat": "LOST {{topic}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Per-partition throughput (messages processed)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (topic, partition) (rate(consumer_messages_processed_total[1m]))", "legendFormat": "{{topic}}/{{partition}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Projection consumer — consumed vs handler-invoked vs DLQ-routed",
+      "description": "Divergence between 'consumed' and 'handler_invoked' indicates filtering at the consumer edge; divergence between 'handler_invoked' and 'consumed - dlq_routed' indicates handler exceptions escaping into the DLQ path.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(consumer_consumed_total[1m]))", "legendFormat": "consumed" },
+        { "expr": "sum(rate(consumer_handler_invoked_total[1m]))", "legendFormat": "handler_invoked" },
+        { "expr": "sum(rate(consumer_dlq_routed_total[1m]))", "legendFormat": "dlq_routed" },
+        { "expr": "histogram_quantile(0.95, sum by (le, topic) (rate(projection_lag_seconds_bucket[5m])))", "legendFormat": "projection lag p95 {{topic}}" }
+      ]
+    }
+  ]
+}

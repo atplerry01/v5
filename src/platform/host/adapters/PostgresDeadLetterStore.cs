@@ -156,6 +156,42 @@ public sealed class PostgresDeadLetterStore : IDeadLetterStore
         return results;
     }
 
+    public async Task<IReadOnlyList<DeadLetterEntry>> ListAllAsync(
+        DateTimeOffset? since = null,
+        int limit = 100,
+        bool includeReprocessed = false,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveLimit = Math.Min(Math.Max(1, limit), 1000);
+
+        await using var conn = await _dataSource.OpenAsync(cancellationToken);
+
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT event_id, source_topic, event_type, correlation_id, causation_id,
+                   enqueued_at, failure_category, last_error, attempt_count,
+                   payload, schema_version, reprocessed_at, reprocessed_by_identity
+            FROM dead_letter_entries
+            WHERE (@include_reprocessed OR reprocessed_at IS NULL)
+              AND (@since IS NULL OR enqueued_at >= @since)
+            ORDER BY enqueued_at DESC
+            LIMIT @limit
+            """,
+            conn);
+        cmd.Parameters.AddWithValue("include_reprocessed", includeReprocessed);
+        cmd.Parameters.AddWithValue("since", (object?)since ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("limit", effectiveLimit);
+
+        var results = new List<DeadLetterEntry>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(ReadEntry(reader));
+        }
+
+        return results;
+    }
+
     public async Task MarkReprocessedAsync(
         Guid eventId,
         string operatorIdentityId,

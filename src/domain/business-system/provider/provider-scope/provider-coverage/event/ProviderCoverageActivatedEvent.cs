@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Provider.ProviderScope.ProviderCoverage;
+
+public sealed record ProviderCoverageActivatedEvent(ProviderCoverageId ProviderCoverageId);

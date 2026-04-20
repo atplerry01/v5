@@ -6,7 +6,7 @@ Groups descriptive metadata attached to a document. Descriptor aggregates hold t
 
 ## Why this group exists
 
-Metadata is a distinct semantic class from content artifacts and lifecycle aggregates: it describes the artifact but is neither the artifact nor a lifecycle transition over it. Isolating it into its own domain-group keeps that separation clean and leaves room for additional descriptor-class domains (e.g. tagging, classification-tree attachment) without polluting `content-artifact/` or `lifecycle/`.
+Metadata is a distinct semantic class from core objects and lifecycle aggregates: it describes the object but is neither the object nor a lifecycle transition over it. Isolating it into its own domain-group keeps that separation clean and leaves room for additional descriptor-class domains (e.g. tagging, classification-tree attachment) without polluting `core-object/` or `lifecycle/`.
 
 ## Leaf domains
 

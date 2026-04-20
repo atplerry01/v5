@@ -1,0 +1,83 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "title": "Runtime — Outbound Effects",
+  "tags": ["whycespace", "outbound-effect", "r4a"],
+  "timezone": "utc",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Outbound-effect lifecycle + reconciliation + compensation. Canonical lifecycle tags surface on the existing low-cardinality {provider, effect_type} pair. Deep-dive by provider via the variable picker. Source meter: Whycespace.OutboundEffects.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Scheduled rate (by provider × effect_type)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (provider, effect_type) (rate(outbound_effect_scheduled_total[1m]))", "legendFormat": "{{provider}} / {{effect_type}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Schedule dedup-hit rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (provider, effect_type) (rate(outbound_effect_schedule_dedup_hit_total[1m]))", "legendFormat": "{{provider}} / {{effect_type}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Dispatch / ack / finality duration p95 (ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(outbound_effect_dispatch_duration_bucket[5m])))", "legendFormat": "dispatch p95" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(outbound_effect_ack_duration_bucket[5m])))", "legendFormat": "ack p95" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(outbound_effect_finality_duration_bucket[5m])))", "legendFormat": "finality p95" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Retry attempts and exhaustion",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (provider) (rate(outbound_effect_retry_attempts_total[5m]))", "legendFormat": "retry {{provider}}" },
+        { "expr": "sum by (provider) (rate(outbound_effect_retry_exhausted_total[5m]))", "legendFormat": "exhausted {{provider}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Reconciliation-required rate (by provider × effect_type)",
+      "description": "Non-zero values mean the reconciliation sweeper has marked an effect pending operator reconcile. Operators should query /api/admin/outbound-effects/reconciliation-required for the current backlog.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (provider, effect_type) (rate(outbound_effect_reconciliation_required_total[5m]))", "legendFormat": "{{provider}} / {{effect_type}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Cancelled / compensation-emitted / compensation-unhandled",
+      "description": "Compensation-unhandled > 0 means no IOutboundEffectCompensationHandler is registered for the emitted effect type. Operator action: register the handler or accept the loud WARN log + replay path.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(outbound_effect_cancelled_total[5m]))", "legendFormat": "cancelled" },
+        { "expr": "sum(rate(outbound_effect_compensation_emitted_total[5m]))", "legendFormat": "compensation emitted" },
+        { "expr": "sum(rate(outbound_effect_compensation_unhandled_total[5m]))", "legendFormat": "compensation UNHANDLED" },
+        { "expr": "sum(rate(outbound_effect_compensation_handler_failed_total[5m]))", "legendFormat": "handler failed" }
+      ]
+    }
+  ]
+}

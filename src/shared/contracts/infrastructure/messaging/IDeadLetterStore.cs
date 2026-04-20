@@ -57,6 +57,20 @@ public interface IDeadLetterStore
         string operatorIdentityId,
         DateTimeOffset reprocessedAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// R4.B — enumerate entries across ALL source topics. Used by the admin
+    /// DLQ inspection surface when the operator wants to see every poison
+    /// message, not just one topic. <paramref name="limit"/> is capped at
+    /// 1000 by implementations. When <paramref name="includeReprocessed"/>
+    /// is <c>false</c> (default) reprocessed rows are filtered out, matching
+    /// <see cref="ListAsync(string, DateTimeOffset?, int, CancellationToken)"/>.
+    /// </summary>
+    Task<IReadOnlyList<DeadLetterEntry>> ListAllAsync(
+        DateTimeOffset? since = null,
+        int limit = 100,
+        bool includeReprocessed = false,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

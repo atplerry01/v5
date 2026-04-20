@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceConstraint;
+
+public sealed record ServiceConstraintArchivedEvent(ServiceConstraintId ServiceConstraintId);

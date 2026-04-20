@@ -730,8 +730,10 @@ FAIL IF any `ICompositionModule` implementation does not define a unique, non-ne
 #### G-COMPLOAD-03 — Locked Execution Sequence
 
 FAIL IF the registry order deviates from:
-`Core(0) → Runtime(1) → Infrastructure(2) → Projections(3) → Observability(4)`.
+`Core(0) → Runtime(1) → Infrastructure(2) → Projections(3) → Observability(4) → Admin(6)`.
 Adding a new module requires extending this sequence and updating this guard.
+
+The Admin tier (R4.B / R-ADMIN-COMPOSITION-ORDER-01) is pinned AFTER Observability because the admin/operator control surface depends on the full runtime + infrastructure + projection + observability stack already being registered. The Order gap (5 reserved) leaves room for a future mid-tier slot without renumbering the admin entry.
 
 #### G-COMPLOAD-04 — Loader-Only Composition
 
@@ -920,3 +922,101 @@ S2
 References:
 - R-PLAT-01 (API layer purity — Swagger/OpenAPI config permitted)
 - Source: `claude/new-rules/20260418-214500-audits.md`
+
+---
+
+## Section: R4.A Observability Packaging (2026-04-20)
+
+R4.A packages the existing runtime observability surface into a canonical operator asset set: six Grafana dashboards + five Prometheus alert-rule groups + provisioning wiring. The rules below lock asset placement, coverage expectations, low-cardinality discipline, and canonical-vocabulary alignment.
+
+### R-OBS-ASSET-PLACEMENT-01 — Canonical Observability Asset Paths
+
+Definition:
+- Grafana dashboards MUST live under `infrastructure/observability/grafana/dashboards/{name}.json`.
+- Prometheus alert-rule groups MUST live under `infrastructure/observability/prometheus/rules/{family}.yml`.
+- Grafana dashboard provisioning YAML MUST live under `infrastructure/observability/grafana/provisioning/dashboards/`.
+- Prometheus `prometheus.yml` MUST declare `rule_files: ["rules/*.yml"]` so every rule file under the rules directory is auto-loaded.
+- The legacy `infrastructure/observability/phase3/**` tree is HISTORICAL BASELINE and is not re-discovered by the R4.A provisioning glob.
+
+Severity:
+S1
+
+References:
+- `infrastructure/observability/grafana/dashboards/`
+- `infrastructure/observability/prometheus/rules/`
+- `infrastructure/observability/prometheus/prometheus.yml`
+- `infrastructure/observability/grafana/provisioning/dashboards/dashboards.yml`
+- `tests/unit/observability/R4AObservabilityPackageTests.cs` — `Prometheus_config_declares_rule_files_glob` + `Grafana_dashboards_provisioning_file_exists`
+
+### R-OBS-COVERAGE-01 — Canonical Dashboard Family Coverage
+
+Definition:
+The following six dashboards MUST be present and MUST each carry a non-empty top-level `description` (operator purpose statement) + at least one panel:
+
+1. `runtime-control-plane.json` — command throughput / latency / failure / HTTP / intake / enforcement / policy / operator actions.
+2. `workflow-runtime.json` — workflow admission + execution outcomes + step duration + retry/terminal failures.
+3. `outbound-effect.json` — scheduled/dispatched/ack/finality + retry + reconciliation-required + compensation.
+4. `dlq-retry.json` — DLQ depth + arrival rate + consumer DLQ-publish failures + operator re-drive outcomes.
+5. `kafka-consumer-fabric.json` — consumer lag + rebalance + per-partition throughput + projection lag.
+6. `persistence-outbox.json` — Postgres pool + outbox depth/age + event-store append + chain-anchor timing.
+
+The corresponding five alert-rule files MUST be present:
+
+1. `runtime-posture.yml`
+2. `workflow.yml`
+3. `outbound-effect.yml`
+4. `dlq-retry.yml`
+5. `persistence.yml`
+
+Severity:
+S1
+
+References:
+- `tests/unit/observability/R4AObservabilityPackageTests.cs` — `Every_required_dashboard_file_exists_and_is_valid_json` + `Every_required_alert_rule_file_exists_and_parses`
+
+### R-OBS-LOW-CARDINALITY-01 — No High-Cardinality Labels In Dashboards Or Alerts
+
+Definition:
+FAIL IF any dashboard JSON or alert-rule YAML references any of these forbidden high-cardinality tokens:
+- `correlation_id` / `correlation.id`
+- `actor_id` / `actor.id`
+- `request_id` / `request.id`
+- `command_id` / `command.id`
+
+These dimensions are per-request unique identifiers — useful for log joins, destructive for time-series aggregation. Use existing low-cardinality dimensions only (`classification`, `context`, `domain`, `workflow_name`, `step_name`, `provider`, `effect_type`, `topic`, `worker`, `partition`, `pool`, `reason`, `severity`, `category`, `outcome`, `action_type`, `action`).
+
+Severity:
+S1
+
+References:
+- `tests/unit/observability/R4AObservabilityPackageTests.cs` — `No_dashboard_or_alert_references_high_cardinality_labels`
+
+### R-OBS-ALERT-ACTIONABLE-01 — Every Alert Carries Canonical Metadata
+
+Definition:
+Every `- alert: …` block under `infrastructure/observability/prometheus/rules/*.yml` MUST carry:
+- `labels.severity` — one of `info`, `warning`, `critical`.
+- `labels.family` — the R4.A alert-family name, matching the file's group name.
+- `annotations.summary` — one-line operator description.
+- `annotations.description` — multi-line rationale describing what failed, why it matters, and what to inspect next.
+
+Alerts without these fields are silently dropped by the operator; the rule preserves the "every alert must be actionable" constraint from the R4.A execution prompt.
+
+Severity:
+S1
+
+References:
+- `tests/unit/observability/R4AObservabilityPackageTests.cs` — `Every_alert_has_summary_and_description_annotations`
+
+### R-OBS-OPERATOR-ACTION-METRIC-01 — Operator Action Counter Is Canonical
+
+Definition:
+`OperatorActionAuditRecorder.RecordAsync` MUST emit `whyce.runtime.operator.action.total` (counter, tags: `action_type`, `outcome`) on every successful fabric emission. The meter name MUST be `Whycespace.Runtime.ControlPlane` (shared with the command-dispatch pipeline — operator actions are a control-plane concern; fragmenting meters is drift). This is the sole R4.A packaging-discovered gap metric — every other dashboard panel builds on pre-existing instruments.
+
+Severity:
+S2
+
+References:
+- `src/runtime/control-plane/admin/OperatorActionAuditRecorder.cs`
+- `infrastructure/observability/grafana/dashboards/runtime-control-plane.json` — panel "Operator actions (R4.B)"
+- `infrastructure/observability/grafana/dashboards/dlq-retry.json` — panel "Operator re-drive activity"

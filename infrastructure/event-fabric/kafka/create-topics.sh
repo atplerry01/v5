@@ -291,6 +291,11 @@ TOPICS=(
   "whyce.economic.risk.exposure.events"
   "whyce.economic.risk.exposure.retry"
   "whyce.economic.risk.exposure.deadletter"
+
+  # integration > outbound-effect (R3.B.1 — external side-effect lifecycle events)
+  # Events-only tier: scheduling is via IOutboundEffectDispatcher (not Kafka commands);
+  # retry/DLQ semantics are internal to the aggregate lifecycle.
+  "whyce.integration.outbound-effect.events"
 )
 
 for TOPIC in "${TOPICS[@]}"; do

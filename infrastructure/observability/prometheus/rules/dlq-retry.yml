@@ -1,0 +1,66 @@
+groups:
+  # R4.A / R-OBS-ALERT-DLQ-RETRY-01 — DLQ + retry-tier alerts.
+  # Depth-based where available (outbox_deadletter_depth gauge from
+  # OutboxDepthSampler), arrival-rate-based elsewhere. Operator inspection
+  # path: GET /api/admin/dlq, re-drive: POST /api/admin/dlq/{id}/redrive.
+  - name: dlq-retry
+    interval: 30s
+    rules:
+      - alert: DlqDepthSustained
+        expr: outbox_deadletter_depth > 100
+        for: 10m
+        labels:
+          severity: warning
+          family: dlq-retry
+        annotations:
+          summary: DLQ depth sustained above 100 rows (10m).
+          description: |
+            outbox_deadletter_depth from OutboxDepthSampler. Poison messages
+            are accumulating in the persisted DLQ. Operator triage:
+            GET /api/admin/dlq to inspect; re-drive via
+            POST /api/admin/dlq/{eventId}/redrive (eligibility gate
+            enforced per R-ADMIN-REDRIVE-ELIGIBILITY-01).
+
+      - alert: DlqArrivalRateHigh
+        expr: sum(rate(outbox_deadlettered_total[5m])) + sum(rate(consumer_dlq_routed_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          family: dlq-retry
+        annotations:
+          summary: Combined DLQ arrival rate > 0.2/s (5m).
+          description: |
+            Outbox deadletter + projection-consumer DLQ routing is
+            elevated. Inspect consumer_dlq_publish_failed_total{reason}
+            on the DLQ dashboard for the dominant failure category.
+
+      - alert: DlqPublishFailing
+        expr: sum(rate(consumer_dlq_publish_failed_total[5m])) > 0
+        for: 3m
+        labels:
+          severity: critical
+          family: dlq-retry
+        annotations:
+          summary: Consumer DLQ publish is failing — poison messages may be silently retried.
+          description: |
+            consumer_dlq_publish_failed_total is incrementing — messages
+            that should have been diverted to the .deadletter tier are
+            instead being retried in the main consumer loop. This is a
+            correctness-adjacent signal; treat as critical. Inspect the
+            kafka-producer breaker and the KafkaInfrastructureModule
+            producer health.
+
+      - alert: OperatorRedriveFailureSpike
+        expr: sum(rate(whyce_runtime_operator_action_total_total{action_type="dlq.redrive",outcome="failed"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          family: dlq-retry
+        annotations:
+          summary: Operator DLQ re-drive is failing (>0.05/s for 5m).
+          description: |
+            DLQ re-drive attempts are surfacing PublishFailed outcomes —
+            the publisher cannot reach the source topic. DLQ entries
+            remain eligible for retry (not marked reprocessed) per
+            R-ADMIN-REDRIVE-ELIGIBILITY-01. Investigate the Kafka
+            producer health before operators attempt re-drive again.

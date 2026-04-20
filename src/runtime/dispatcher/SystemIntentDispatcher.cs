@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Whycespace.Runtime.Observability;
 using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -119,10 +121,47 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             IsSystem = isSystem
         };
 
+        // R5.A / R-TRACE-DISPATCH-SPAN-01 — wrap the control-plane execution
+        // in a canonical runtime.command.dispatch span. The span carries the
+        // full routing-coordinate set plus actor/correlation ids so operators
+        // can filter in Jaeger on any canonical dimension. Span name is
+        // FIXED (low-cardinality); command type lives on an attribute.
+        using var activity = WhyceActivitySources.ControlPlane.StartActivity(
+            WhyceActivitySources.Spans.CommandDispatch,
+            ActivityKind.Internal);
+        activity?.SetTag(WhyceActivitySources.Attributes.CommandType, commandType.Name);
+        activity?.SetTag(WhyceActivitySources.Attributes.Classification, route.Classification);
+        activity?.SetTag(WhyceActivitySources.Attributes.Context, route.Context);
+        activity?.SetTag(WhyceActivitySources.Attributes.Domain, route.Domain);
+        activity?.SetTag(WhyceActivitySources.Attributes.AggregateId, aggregateId);
+        activity?.SetTag(WhyceActivitySources.Attributes.ActorId, actorId);
+        activity?.SetTag(WhyceActivitySources.Attributes.TenantId, tenantId);
+        activity?.SetTag(WhyceActivitySources.Attributes.CorrelationId, correlationId);
+
         // phase1.5-S5.2.3 / TC-1 (DISPATCHER-CT-CONTRACT-01): forward
         // the cancellation token into the control plane so the locked
         // middleware pipeline can honor request/shutdown cancellation.
-        var result = await _controlPlane.ExecuteAsync(command, context, cancellationToken);
+        CommandResult result;
+        try
+        {
+            result = await _controlPlane.ExecuteAsync(command, context, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // R5.A — canonical failure recording on the span. The exception
+            // itself re-propagates untouched (layer discipline: the
+            // dispatcher NEVER swallows) so the HTTP edge / canonical
+            // exception handlers still see the typed failure.
+            activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+            activity?.SetTag(WhyceActivitySources.Attributes.Outcome, "exception");
+            activity?.SetTag(WhyceActivitySources.Attributes.FailureReason, ex.GetType().Name);
+            throw;
+        }
+
+        activity?.SetStatus(result.IsSuccess ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+        activity?.SetTag(WhyceActivitySources.Attributes.Outcome, result.IsSuccess ? "success" : "failure");
+        if (!result.IsSuccess && !string.IsNullOrEmpty(result.Error))
+            activity?.SetTag(WhyceActivitySources.Attributes.FailureReason, result.Error);
 
         // phase1-gate-S7: stamp the correlation id used by EventStore /
         // WhyceChain / Outbox onto the response so the API caller can trace

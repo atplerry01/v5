@@ -1,0 +1,83 @@
+groups:
+  # R4.A / R-OBS-ALERT-POSTURE-01 — runtime posture alerts.
+  # Tied to the canonical degraded-mode reasons and the readiness state enum
+  # (Healthy / Degraded / NotReady / Halt). Thresholds reflect the runtime's
+  # existing posture semantics — no new state vocabulary introduced.
+  - name: runtime-posture
+    interval: 30s
+    rules:
+      - alert: RuntimeNotReady
+        expr: up{job="whycespace-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          family: runtime-posture
+        annotations:
+          summary: Runtime /metrics scrape is failing (possible NotReady/Halt).
+          description: |
+            The Prometheus scrape for the whycespace-api target has been
+            failing for 2 minutes. Inspect /ready and /Health directly:
+            a 503 from either indicates NotReady or Halt per the
+            RuntimeStateAggregator state enum. Correlate with recent
+            deploys or dependency outages.
+
+      - alert: RuntimePolicyEvaluationFailuresSpike
+        expr: sum(rate(policy_evaluate_failure_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          family: runtime-posture
+        annotations:
+          summary: Sustained OPA policy-evaluation failures (>0.2/s for 5m).
+          description: |
+            OpaPolicyEvaluator is reporting non-trivial failure rate.
+            Typical causes: OPA bundle load failure, OPA container down,
+            or network partition. If the policy breaker opens the
+            RuntimeDegradedMode reason 'opa_breaker_open' will fire and
+            /ready will return 207. Inspect the opa-policy-evaluator
+            breaker and the OpaWarmupService logs.
+
+      - alert: RuntimePolicyBreakerOpenRate
+        expr: sum(rate(policy_evaluate_breaker_open_total[5m])) > 0
+        for: 3m
+        labels:
+          severity: critical
+          family: runtime-posture
+        annotations:
+          summary: OPA breaker is refusing policy evaluations.
+          description: |
+            policy_evaluate_breaker_open_total is incrementing — the
+            policy breaker is Open and denying evaluation requests.
+            All affected commands will surface a 503
+            (PolicyEvaluationUnavailableExceptionHandler). Restore OPA
+            before retrying; the breaker half-opens automatically on
+            its configured window.
+
+      - alert: IntakeSustainedRejectionRate
+        expr: sum(rate(intake_rejected_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          family: runtime-posture
+        annotations:
+          summary: Intake admission is rejecting requests at >5/s for 5m.
+          description: |
+            The partitioned rate limiter is sustained in overflow.
+            Split by partition label ("tenant" vs "ip") and path label to
+            identify the offending caller. Check Intake:GlobalConcurrency
+            + Intake:PerTenantConcurrency config or scale horizontally.
+
+      - alert: HttpFiveHundredRateHigh
+        expr: sum(rate(request_count_total{status_code=~"5.."}[5m])) / clamp_min(sum(rate(request_count_total[5m])), 1) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          family: runtime-posture
+        annotations:
+          summary: HTTP 5xx ratio above 1% (5m).
+          description: |
+            Correlate with the 'Runtime — Control Plane' dashboard
+            'Command failure rate' panel and the exception handler family
+            (ConcurrencyConflict / OutboxSaturated / ChainAnchorWaitTimeout /
+            WorkflowSaturated / WorkflowTimeout). Each typed exception maps
+            to a distinct status code + reason per the platform edge chain.

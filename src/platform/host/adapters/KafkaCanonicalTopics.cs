@@ -414,6 +414,17 @@ public static class KafkaCanonicalTopics
         "whyce.economic.risk.exposure.deadletter",
     ];
 
+    // R3.B.1 — integration/outbound-effect lifecycle. Events-only tier:
+    // outbound effects are scheduled via IOutboundEffectDispatcher, not via
+    // Kafka commands, and retry/DLQ semantics are internal to the aggregate
+    // (RetryExhausted IS the DLQ — see parent design §7.2). The
+    // whyce.integration.outbound-effect.events topic carries the eleven
+    // lifecycle events for external consumers and the operator read model.
+    private static readonly string[] IntegrationOutboundEffect =
+    [
+        "whyce.integration.outbound-effect.events",
+    ];
+
     /// <summary>
     /// Flat, de-duplicated, ordered view of every topic name the runtime
     /// expects to exist on the broker. Enumeration order is stable across
@@ -469,6 +480,7 @@ public static class KafkaCanonicalTopics
         EconomicSubjectSubject,
         EconomicComplianceAudit,
         EconomicRiskExposure,
+        IntegrationOutboundEffect,
     }
     .SelectMany(block => block)
     .Distinct(StringComparer.Ordinal)

@@ -1,9 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Subscription.SubscriptionAccount;
-
-public sealed record SubscriptionAccountOpenedEvent(SubscriptionAccountId SubscriptionAccountId, AccountHolder AccountHolder);
-
-public sealed record SubscriptionAccountActivatedEvent(SubscriptionAccountId SubscriptionAccountId);
-
-public sealed record SubscriptionAccountSuspendedEvent(SubscriptionAccountId SubscriptionAccountId);
-
-public sealed record SubscriptionAccountClosedEvent(SubscriptionAccountId SubscriptionAccountId);

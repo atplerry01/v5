@@ -45,6 +45,11 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <!-- Pin the ILogger abstraction to match the runtime's explicit 9.0.0
+         reference. Without this pin, NSubstitute / the test SDK pull in
+         a stale 3.1.0 via transitive graph, which the compiler rejects
+         against the runtime assembly's newer-version reference. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

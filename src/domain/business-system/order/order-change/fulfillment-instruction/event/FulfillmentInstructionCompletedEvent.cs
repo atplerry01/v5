@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.FulfillmentInstruction;
+
+public sealed record FulfillmentInstructionCompletedEvent(FulfillmentInstructionId FulfillmentInstructionId, DateTimeOffset CompletedAt);

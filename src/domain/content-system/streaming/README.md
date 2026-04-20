@@ -2,50 +2,52 @@
 
 ## Purpose
 
-The `streaming` context owns the truth of streaming delivery — the stream itself, its live-stream broadcast lifecycle, its channel, its per-viewer session, its delivery artifacts (manifest, segment, playback), its technical access grants, and its native observability (recording, metrics).
+The `streaming` context owns the truth of streaming delivery — stream identity, manifest, availability descriptors, channels, playback consumption (viewer sessions), live broadcast, archive, and delivery governance (access, entitlement hooks, moderation, observability).
 
-Everything in this context describes **how a stream technically exists and is delivered**, not who is watching, what they paid, or what programme is playing.
+Everything here describes **how a stream technically exists and is delivered**, not who is watching commercially, what they paid, or what programme is playing.
 
 ## Domain-groups
 
-- `stream-core/` — the core streaming entities that constitute a stream's identity and session lifecycle: stream, live-stream, channel, stream-session.
-- `delivery-artifact/` — artifacts produced to actually deliver a stream to a consumer: manifest, segment, playback descriptor.
-- `control/` — technical control surfaces over a stream. Currently houses `access`, with room for further control domains (e.g. ingest control) as the context grows.
-- `persistence-and-observability/` — stream-native durable outputs and measurements: recording, metrics.
+- `stream-core/` — core streaming entities that constitute a stream's identity: `stream`, `channel`, `manifest`, `availability`.
+- `playback-consumption/` — viewer-side session and progress concerns: `session` (and scaffolded `progress`, `replay` in CS.7).
+- `live-streaming/` — live broadcast concerns: `broadcast` (moved from stream-core/live-stream), with scaffolded `ingest-session` and live `archive` (CS.6 and CS.7).
+- `delivery-governance/` — access, entitlement hooks, moderation, observability: `access`, `observability` (moved from metrics), plus scaffolded `entitlement-hook` and `moderation` in CS.7.
+
+**Removed in P2.6.CS.5:** `delivery-artifact/` (manifest moved to stream-core; segment retired; playback moved to stream-core/availability). `control/` (access moved). `persistence-and-observability/` (metrics moved to delivery-governance/observability; recording splits in CS.6).
 
 ## Ownership boundaries
 
 ### Owns
 
 - Stream identity, mode, type, and lifecycle (Created / Active / Paused / Ended / Archived).
-- Live-stream broadcast lifecycle (Created / Scheduled / Live / Paused / Ended / Cancelled) with broadcast window.
+- Broadcast lifecycle (Created / Scheduled / Live / Paused / Ended / Cancelled) with broadcast window. (Currently held by `live-streaming/broadcast/LiveStreamAggregate`; class-level rename deferred to CS.13 per CS.5 discipline capture.)
 - Channel identity, stream binding, enable/disable/archive lifecycle.
-- Stream-session lifecycle per viewer session (Opened / Active / Suspended / Closed / Failed / Expired) with window enforcement.
+- Session lifecycle per viewer session (Opened / Active / Suspended / Closed / Failed / Expired) with window enforcement. (Held by `playback-consumption/session/StreamSessionAggregate` — rename deferred.)
 - Manifest lifecycle (Created / Published / Retired / Archived) with version progression.
-- Segment lifecycle (Created / Published / Retired / Archived) with source reference and sequence number.
-- Playback descriptor lifecycle (Created / Enabled / Disabled / Archived) with playback mode, window, and source reference.
+- Availability descriptor lifecycle (Created / Enabled / Disabled / Archived) with playback mode, window, and source reference. (Held by `stream-core/availability/PlaybackAggregate` — rename deferred per §DF-01 verdict.)
 - Technical access grant lifecycle (Granted / Restricted / Revoked / Expired) with mode, window, and token binding — purely technical, not commercial entitlement.
-- Stream-native recording lifecycle (Started / Completed / Failed / Finalized / Archived).
-- Stream-native metrics capture lifecycle (Capturing / Updated / Finalized / Archived) with bitrate, latency, drop, error, viewer, and playback counts.
+- Stream-native recording lifecycle (Started / Completed / Failed / Finalized / Archived). (Will SPLIT in CS.6 into `live-streaming/archive` + `playback-consumption/replay`.)
+- Observability capture lifecycle with bitrate, latency, drop, error, viewer, and playback counts. (Held by `delivery-governance/observability/MetricsAggregate` — rename deferred.)
 
 ### Does not own
 
-- Commercial entitlement, subscription, payment — `control/access` models **technical** access, not whether a buyer is authorised.
+- Commercial entitlement, subscription, payment — `delivery-governance/access` models **technical** access only; commercial entitlement is upstream.
 - DRM policy decisions — policy engine layer.
 - Programme / show / series metadata — that is an upstream commercial concern.
 - Transcoder or CDN implementation — infrastructure adapters.
 - Ad insertion or monetisation signalling.
 - Viewer identity semantics — identity belongs to identity-system; `streaming` only holds opaque session and token-binding truth.
+- Per-segment delivery truth — `segment` RETIRED in CS.5 per §CD-07 verdict (§claude/new-rules/20260420-091444-audits.md).
 
-## Leaf domains
+## Leaf domains (post CS.5)
 
 - `stream-core/stream` — root stream aggregate.
-- `stream-core/live-stream` — broadcast lifecycle for live streaming.
 - `stream-core/channel` — named channel bound to a stream.
-- `stream-core/stream-session` — per-session lifecycle with window enforcement.
-- `delivery-artifact/manifest` — streaming manifest (e.g. HLS/DASH-shaped) with version progression.
-- `delivery-artifact/segment` — individual delivery segment.
-- `delivery-artifact/playback` — playback descriptor controlling technical playback availability.
-- `control/access` — technical stream-access grant.
-- `persistence-and-observability/recording` — stream-native durable recording.
-- `persistence-and-observability/metrics` — stream-native technical metrics.
+- `stream-core/manifest` — streaming manifest with version progression.
+- `stream-core/availability` — availability descriptor (formerly `delivery-artifact/playback`; maps to target canonical `availability`).
+- `playback-consumption/session` — per-session viewer attachment (formerly `stream-core/stream-session`).
+- `live-streaming/broadcast` — live broadcast lifecycle (formerly `stream-core/live-stream`).
+- `delivery-governance/access` — technical stream-access grant (formerly `control/access`).
+- `delivery-governance/observability` — metrics/observability (formerly `persistence-and-observability/metrics`).
+- `live-streaming/archive` — stream-native recording/archive (moved from legacy `persistence-and-observability/recording` in CS.6; events broadcast-side only per §DF-06).
+- `playback-consumption/replay` — (SCAFFOLD) viewer-initiated replay of an archive; no events migrated from legacy recording.

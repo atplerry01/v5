@@ -1,0 +1,69 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "title": "Runtime — DLQ & Retry",
+  "tags": ["whycespace", "dlq", "retry", "r4a"],
+  "timezone": "utc",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "DLQ + retry-tier observability. Depth vs rate vs re-drive outcome. Re-drive results land on the Runtime control-plane dashboard under 'Operator actions' (action_type=dlq.redrive). Source meters: Whycespace.Outbox, Whycespace.Projection.Consumer, Whycespace.OutboundEffects.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "DLQ depth (rows persisted)",
+      "description": "Outbox-tier DLQ depth snapshot sampled by OutboxDepthSampler. A sustained non-zero depth indicates poison messages awaiting operator triage.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "outbox_deadletter_depth", "legendFormat": "depth" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "DLQ arrival rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(outbox_deadlettered_total[1m]))", "legendFormat": "outbox→DLQ" },
+        { "expr": "sum(rate(outbox_dlq_published_total[1m]))", "legendFormat": "DLQ publish" },
+        { "expr": "sum(rate(consumer_dlq_routed_total[1m]))", "legendFormat": "consumer→DLQ" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Consumer DLQ-publish failures (by reason)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (reason) (rate(consumer_dlq_publish_failed_total[5m]))", "legendFormat": "{{reason}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Retry exhaustion (outbound effects)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (provider, effect_type) (rate(outbound_effect_retry_exhausted_total[5m]))", "legendFormat": "{{provider}} / {{effect_type}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Operator re-drive activity (from control-plane meter)",
+      "description": "Rate of operator-initiated DLQ re-drive calls split by outcome. Non-zero 'refused' indicates eligibility checks are protecting the operator from double re-drive; non-zero 'failed' indicates a transport fault that warrants investigation of the Kafka producer breaker.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "targets": [
+        { "expr": "sum by (outcome) (rate(whyce_runtime_operator_action_total_total{action_type=\"dlq.redrive\"}[5m]))", "legendFormat": "redrive / {{outcome}}" }
+      ]
+    }
+  ]
+}

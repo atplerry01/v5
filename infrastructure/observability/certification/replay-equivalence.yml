@@ -1,0 +1,210 @@
+# R5.C.1 — Canonical Replay-Equivalence Invariant Catalog
+#
+# Source of truth for the determinism claims the runtime rests on. Each
+# entry pairs an invariant (a statement about what replay must preserve)
+# with an executable proof test. Parallel to R5.B's failure-mode catalog
+# in shape and discipline.
+#
+# Status semantics:
+#   certified  — proof_test exists on disk; running it produces binding
+#                evidence the invariant holds under the declared conditions.
+#   unproven   — deferred; rationale carried inline.
+
+version: 1
+
+invariants:
+  # ── Type A replay: command re-execution determinism ──────────────────
+
+  - id: command-reexecution-deterministic-end-to-end
+    claim: |
+      Two independent executions of the same command set against the
+      same frozen IClock + IIdGenerator produce byte-identical outputs:
+      same event count, same aggregate ids, same event types in the
+      same order, same execution hashes, same outbox batches, same
+      chain block decisions, same chain block ids.
+    invariant_family: type-a
+    canonical_primitives:
+      - ExecutionHash
+      - DeterministicIdGenerator
+      - ChainHasher
+      - TestClock
+    proof_test: tests/e2e/replay/DeterministicReplayTest.cs
+    status: certified
+
+  # ── Type B replay: aggregate state reconstruction from event stream ──
+
+  - id: aggregate-stream-replay-byte-equivalent
+    claim: |
+      An aggregate reconstructed by applying its persisted event stream
+      reaches a terminal state byte-equal to the state produced by the
+      original live execution. Covers four canonical streams on
+      OutboundEffectAggregate: ack path, transient+retry, retry
+      exhausted, reconciliation-required.
+    invariant_family: type-b
+    canonical_primitives:
+      - OutboundEffectAggregate
+      - EventDeserializer
+    proof_test: tests/integration/integration-system/outbound-effect/OutboundEffectAggregateReplayEquivalenceTests.cs
+    status: certified
+
+  # ── Lossless round-trip: JSON serialize ↔ deserialize ────────────────
+
+  - id: event-envelope-lossless-roundtrip
+    claim: |
+      Every canonical aggregate event round-trips losslessly through
+      the JSON serializer → EventDeserializer → LoadFromHistory path
+      that the EventStore uses at persistence time. Value-object fields
+      (currency enums, decimal precision, nested records) survive the
+      round trip without corruption. Exercised via AggregateReplayHarness
+      per-aggregate invocation from tests that use the canonical harness.
+    invariant_family: round-trip
+    canonical_primitives:
+      - AggregateReplayHarness
+      - EventDeserializer
+      - EventSchemaRegistry
+    proof_test: tests/integration/setup/AggregateReplayHarness.cs
+    status: certified
+    rationale: |
+      The harness itself is the canonical infrastructure; call sites
+      throughout the integration suite exercise it per aggregate. The
+      test file IS the invariant — it documents the round-trip contract
+      and is referenced by every aggregate test that opts into replay
+      verification.
+
+  # ── Deterministic id generation ──────────────────────────────────────
+
+  - id: deterministic-id-same-seed-same-guid
+    claim: |
+      DeterministicIdGenerator.Generate(seed) produces the SAME Guid
+      for identical seed strings across process restarts, machines,
+      and instances. Distinct seeds produce distinct Guids under a
+      10K-sample collision probe. Frozen clock invariance holds: id
+      generation takes no clock input.
+    invariant_family: primitive
+    canonical_primitives:
+      - DeterministicIdGenerator
+      - TestClock
+    proof_test: tests/integration/economic-system/phase2-validation/Phase2DeterminismValidationTests.cs
+    status: certified
+
+  # ── Workflow replay: resume + approval ───────────────────────────────
+
+  - id: workflow-resume-replay-deterministic
+    claim: |
+      WorkflowExecutionReplayService.ResumeAsync on a suspended/failed
+      workflow produces the SAME sequence of step emissions + outcome
+      as the original forward execution, given identical frozen clock
+      + id generator state. Covers step-index restoration + payload
+      reconstitution.
+    invariant_family: workflow-replay
+    canonical_primitives:
+      - WorkflowExecutionReplayService
+      - T1MWorkflowEngine
+    proof_test: tests/integration/orchestration/workflow/execution/WorkflowReplayResumeTests.cs
+    status: certified
+
+  - id: workflow-approval-replay-deterministic
+    claim: |
+      R3.A.6 human-approval grant/reject replays deterministically:
+      the ApprovalDecisionPayload + human_approval_granted|rejected
+      carrier on the emitted event carry the full decision evidence,
+      and re-running the approval path against a frozen aggregate
+      produces byte-equal emitted events.
+    invariant_family: workflow-replay
+    canonical_primitives:
+      - IWorkflowExecutionReplayService
+      - ApprovalDecisionPayload
+    proof_test: tests/integration/orchestration/workflow/execution/WorkflowApprovalReplayServiceTests.cs
+    status: certified
+
+  # ── CommandContext replay-reset seam ─────────────────────────────────
+
+  - id: command-context-replay-reset-preserves-invariants
+    claim: |
+      CommandContext.ResetForReplay() produces a context object whose
+      write-once fields (IdentityId, Roles, TrustScore, PolicyDecision*)
+      are cleared for re-evaluation, while deterministic coordinates
+      (CorrelationId, CausationId, CommandId, AggregateId, routing
+      triple, IsSystem) are preserved. Production callers are
+      architecture-test-pinned to a specific whitelist (no accidental
+      production use).
+    invariant_family: replay-seam
+    canonical_primitives:
+      - CommandContext
+    proof_test: tests/unit/runtime/CommandContextReplayResetTests.cs
+    status: certified
+
+  # ── Phase 7 cross-subsystem replay determinism ──────────────────────
+
+  - id: phase7-cross-subsystem-replay-determinism
+    claim: |
+      End-to-end replay determinism across the command pipeline + event
+      fabric + projection dispatcher for the Phase 7 aggregates. Covers
+      the invariants cataloged in the Phase 7 gate: idempotency token
+      stability, per-event last_event_id short-circuit, projection
+      handler determinism.
+    invariant_family: projection-replay
+    canonical_primitives:
+      - ProjectionDispatcher
+      - EventSchemaRegistry
+    proof_test: tests/unit/phase7/Phase7ReplayDeterminismTests.cs
+    status: certified
+
+# ── Invariants not yet pinned by executable proof ────────────────────
+
+unproven_invariants:
+  - id: projection-state-byte-equivalence-after-full-rebuild
+    claim: |
+      A ProjectionRebuilder-driven full rebuild (against the same event
+      stream) produces projection read-model state byte-equal to the
+      live-path state. Not yet pinned by a dedicated per-projection
+      byte-equivalence test; covered implicitly by the round-trip +
+      handler determinism guarantees but not asserted end-to-end.
+    invariant_family: projection-rebuild
+    canonical_primitives:
+      - ProjectionRebuilder
+      - EventReplayService
+      - PostgresProjectionStore
+    status: unproven
+    rationale: |
+      Existing coverage: AggregateReplayHarness (round-trip of event
+      payload) + Phase7ReplayDeterminismTests (projection handler
+      determinism) indirectly guarantee this, but no test reads the
+      post-rebuild read-model and asserts field-by-field equivalence
+      to the live-path read-model. R5.C.1 follow-up — one
+      per-representative-domain (e.g. CapitalAccountReadModel) test
+      would close this.
+
+  - id: cross-instance-replay-equivalence
+    claim: |
+      Two separate runtime instances consuming the same event stream
+      from Kafka produce identical projection state. Multi-instance
+      determinism proof.
+    invariant_family: multi-instance
+    canonical_primitives:
+      - GenericKafkaProjectionConsumerWorker
+      - ProjectionRebuilder
+    status: unproven
+    rationale: |
+      Multi-instance tests exist (tests/integration/multi-instance/)
+      but no test specifically asserts projection-state
+      byte-equivalence across two instances consuming the same
+      offset range. R5.C.2 / R5.C.3 follow-up — requires live
+      multi-instance harness.
+
+  - id: chain-anchor-ledger-replay-equivalence
+    claim: |
+      WhyceChain ledger reconstruction from the event stream produces
+      byte-identical block hashes + sequence. The DeterministicReplayTest
+      asserts block-id equivalence for the in-flight path but does not
+      replay the entire chain from genesis.
+    invariant_family: chain-replay
+    canonical_primitives:
+      - ChainAnchorService
+      - ChainHasher
+    status: unproven
+    rationale: |
+      ChainHasher is pure (SHA256 composition, no clock / rng inputs),
+      so the invariant is architecturally sound. A dedicated "replay
+      chain from genesis → compare final hash to persisted head"
+      test would make this executable. R5.C.2 follow-up.

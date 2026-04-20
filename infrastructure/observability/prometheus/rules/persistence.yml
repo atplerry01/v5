@@ -1,0 +1,84 @@
+groups:
+  # R4.A / R-OBS-ALERT-PERSISTENCE-01 — persistence-tier alerts.
+  # Postgres pool health + outbox backlog + chain anchor serializer timing.
+  # Aligned with the canonical RuntimeDegradedMode reasons
+  # (postgres_high_wait, outbox_over_high_water_mark, chain_anchor_breaker_open).
+  - name: persistence
+    interval: 30s
+    rules:
+      - alert: PostgresPoolAcquisitionFailuresHigh
+        expr: sum by (pool) (rate(postgres_pool_acquisition_failures_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          family: persistence
+        annotations:
+          summary: Postgres pool {{ $labels.pool }} acquisition failures > 0.2/s (5m).
+          description: |
+            PostgresPoolHealthEvaluator will report high-wait and surface
+            the canonical RuntimeDegradedMode reason 'postgres_high_wait'
+            on /ready. Inspect split by reason label — timeout vs
+            connection vs transport. Common remediation: raise pool size
+            in the config, restart the target database, or route read
+            traffic away if a read-replica is available.
+
+      - alert: OutboxOldestPendingAgeHigh
+        expr: outbox_oldest_pending_age_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+          family: persistence
+        annotations:
+          summary: Outbox oldest pending age > 60s (5m).
+          description: |
+            The relay is falling behind — events are persisting to the
+            outbox but not being published to Kafka within 60s. If
+            sustained, the OutboxSaturatedExceptionHandler will start
+            returning 503 once the high-water-mark kicks in. Investigate
+            the KafkaOutboxPublisher + the kafka-producer breaker.
+
+      - alert: OutboxDepthHigh
+        expr: outbox_depth > 10000
+        for: 10m
+        labels:
+          severity: critical
+          family: persistence
+        annotations:
+          summary: Outbox depth > 10K rows (10m) — admission refusal imminent.
+          description: |
+            The outbox is approaching the admission high-water-mark.
+            Expect OutboxSaturatedExceptionHandler 503 refusals shortly.
+            This alert is paired with OutboxOldestPendingAgeHigh — if
+            both fire together the relay is blocked; if only depth fires
+            the admission pressure is write-side.
+
+      - alert: ChainAnchorWaitP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(chain_anchor_wait_ms_bucket[5m]))) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          family: persistence
+        annotations:
+          summary: Chain anchor serializer p95 wait > 1s (5m).
+          description: |
+            The chain-anchor commit serializer (single permit by default)
+            is queueing — event-fabric ProcessAsync calls are waiting
+            on the anchor lock. The ChainAnchorWaitTimeoutExceptionHandler
+            will translate bounded-wait timeouts to 503. Investigate
+            chain-store transport health + the chain-store circuit
+            breaker.
+
+      - alert: EventStoreAdvisoryWaitP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(event_store_append_advisory_lock_wait_ms_bucket[5m]))) > 500
+        for: 5m
+        labels:
+          severity: warning
+          family: persistence
+        annotations:
+          summary: Event-store advisory-lock wait p95 > 500ms (5m).
+          description: |
+            Appends are contending on the per-aggregate advisory lock
+            longer than expected. Sustained pressure here correlates with
+            ConcurrencyConflictException rate (status code 409 on the
+            HTTP edge). Investigate the aggregates with the most write
+            contention.

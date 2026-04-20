@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Eligibility;
+
+public sealed record EligibilityEvaluatedEligibleEvent(EligibilityId EligibilityId, DateTimeOffset EvaluatedAt);

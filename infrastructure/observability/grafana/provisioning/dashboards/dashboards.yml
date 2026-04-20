@@ -1,0 +1,18 @@
+apiVersion: 1
+
+# R4.A — Grafana dashboard provisioning. Auto-loads every JSON file under
+# the mounted /etc/grafana/provisioning/dashboards directory-tree, which the
+# docker-compose mount binds to ../dashboards/ (the canonical R4.A dashboard
+# root). New R4.A-family dashboards drop into that directory and are
+# discovered on the next provisioning pass — no edit required here.
+providers:
+  - name: whycespace-r4a
+    orgId: 1
+    folder: Whycespace
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: true

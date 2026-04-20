@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Localization.Timezone;
-
-public sealed record TimezoneActivatedEvent(TimezoneId TimezoneId);

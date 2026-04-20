@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.ContactPoint;
+
+public sealed record ContactPointActivatedEvent(ContactPointId ContactPointId);

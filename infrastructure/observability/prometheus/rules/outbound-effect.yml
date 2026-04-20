@@ -1,0 +1,69 @@
+groups:
+  # R4.A / R-OBS-ALERT-OUTBOUND-EFFECT-01 — outbound-effect lifecycle alerts.
+  # Keyed on the canonical {provider, effect_type} low-cardinality pair.
+  # Aligned with R-OUT-EFF-* guard rules — no new state vocabulary.
+  - name: outbound-effect
+    interval: 30s
+    rules:
+      - alert: OutboundEffectReconciliationBacklogGrowing
+        expr: sum(rate(outbound_effect_reconciliation_required_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          family: outbound-effect
+        annotations:
+          summary: Reconciliation-required entries growing at >0.1/s (10m).
+          description: |
+            The reconciliation sweeper is marking a growing number of
+            effects pending operator reconcile. Inspect the current backlog
+            via GET /api/admin/outbound-effects/reconciliation-required
+            and reconcile via POST /api/admin/outbound-effects/{id}/reconcile.
+            Typical root cause: ack/finality deadline expiry against a
+            degraded provider.
+
+      - alert: OutboundEffectCompensationUnhandled
+        expr: increase(outbound_effect_compensation_unhandled_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          family: outbound-effect
+        annotations:
+          summary: Compensation signal fired but no handler is registered.
+          description: |
+            outbound_effect_compensation_unhandled_total has incremented.
+            Per R-OUT-EFF-COMPENSATION-UNHANDLED-01 the event is on the
+            aggregate stream and a late handler registration + replay
+            will eventually deliver it — but until then the compensation
+            has no in-process side effect. Register the
+            IOutboundEffectCompensationHandler for the effect type, or
+            accept the deferred-replay path explicitly.
+
+      - alert: OutboundEffectRetryExhaustionSpike
+        expr: sum by (provider) (rate(outbound_effect_retry_exhausted_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          family: outbound-effect
+        annotations:
+          summary: Outbound-effect retry exhaustion on provider {{ $labels.provider }}.
+          description: |
+            The retry executor has hit its RetryPolicy ceiling for effects
+            routed to provider {{ $labels.provider }}. Exhausted effects
+            transition to RetryExhausted → (possibly) CompensationRequested
+            per the R-OUT-EFF-COMPENSATION-EMIT-01 policy. Inspect
+            provider-side error rates + the provider adapter circuit.
+
+      - alert: OutboundEffectDispatchLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(outbound_effect_dispatch_duration_bucket[5m]))) > 2000
+        for: 10m
+        labels:
+          severity: warning
+          family: outbound-effect
+        annotations:
+          summary: Outbound-effect dispatch p95 > 2s (10m).
+          description: |
+            Dispatch-tier latency is elevated. Confirm provider adapter
+            health, outbound breaker posture, and the canonical
+            per-provider timeout options. If p95 > ack deadline the
+            reconciliation backlog will start to grow — this alert
+            precedes OutboundEffectReconciliationBacklogGrowing.

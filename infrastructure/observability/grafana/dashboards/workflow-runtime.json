@@ -1,0 +1,87 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "title": "Runtime — Workflow",
+  "tags": ["whycespace", "workflow", "r4a"],
+  "timezone": "utc",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Workflow runtime dashboard — execution + step lifecycle. Canonical outcome tags {success, failed, timeout_step, timeout_execution, cancelled, suspended}. Approval backlog is surfaced via rejected-admission rate (no per-workflow approval gauge exists yet; see R4.B awaiting-approval admin endpoint for the authoritative backlog list). Source meter: Whycespace.Workflow.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Workflow admission rate (by workflow_name)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (workflow_name) (rate(workflow_admitted_total[1m]))", "legendFormat": "{{workflow_name}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Workflow admission refusals (rejected)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (workflow_name, partition) (rate(workflow_rejected_total[1m]))", "legendFormat": "{{workflow_name}} / {{partition}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Execution duration p50/p95/p99 (ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, workflow_name) (rate(workflow_execution_duration_bucket[5m])))", "legendFormat": "p50 {{workflow_name}}" },
+        { "expr": "histogram_quantile(0.95, sum by (le, workflow_name) (rate(workflow_execution_duration_bucket[5m])))", "legendFormat": "p95 {{workflow_name}}" },
+        { "expr": "histogram_quantile(0.99, sum by (le, workflow_name) (rate(workflow_execution_duration_bucket[5m])))", "legendFormat": "p99 {{workflow_name}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Execution outcomes (success / failed / timeout / suspended / cancelled)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (outcome) (rate(workflow_execution_duration_count[5m]))", "legendFormat": "{{outcome}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Step duration p95 (ms, by step_name)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le, step_name) (rate(workflow_step_duration_bucket[5m])))", "legendFormat": "{{step_name}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Step retry attempts (by workflow × step)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (workflow_name, step_name) (rate(workflow_step_retry_attempts_total[5m]))", "legendFormat": "{{workflow_name}} / {{step_name}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Step terminal failures (by category)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "targets": [
+        { "expr": "sum by (category, step_name) (rate(workflow_step_terminal_failures_total[5m]))", "legendFormat": "{{step_name}} / {{category}}" }
+      ]
+    }
+  ]
+}

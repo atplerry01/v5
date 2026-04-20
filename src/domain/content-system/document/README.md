@@ -8,9 +8,13 @@ A "document" here is a content object — not a legal instrument, not an approva
 
 ## Domain-groups
 
-- `content-artifact/` — the document object itself and its immediate structural neighbours: the stored file, named groupings (bundle), audit-closure containers (record), and reusable templates.
+- `core-object/` — the document object itself and its immediate structural neighbours: the stored file, named groupings (bundle), audit-closure containers (record), and reusable templates.
 - `descriptor/` — descriptive metadata attached to a document. Typed key/value entries with finalize semantics.
-- `lifecycle/` — cross-cutting lifecycle aggregates that move documents through ingestion, transformation, retention, and version progression.
+- `intake/` — external → system ingress (upload, import).
+- `lifecycle-change/` — internal state transitions (processing — first-class per §CD-02a; version; review; publication).
+- `governance/` — compliance/policy aggregates (retention, classification, moderation).
+- `integrity-provenance/` — (SCAFFOLD pending CS.3) attestations and provenance.
+- `representation/` — (SCAFFOLD pending CS.3) derived renderings (preview, export).
 
 ## Ownership boundaries
 
@@ -36,13 +40,13 @@ A "document" here is a content object — not a legal instrument, not an approva
 
 ## Leaf domains
 
-- `content-artifact/document` — the document aggregate.
-- `content-artifact/file` — stored file bytes truth.
-- `content-artifact/bundle` — named grouping of document members.
-- `content-artifact/record` — lockable/closable document record container.
-- `content-artifact/template` — reusable document template.
+- `core-object/document` — the document aggregate.
+- `core-object/file` — stored file bytes truth.
+- `core-object/bundle` — named grouping of document members.
+- `core-object/record` — lockable/closable document record container.
+- `core-object/template` — reusable document template.
 - `descriptor/metadata` — descriptive metadata entries attached to a document.
-- `lifecycle/upload` — document upload transaction.
-- `lifecycle/processing` — document processing job.
-- `lifecycle/retention` — retention attachment and lifecycle.
-- `lifecycle/version` — document version lineage.
+- `intake/upload` — document upload transaction.
+- `lifecycle-change/processing` — document processing job. First-class per §CD-02a.
+- `lifecycle-change/version` — document version lineage.
+- `governance/retention` — retention attachment and lifecycle.

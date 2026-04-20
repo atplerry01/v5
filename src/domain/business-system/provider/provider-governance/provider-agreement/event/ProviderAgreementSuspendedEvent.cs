@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Provider.ProviderGovernance.ProviderAgreement;
+
+public sealed record ProviderAgreementSuspendedEvent(ProviderAgreementId ProviderAgreementId, DateTimeOffset SuspendedAt);

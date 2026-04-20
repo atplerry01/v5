@@ -8,9 +8,10 @@ It is a technical truth layer. It does not model commercial, customer, legal, or
 
 ## Canonical contexts
 
-- `document` — stored document artifacts, their files, versions, metadata, and document-centric lifecycle (upload, processing, retention).
+- `document` — stored document artifacts, their files, versions, metadata, and document-centric lifecycle (upload, processing, retention). Uses `core-object/` as the primary-objects group.
 - `media` — typed rich-media artifacts (asset, audio, video, image), their backing files, companion artifacts (subtitle, transcript), metadata, and media-centric lifecycle (upload, processing, version).
 - `streaming` — streaming technical truth: stream, channel, session, live-stream, delivery artifacts (manifest, segment, playback), technical access, and native persistence/observability (recording, metrics).
+- `shared` — cross-context content truth: relationship graph, localization variants, evidence linkage. Gated additions only — not a dumping ground.
 
 ## Topology
 
@@ -57,7 +58,7 @@ Example: `content-system/media/content-artifact/asset/` routes as `DomainRoute("
 ```
 src/domain/content-system/
 ├── document/
-│   ├── content-artifact/
+│   ├── core-object/
 │   │   ├── document/
 │   │   ├── file/
 │   │   ├── bundle/
@@ -65,42 +66,49 @@ src/domain/content-system/
 │   │   └── template/
 │   ├── descriptor/
 │   │   └── metadata/
-│   └── lifecycle/
-│       ├── upload/
-│       ├── processing/
-│       ├── retention/
-│       └── version/
+│   ├── intake/
+│   │   └── upload/
+│   ├── lifecycle-change/
+│   │   ├── processing/       (first-class per §CD-02a)
+│   │   └── version/
+│   └── governance/
+│       └── retention/
 ├── media/
-│   ├── content-artifact/
-│   │   ├── asset/
-│   │   ├── audio/
-│   │   ├── video/
-│   │   ├── image/
-│   │   └── media-file/
-│   ├── companion-artifact/
-│   │   ├── subtitle/
-│   │   └── transcript/
+│   ├── core-object/
+│   │   ├── asset/               (absorbed intrinsic VOs from audio/video/image in CS.8)
+│   │   ├── subtitle/            (moved from companion-artifact/ in CS.9)
+│   │   └── transcript/          (moved from companion-artifact/ in CS.9)
 │   ├── descriptor/
 │   │   └── metadata/
-│   └── lifecycle/
-│       ├── upload/
-│       ├── processing/
-│       └── version/
-└── streaming/
-    ├── stream-core/
-    │   ├── stream/
-    │   ├── live-stream/
-    │   ├── channel/
-    │   └── stream-session/
-    ├── delivery-artifact/
-    │   ├── manifest/
-    │   ├── segment/
-    │   └── playback/
-    ├── control/
-    │   └── access/
-    └── persistence-and-observability/
-        ├── recording/
-        └── metrics/
+│   ├── intake/
+│   │   └── ingest/              (renamed from upload in CS.9 per §CD-11)
+│   ├── technical-processing/
+│   │   ├── processing/          (moved from lifecycle/ in CS.9)
+│   │   └── quality/             (SCAFFOLD from CS.8 per §CD-03)
+│   └── lifecycle-change/
+│       └── version/             (moved from lifecycle/ in CS.9)
+├── streaming/
+│   ├── stream-core/
+│   │   ├── stream/
+│   │   ├── channel/
+│   │   ├── manifest/               (moved from delivery-artifact/ in CS.5)
+│   │   └── availability/           (moved from delivery-artifact/playback in CS.5 per §DF-01)
+│   ├── live-streaming/
+│   │   ├── broadcast/              (moved from stream-core/live-stream in CS.5)
+│   │   └── archive/                (moved from persistence-and-observability/recording in CS.6 per §CD-08; class RecordingAggregate retained; CS.13 renames)
+│   ├── playback-consumption/
+│   │   ├── session/                (moved from stream-core/stream-session in CS.5)
+│   │   └── replay/                 (SCAFFOLD from CS.6; no events migrated per §DF-06 — broadcast-side only)
+│   └── delivery-governance/
+│       ├── access/                 (moved from control/ in CS.5)
+│       └── observability/          (moved from persistence-and-observability/metrics in CS.5)
+└── shared/
+    ├── relationship/
+    │   └── relationship/
+    ├── localization/
+    │   └── localization/
+    └── provenance-evidence/
+        └── evidence/
 ```
 
 Each leaf domain carries the canonical 7 artifact subfolders:

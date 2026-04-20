@@ -1,0 +1,231 @@
+# R5.B — Canonical Runtime Failure-Mode Catalog
+#
+# Source of truth for {fault → exception → handler → HTTP status → type URI
+# → degraded-mode reason → R4.A alert family} linkage. Validators under
+# tests/unit/certification/ consume this file to verify the mappings actually
+# hold in the codebase.
+#
+# Every new canonical failure mode MUST land here. Every R4.A alert MUST
+# cross-reference at least one entry (or appear on the operational-only
+# allowlist below).
+#
+# Status semantics:
+#   certified  — proof_test exists, maps the fault to its handler + status.
+#   unproven   — deferred; rationale carried inline; alert surface covers
+#                the metric, but end-to-end handler behavior has no test yet.
+
+version: 1
+
+failure_modes:
+  - id: opa-unavailable
+    fault: OPA policy evaluator transport failure or breaker-open
+    canonical_exception: PolicyEvaluationUnavailableException
+    exception_handler: PolicyEvaluationUnavailableExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:policy-evaluation-unavailable"
+    degraded_reason: opa_breaker_open
+    feeding_metrics:
+      - policy_evaluate_timeout_total
+      - policy_evaluate_breaker_open_total
+      - policy_evaluate_failure_total
+    r4a_alerts:
+      - RuntimePolicyEvaluationFailuresSpike
+      - RuntimePolicyBreakerOpenRate
+    proof_test: tests/integration/failure-recovery/PolicyEngineFailureTest.cs
+    status: certified
+
+  - id: outbox-saturated
+    fault: Outbox depth above high-water-mark admission threshold
+    canonical_exception: OutboxSaturatedException
+    exception_handler: OutboxSaturatedExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:outbox-saturated"
+    degraded_reason: outbox_over_high_water_mark
+    feeding_metrics:
+      - outbox_depth
+      - outbox_oldest_pending_age_seconds
+    r4a_alerts:
+      - OutboxDepthHigh
+      - OutboxOldestPendingAgeHigh
+    proof_test: tests/integration/failure-recovery/OutboxKafkaOutageRecoveryTest.cs
+    status: certified
+
+  - id: chain-anchor-wait-timeout
+    fault: Chain-anchor commit serializer wait exceeds bounded timeout
+    canonical_exception: ChainAnchorWaitTimeoutException
+    exception_handler: ChainAnchorWaitTimeoutExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:chain-anchor-wait-timeout"
+    degraded_reason: chain_anchor_breaker_open
+    feeding_metrics:
+      - chain_anchor_wait_ms_bucket
+    r4a_alerts:
+      - ChainAnchorWaitP95High
+    proof_test: tests/integration/failure-recovery/ChainFailureTest.cs
+    status: certified
+
+  - id: chain-anchor-unavailable
+    fault: Chain-store transport failure or breaker-open
+    canonical_exception: ChainAnchorUnavailableException
+    exception_handler: ChainAnchorUnavailableExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:chain-anchor-unavailable"
+    degraded_reason: chain_anchor_breaker_open
+    feeding_metrics: []
+    r4a_alerts: []
+    proof_test: tests/integration/failure-recovery/ChainFailureTest.cs
+    status: certified
+    rationale: |
+      Degraded-reason + handler covered. No dedicated R4.A alert rule because
+      the surfacing happens via RuntimeNotReady (scrape 503) when the
+      degraded posture exceeds the 'Healthy' threshold; adding a dedicated
+      chain-transport alert is R5.B follow-up if operators request finer
+      signal.
+
+  - id: workflow-saturated
+    fault: WorkflowAdmissionGate at concurrency capacity
+    canonical_exception: WorkflowSaturatedException
+    exception_handler: WorkflowSaturatedExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:workflow-saturated"
+    degraded_reason: null
+    feeding_metrics:
+      - workflow_rejected_total
+    r4a_alerts:
+      - WorkflowAdmissionRejectionSustained
+    proof_test: tests/integration/api/WorkflowSaturatedExceptionHandlerTest.cs
+    status: certified
+
+  - id: workflow-timeout
+    fault: Per-step or per-execution workflow deadline expiry
+    canonical_exception: WorkflowTimeoutException
+    exception_handler: WorkflowTimeoutExceptionHandler
+    http_status: 503
+    type_uri: "urn:whyce:error:workflow-timeout"
+    degraded_reason: null
+    feeding_metrics:
+      - workflow_execution_duration_count
+    r4a_alerts:
+      - WorkflowTimeoutRateHigh
+    proof_test: tests/integration/api/WorkflowTimeoutExceptionHandlerTest.cs
+    status: certified
+
+  - id: postgres-pool-exhaustion
+    fault: Postgres pool acquisition failures / high-wait
+    canonical_exception: null
+    exception_handler: null
+    http_status: null
+    type_uri: null
+    degraded_reason: postgres_high_wait
+    feeding_metrics:
+      - postgres_pool_acquisition_failures_total
+    r4a_alerts:
+      - PostgresPoolAcquisitionFailuresHigh
+    proof_test: tests/integration/failure-recovery/PostgresFailureRecoveryTest.cs
+    status: certified
+    rationale: |
+      Pool exhaustion surfaces through the degraded-reason path
+      (postgres_high_wait) rather than a dedicated exception type — callers
+      see the native Npgsql exception while the RuntimeStateAggregator
+      flips /ready to 503. This is the canonical design, not a gap.
+
+  - id: concurrency-conflict
+    fault: Event-store optimistic concurrency violation
+    canonical_exception: ConcurrencyConflictException
+    exception_handler: ConcurrencyConflictExceptionHandler
+    http_status: 409
+    type_uri: "urn:whyce:error:concurrency-conflict"
+    degraded_reason: null
+    feeding_metrics: []
+    r4a_alerts: []
+    proof_test: tests/integration/api/ConcurrencyConflictExceptionHandlerTest.cs
+    status: certified
+
+  - id: domain-invariant-violation
+    fault: Aggregate refuses a command as domain-invalid
+    canonical_exception: DomainException
+    exception_handler: DomainExceptionHandler
+    http_status: 400
+    type_uri: "urn:whyce:error:domain-invariant"
+    degraded_reason: null
+    feeding_metrics: []
+    r4a_alerts: []
+    proof_test: tests/integration/api/DomainExceptionHandlerTest.cs
+    status: certified
+
+# Alerts that intentionally have no failure-mode linkage. These are
+# infrastructure posture signals (scrape-layer / saturation rate / envelope
+# health) that don't map to a single exception type.
+operational_only_alerts:
+  - alert: RuntimeNotReady
+    rationale: |
+      `up{job="whycespace-api"} == 0` is a scrape-layer signal that fires
+      when Prometheus can't reach the /metrics endpoint at all — no
+      application-level exception is in scope. The signal surfaces NotReady
+      / Halt states holistically without mapping to any single failure mode.
+  - alert: IntakeSustainedRejectionRate
+    rationale: |
+      Admission-layer rate limiter refusal is a load signal, not a fault.
+      Fires when a caller sustainably exceeds their partition quota; the
+      rate limiter is doing its job.
+  - alert: HttpFiveHundredRateHigh
+    rationale: |
+      Aggregate 5xx ratio is a meta-signal that catches the union of every
+      503/500 path. Individual failure modes have their own alerts;
+      this one exists as a catch-all for unclassified server-side errors.
+  - alert: WorkflowStepTerminalFailureSpike
+    rationale: |
+      Terminal failure is a workflow business-outcome signal, not a runtime
+      fault. Depends on the step's RuntimeFailureCategory, which spans many
+      underlying faults. Operators read this alert to triage which
+      downstream dependency is failing.
+  - alert: WorkflowStepRetryAttemptsBurst
+    rationale: |
+      Info-severity early warning. Same rationale as
+      WorkflowStepTerminalFailureSpike — downstream-dependency signal.
+  - alert: OutboundEffectReconciliationBacklogGrowing
+    rationale: |
+      Lifecycle-state signal (reconciliation-required count rate). Upstream
+      fault is typically ack/finality deadline expiry against a slow
+      provider — surfaced via OutboundEffectDispatchLatencyP95High and the
+      per-provider adapter signals. This alert is the downstream consequence.
+  - alert: OutboundEffectCompensationUnhandled
+    rationale: |
+      Governance signal: a handler registration is missing. Not a runtime
+      fault — an operator-discipline signal per
+      R-OUT-EFF-COMPENSATION-UNHANDLED-01.
+  - alert: OutboundEffectRetryExhaustionSpike
+    rationale: |
+      Retry-tier signal — indicates sustained provider failure. The
+      individual provider adapter faults are too coarse to catalog as
+      canonical failure modes; this alert surfaces the aggregate.
+  - alert: OutboundEffectDispatchLatencyP95High
+    rationale: |
+      Latency signal against the provider adapter envelope. Root cause
+      varies by provider; alert surfaces the signal so operators can
+      drill into the provider breakdown on the outbound-effect dashboard.
+  - alert: DlqArrivalRateHigh
+    rationale: |
+      Aggregate DLQ flow signal. Root causes are per-message and surface
+      upstream in the specific producer's own alerts.
+  - alert: DlqDepthSustained
+    rationale: |
+      Backlog signal. Pairs with DlqArrivalRateHigh — the depth grows when
+      arrival exceeds operator re-drive rate.
+  - alert: DlqPublishFailing
+    rationale: |
+      Kafka producer transport signal. Pairs with kafka-producer breaker
+      open — not a distinct failure mode.
+  - alert: OperatorRedriveFailureSpike
+    rationale: |
+      Operator-action-tier failure rate. Root cause overlaps with
+      DlqPublishFailing — Kafka producer health. Alert exists to surface
+      the operator-visible consequence.
+  - alert: EventStoreAdvisoryWaitP95High
+    rationale: |
+      Proxy signal for aggregate write contention. Surfaces when the
+      per-aggregate advisory lock contends long enough to matter — the
+      correlated ConcurrencyConflictException 409 rate is the
+      business-visible consequence, but conflict-rate itself is a
+      domain-behavior signal (see concurrency-conflict failure-mode entry),
+      not a runtime-posture signal. This alert is the runtime-tier proxy.

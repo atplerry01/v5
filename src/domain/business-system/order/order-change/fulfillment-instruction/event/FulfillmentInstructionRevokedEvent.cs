@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.FulfillmentInstruction;
+
+public sealed record FulfillmentInstructionRevokedEvent(FulfillmentInstructionId FulfillmentInstructionId, DateTimeOffset RevokedAt);

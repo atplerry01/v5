@@ -1568,3 +1568,33 @@ S2
 References:
 - CLAUDE.md $1b (post-execution audit sweep)
 - Source: `claude/new-rules/20260417-122320-economic-system-phase4-5-final-residual.md`
+
+### DG-R-OUT-EFF-PLACEMENT-01 — Outbound-Effect Aggregate Placement
+
+Definition:
+`OutboundEffectAggregate` and its eleven canonical lifecycle events
+(`OutboundEffectScheduledEvent`, `OutboundEffectDispatchedEvent`,
+`OutboundEffectAcknowledgedEvent`, `OutboundEffectDispatchFailedEvent`,
+`OutboundEffectRetryAttemptedEvent`, `OutboundEffectRetryExhaustedEvent`,
+`OutboundEffectFinalizedEvent`, `OutboundEffectReconciliationRequiredEvent`,
+`OutboundEffectReconciledEvent`, `OutboundEffectCompensationRequestedEvent`,
+`OutboundEffectCancelledEvent`) MUST live under
+`src/domain/integration-system/outbound-effect/**` per the three-level
+nesting `classification/context/domain` (D-R3B-1 ratified 2026-04-20,
+new top-level `integration-system` classification). Placement elsewhere —
+including under `business-system/integration/**` or any other
+classification — is S1 drift.
+
+Enforcement:
+Architecture test `OutboundEffect_Aggregate_And_Events_Under_IntegrationSystem`
+scans for `OutboundEffectAggregate` / `OutboundEffect*Event` type definitions
+outside the canonical path.
+
+Severity:
+S1
+
+References:
+- `src/domain/integration-system/outbound-effect/aggregate/OutboundEffectAggregate.cs`
+- `src/domain/integration-system/outbound-effect/event/**`
+- `claude/project-topics/v2b/closure/20260420-100946-r3-b-design.md` §3.2, §17.1 D-R3B-1
+- `claude/project-topics/v2b/closure/20260420-103811-r3-b-1-design.md` §3.12

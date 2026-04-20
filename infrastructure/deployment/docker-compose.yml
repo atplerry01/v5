@@ -295,6 +295,22 @@ services:
     networks:
       - whyce-network
 
+  # R5.A — OpenTelemetry tracing backend. Jaeger all-in-one speaks OTLP
+  # natively on :4317 (gRPC) as of 1.35+; the runtime exports spans there
+  # per TracingInfrastructureModule. UI on :16686. No persistent volume —
+  # tracing is ephemeral for local dev; production deployments should wire
+  # Tempo + object storage for retention.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: whyce-jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC ingest (matches Otel:Endpoint default)
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - whyce-network
+
   # ── WhyceChain Ledger ──
 
   whycechain-db:

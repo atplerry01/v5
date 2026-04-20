@@ -322,18 +322,18 @@ Evidence paths are the single most canonical file. Absence of evidence here does
 |---|---|---|
 | Explicit side-effect boundary | PRESENT | `src/runtime/control-plane/RuntimeControlPlane.cs` |
 | No external side effect before durable intent capture | PRESENT | `src/runtime/event-fabric/EventFabric.cs` |
-| Idempotent external interaction discipline | PARTIAL | — |
-| Settlement/finality-aware behavior where needed | PARTIAL | — |
-| Webhook/API call retry discipline | ABSENT | — |
-| External confirmation tracking | ABSENT | — |
-| External failure classification | ABSENT | — |
-| Compensation or reconciliation-required signaling | PARTIAL | — |
-| Outbound request evidence logging | PARTIAL | — |
-| Safe third-party timeout handling | ABSENT | — |
-| Duplicate external-call prevention | ABSENT | — |
-| External dependency circuit protection where needed | ABSENT | — |
-| Side-effect observability | PARTIAL | — |
-| Side-effect auditability | PARTIAL | — |
+| Idempotent external interaction discipline | **PRESENT** | R3.B.2 (2026-04-20) — three-layer dedup proven end-to-end: (1) DB-level `(provider_id, idempotency_key)` UNIQUE constraint in `outbound_effect_dispatch_queue` surfaces races as `OutboundEffectDuplicateKeyException`; (2) relay reuses stable `effect_id` + key across retries; (3) `WebhookDeliveryAdapter` propagates `Idempotency-Key` header so partner-side dedup collapses duplicates. HMAC signature determinism pinned by `Hmac_signature_header_is_stable_across_retries_for_same_body`. |
+| Settlement/finality-aware behavior where needed | **PRESENT** | R3.B.4 — async finality operative via `WebhookCallbackIngressHandler` (Push) + `OutboundEffectReconciliationSweeper` with `IOutboundEffectAdapter.PollFinalityAsync` (Poll/Hybrid). Webhook callbacks correlate by `(effectId, providerId, providerOperationId)` and HMAC signature; poll path handles StillPending / Unresolvable deterministically. |
+| Webhook/API call retry discipline | **PRESENT** | R3.B.2 — `OutboundEffectRelay` wraps every adapter call in a linked CTS bounded by `DispatchTimeoutMs`; `WebhookDeliveryAdapter` classifies 5xx/408/429 as Transient with `Retry-After` propagation and 4xx as Terminal. Retry budget enforced by `MaxAttempts`; breaker-open never consumes the budget. |
+| External confirmation tracking | **PRESENT** | R3.B.4 — provider operation identity correlated end-to-end: relay stamps `ProviderOperationId` on `OutboundEffectAcknowledgedEvent`; webhook ingress validates the incoming `(effectId, providerId, providerOperationId)` trio + HMAC signature before emitting `Finalized`; `OutboundEffectFinalityService.FinalizeAsync` records `FinalitySource` (Push/Poll/SynchronousAck) and `EvidenceDigest` on the lifecycle event. |
+| External failure classification | **PRESENT** | R3.B.2 — adapter maps HTTP status + network-error + OCE into the three canonical `OutboundAdapterClassification` variants via `TranslateAsync`. Unit tests pin 2xx→Acknowledged, 4xx→Terminal, 5xx/408/429→Transient, malformed URL→Terminal, HttpRequestException→Transient. |
+| Compensation or reconciliation-required signaling | **PRESENT** | R3.B.5 — both halves operative end-to-end. **Reconciliation:** `OutboundEffectReconciliationSweeper` emits `ReconciliationRequired` on ack/finality-timeout + `Unresolvable` poll result + `Ambiguous × AtMostOnce` dispatch. **Compensation:** `OutboundEffectCompensationRequestedEvent` emitted atomically from `Finalized(BusinessFailed)` / `RetryExhausted` / `Reconciled(BusinessFailed)` / `Reconciled(PartiallyCompleted) × {AtMostOnceRequired, CompensatableOnly}`. `OutboundEffectCompensationDispatcher` fans signals to registered `IOutboundEffectCompensationHandler` instances; missing-handler path increments `outbound.effect.compensation.unhandled` + WARN log (R-OUT-EFF-COMPENSATION-UNHANDLED-01). Finalize precondition (terminal-status refuse) guarantees per-trigger idempotency. |
+| Outbound request evidence logging | **PRESENT** | R3.B.2 — every lifecycle transition emits the canonical domain event through persist→chain→outbox; relay emits `Dispatched` + `Acknowledged` (or `DispatchFailed` + `RetryAttempted` / `RetryExhausted`) via `OutboundEffectLifecycleEventFactory` on every attempt. Integration test `Happy_path_without_breaker_records_acknowledged_lifecycle` pins the event emission. |
+| Safe third-party timeout handling | **PRESENT** | R3.B.2 — per-provider `OutboundEffectOptions.DispatchTimeoutMs` drives relay linked CTS; per-provider `ICircuitBreaker` registered under `outbound.{providerId}`; breaker-open short-circuits without consuming retry budget. Integration test `BreakerOpen_short_circuits_adapter_and_preserves_attempt_count` pins the behavior. |
+| Duplicate external-call prevention | **PRESENT** | R3.B.2 — dispatcher dedup-on-schedule (pre-check + DB UNIQUE) + stable `effect_id` reuse on retries + provider `Idempotency-Key` header propagation. Three-layer model proven end-to-end. |
+| External dependency circuit protection where needed | **PRESENT** | R3.B.2 — per-provider `ICircuitBreaker` registered as enumerable `ICircuitBreaker` contributor (auto-picked-up by `CircuitBreakerRegistry` + `RuntimeStateAggregator` per R-BREAKER-HEALTH-POSTURE-01); relay resolves via `ICircuitBreakerRegistry.TryGet("outbound.{providerId}")`; `CircuitBreakerOpenException` translated to `TransientFailed` without incrementing `attempt_count`. |
+| Side-effect observability | PARTIAL (R3.B.2 — `Whycespace.OutboundEffects` meter emits dispatch duration histograms with outcome tag on every attempt, plus scheduled / dedup-hit / retry-attempts / retry-exhausted / reconciliation-required / cancelled counters. Dashboards + alert rules lands in R4.A) | — |
+| Side-effect auditability | **PRESENT** | R3.B.2 — every attempt emits domain events through persist→chain→outbox including full provider operation identity on `Acknowledged`; chain anchoring preserves tamper-evident audit trail. |
 
 ## Section 16 — Evidence / Audit Runtime Features
 

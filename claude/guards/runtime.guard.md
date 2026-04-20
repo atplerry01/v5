@@ -3808,3 +3808,1157 @@ References:
 - `src/projections/orchestration/workflow/handler/WorkflowExecutionProjectionHandler.cs`
 - `src/shared/contracts/projections/orchestration/workflow/WorkflowExecutionReadModel.cs`
 - `claude/project-topics/v2b/closure/20260420-090441-r3-a-6-design.md` §2.5, §3 R-WF-APPROVAL-PROJ-01, D6 ratification
+
+## Section: R3.B.1 Outbound Side-Effect Foundation (2026-04-20)
+
+Preamble — OPA grandfathering under the prohibition regime (D-R3B-10 ratified
+2026-04-20): `OpaPolicyEvaluator`, `OpaWarmupService`, and
+`OpaEnforcementEventEvaluator` are internal synchronous policy-evaluation
+dependencies, NOT business outbound effects. They remain outside the
+R3.B.1 seam as an explicit documented whitelist. Adding new direct HTTP
+integrations requires going through `IOutboundEffectAdapter`; new
+sanctioned exceptions require a ratification-document amendment.
+
+### R-OUT-EFF-PROHIBITION-01 — HttpClient Whitelist
+
+Definition:
+Direct usage of `HttpClient`, `HttpMessageInvoker`, `HttpClientHandler`,
+`WebClient`, and `SocketsHttpHandler` is FORBIDDEN outside the following
+whitelist: (a) `src/platform/host/adapters/Opa*.cs` plus the existing OPA
+support sites `src/platform/host/health/OpaHealthCheck.cs`,
+`src/platform/host/composition/infrastructure/policy/PolicyInfrastructureModule.cs`,
+and `src/platform/host/composition/observability/ObservabilityComposition.cs`
+(OPA grandfathered per D-R3B-10 — the adapter family plus the composition
+sites that inject the HttpClient into it); (b)
+`src/platform/host/adapters/outbound-effects/**/*Adapter.cs` (sanctioned
+production adapter surface); (c) `src/runtime/outbound-effects/**` (relay
+plumbing — delegation to adapters only, no direct HTTP calls); (d)
+`src/shared/contracts/infrastructure/**` (contract/type definitions
+referencing HTTP types for interfaces, not executing calls); (e)
+`src/platform/host/composition/integration/outbound-effect/**` (R3.B.2
+composition sites that construct the `HttpClient` passed into sanctioned
+outbound-effect adapters — parallel to the OPA composition exception).
+Architecture test `HttpClient_Usage_Confined_To_Whitelist` scans for
+`new HttpClient` / `HttpClient ` declarations / injected `HttpClient`
+parameters outside the whitelist.
+
+Severity:
+S0
+
+References:
+- `src/shared/contracts/runtime/outbound-effects/IOutboundEffectAdapter.cs`
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs`
+- `tests/unit/architecture/OutboundEffectProhibitionTests.cs`
+- `claude/project-topics/v2b/closure/20260420-100946-r3-b-design.md` §11.1, §17.2 #5
+- `claude/project-topics/v2b/closure/20260420-103811-r3-b-1-design.md` §10.1
+
+### R-OUT-EFF-PROHIBITION-02 — Third-Party SDK Namespace Whitelist
+
+Definition:
+Third-party SDK namespaces (`Stripe.*`, `Twilio.*`, `SendGrid.*`, `Slack.*`,
+`Amazon.*` service-SDK namespaces, `Microsoft.Azure.*` service-SDK
+namespaces, `Google.Cloud.*`, etc.) are FORBIDDEN in `src/domain/**`,
+`src/engines/**`, `src/runtime/**`, `src/projections/**`, and
+`src/systems/**`. Production SDK references MUST live ONLY in
+`src/platform/host/adapters/outbound-effects/{Provider}Adapter.cs`.
+
+Severity:
+S0
+
+References:
+- `tests/unit/architecture/OutboundEffectProhibitionTests.cs`
+- `claude/project-topics/v2b/closure/20260420-100946-r3-b-design.md` §11.1
+- `claude/project-topics/v2b/closure/20260420-103811-r3-b-1-design.md` §10.1
+
+### R-OUT-EFF-PROHIBITION-03 — Adapter Dispatch Only From Relay
+
+Definition:
+Only `OutboundEffectRelay` may invoke `IOutboundEffectAdapter.DispatchAsync`.
+No other caller. Architecture test `Adapter_DispatchAsync_Only_Invoked_From_Relay`
+scans for `adapter.DispatchAsync(` / `.DispatchAsync(` invocations on
+`IOutboundEffectAdapter` outside `src/runtime/outbound-effects/OutboundEffectRelay.cs`.
+
+Severity:
+S0
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs`
+- `src/shared/contracts/runtime/outbound-effects/IOutboundEffectAdapter.cs`
+
+### R-OUT-EFF-PROHIBITION-04 — Domain May Not Schedule Directly
+
+Definition:
+`src/domain/**` MUST NOT call `IOutboundEffectDispatcher.ScheduleAsync`
+directly. Scheduling happens from engines or the runtime control plane.
+Parallel to the existing domain-purity rules.
+
+Severity:
+S1
+
+### R-OUT-EFF-PROHIBITION-05 — Test Adapter Not In Production Composition
+
+Definition:
+Test-scoped adapters (`NoOpOutboundEffectAdapter` and any member of
+`src/platform/host/adapters/outbound-effects/test/**`) MUST be registered
+only in test composition roots — not in production composition.
+Architecture test `NoOp_Adapter_Not_In_Production_Composition` asserts zero
+reachability of `NoOpOutboundEffectAdapter` from `Program.cs` and the
+bootstrap module catalog.
+
+Severity:
+S1
+
+### R-OUT-EFF-SEAM-01 — Aggregate Construction Only Through Factory
+
+Definition:
+`OutboundEffectAggregate.Start(...)` is the sole construction path. Only
+`OutboundEffectLifecycleEventFactory.Start(...)` may invoke it. Architecture
+test `OutboundEffectAggregate_Start_Only_Called_From_Factory` scans for
+`OutboundEffectAggregate.Start(` invocations outside the factory file and
+under `src/**`.
+
+Severity:
+S1
+
+### R-OUT-EFF-SEAM-02 — Adapters Are Stateless Singletons
+
+Definition:
+`IOutboundEffectAdapter` implementations MUST be stateless: no mutable
+instance fields. Registered as singletons in DI. Architecture test pins
+the discipline.
+
+Severity:
+S1
+
+### R-OUT-EFF-SEAM-03 — Lifecycle Events Constructed Via Factory
+
+Definition:
+Every `OutboundEffect*Event` MUST be constructed through
+`OutboundEffectLifecycleEventFactory`. Direct `new OutboundEffect*Event(...)`
+from dispatcher, relay, projection handler, or adapters is FORBIDDEN.
+Parallel to `R-WORKFLOW-CANCELLATION-FACTORY-01`.
+
+Severity:
+S1
+
+### R-OUT-EFF-FINALITY-01 — Six-Variant Adapter Result Model
+
+Definition:
+`IOutboundEffectAdapter.DispatchAsync` MUST return one of the six sealed
+`OutboundAdapterResult` variants:
+`DispatchFailedPreAcceptance | DispatchedWithoutProviderOperationId |
+Acknowledged | FinalizedSuccess | FinalizedFailure | ReconciliationRequired`.
+Collapsing variants (e.g., returning `Acknowledged` when finality was
+achieved, or a union "success" result) is FORBIDDEN.
+
+Severity:
+S1
+
+### R-OUT-EFF-FINALITY-02 — Acknowledged Requires Provider Operation Identity
+
+Definition:
+`OutboundAdapterResult.Acknowledged` MUST carry a non-null
+`ProviderOperationIdentity` with non-empty `ProviderId` and
+`ProviderOperationId`. `OutboundEffectAcknowledgedEvent.Apply` asserts
+this; factory `Acknowledged(...)` refuses construction otherwise.
+
+Severity:
+S1
+
+### R-OUT-EFF-IDEM-01 — Idempotency Key Required
+
+Definition:
+`OutboundEffectIntent.IdempotencyKey` is REQUIRED (non-null, non-empty).
+The `OutboundIdempotencyKey` value-object constructor throws on empty /
+null / whitespace input. 255-character cap (D-R3B1-3).
+
+Severity:
+S1
+
+### R-OUT-EFF-IDEM-02 — Dedup-On-Schedule
+
+Definition:
+Dispatcher schedules are deduplicated by `(provider_id, idempotency_key)` at
+both the DB level (unique constraint on `outbound_effect_dispatch_queue`)
+and the aggregate level. Duplicate schedules return the existing
+`OutboundEffectId` with `DedupHit = true` and emit the
+`outbound.effect.schedule.dedup_hit` metric. Second aggregate is NOT created.
+
+Severity:
+S1
+
+### R-OUT-EFF-IDEM-03 — Provider Idempotency Key Propagation
+
+Definition:
+`ProviderIdempotent` adapters MUST propagate the idempotency key to the
+provider (e.g., `Idempotency-Key: {key}` header). Architecture test scans
+adapter files for presence of `ctx.IdempotencyKey` / `IdempotencyKey.Value`
+in the request-construction code path.
+
+Severity:
+S1
+
+### R-OUT-EFF-IDEM-04 — Stable Idempotency Key Across Retries
+
+Definition:
+Retries reuse the same `effect_id` and idempotency key — regenerating on
+retry is FORBIDDEN. The relay injects the stable `effect_id` via
+`OutboundEffectDispatchContext` on every attempt.
+
+Severity:
+S1
+
+### R-OUT-EFF-IDEM-05 — AtMostOnce Never Retries Post-Dispatch
+
+Definition:
+`AtMostOnceRequired` adapters MUST NOT retry after the `Dispatched`
+transition. Post-dispatch transient failures translate to
+`ReconciliationRequired`, not retry. Relay `IsRetryEligible` enforces.
+
+Severity:
+S1
+
+### R-OUT-EFF-TIMEOUT-01 — Adapter Honors CancellationToken
+
+Definition:
+Adapter `DispatchAsync` MUST consume the `CancellationToken` it receives
+and propagate it into the underlying provider call. Architecture test scans
+adapter files for the token parameter flowing into at least one downstream
+call.
+
+Severity:
+S1
+
+### R-OUT-EFF-TIMEOUT-02 — Per-Provider Options Required At Composition
+
+Definition:
+`OutboundEffectOptions.{DispatchTimeoutMs, TotalBudgetMs, AckTimeoutMs,
+FinalityWindowMs, MaxAttempts}` are REQUIRED — no hardcoded defaults in
+adapter code or the dispatcher. Missing config throws
+`OutboundEffectErrors.OptionsMissing` at the `ScheduleAsync` /
+`PollOnceAsync` boundary.
+
+Severity:
+S1
+
+### R-OUT-EFF-OBS-01 — Canonical OutboundEffects Meter
+
+Definition:
+All outbound-effect metrics live on the `Whycespace.OutboundEffects` meter.
+No shadow meters per provider. New instruments require guard-level
+promotion (`R-OUT-EFF-OBS-02`).
+
+Severity:
+S2
+
+### R-OUT-EFF-OBS-02 — Outcome Tag Vocabulary Locked
+
+Definition:
+Outcome tag vocabulary is locked to:
+`dispatched | acknowledged | dispatch_failed_pre_acceptance |
+dispatched_without_opid | finalized_success | finalized_business_failed |
+reconciliation_required | transient_failed | retry_exhausted | cancelled`.
+New tag values require this guard rule to be promoted first.
+
+Severity:
+S2
+
+### R-OUT-EFF-DET-01 — Determinism Seams Only
+
+Definition:
+`src/runtime/outbound-effects/**`, `src/engines/T2E/outbound-effects/**`,
+and `src/platform/host/adapters/outbound-effects/**` MUST use
+`IClock` / `IIdGenerator` / `IRandomProvider` only. `Guid.NewGuid()`,
+`DateTime.UtcNow`, `DateTimeOffset.UtcNow`, `Random.*` are FORBIDDEN.
+Architecture test `Determinism_In_Outbound_Effect_Code` pins the invariant.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs`
+- `src/runtime/outbound-effects/OutboundEffectDispatcher.cs`
+- `src/engines/T2E/outbound-effects/lifecycle/OutboundEffectLifecycleEventFactory.cs`
+
+### R-OUT-EFF-QUEUE-01 — Atomic Queue Insert With Scheduled Event
+
+Definition:
+Inserting the queue row MUST be atomic with persisting the
+`OutboundEffectScheduledEvent`. The dispatcher's canonical sequence is:
+(1) dedup pre-check, (2) `IOutboundEffectQueueStore.InsertAsync`,
+(3) `IEventFabric.ProcessAsync` for the scheduled event. Failure of (3)
+after (2) is a reconstructable projection gap recoverable from the event
+stream (recovery tooling is R3.B.3 scope); a failure of (2) short-circuits
+before any event emission.
+
+Severity:
+S1
+
+### R-OUT-EFF-QUEUE-02 — Queue Is Projection Of Event Stream
+
+Definition:
+`outbound_effect_dispatch_queue` is a projection of the aggregate's event
+stream, NOT the source of truth. Recovery commands must be able to
+reconstruct queue rows from the `OutboundEffect*Event` history.
+
+Severity:
+S2
+
+### R-OUT-EFF-QUEUE-03 — Single-Claim Semantics
+
+Definition:
+Queue row claim MUST be atomic single-row update:
+`claimed_by := host_id WHERE claimed_by IS NULL AND status IN (Scheduled,
+TransientFailed) AND next_attempt_at <= now`. Concurrent hosts see
+disjoint claim sets. The Postgres concrete uses `FOR UPDATE SKIP LOCKED`
+(aligning with the existing outbox pattern).
+
+Severity:
+S1
+
+## Section: R3.B.3 Outbound-Effect Hardening (2026-04-20)
+
+### R-OUT-EFF-AMBIGUOUS-ATMOSTONCE-01 — Ambiguous On Unsafe Shape Routes To Reconciliation
+
+Definition:
+When an `IOutboundEffectAdapter` returns
+`OutboundAdapterResult.DispatchFailedPreAcceptance(Ambiguous, ...)` AND the
+adapter's `IdempotencyShape` is `AtMostOnceRequired` or
+`CompensatableOnly`, the relay MUST transition the effect to
+`ReconciliationRequired` (cause `DispatchAmbiguous`) — NOT retry, NOT
+RetryExhausted. Retrying would risk a duplicate business outcome the
+provider cannot collapse; RetryExhausted would terminally refuse work the
+provider may already have acted on. Reconciliation is the only correct
+response. For `ProviderIdempotent` and `NaturalKeyIdempotent` shapes,
+Ambiguous remains retryable subject to the retry budget.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs` — `IsAmbiguousUnsafeToRetry`
+- `tests/integration/integration-system/outbound-effect/OutboundEffectShapeMatrixTests.cs`
+- `claude/project-topics/v2b/closure/20260420-100946-r3-b-design.md` §5 IDEM-05 + §7
+
+### R-OUT-EFF-BACKOFF-DET-01 — Relay Backoff Formula Is Replay-Deterministic
+
+Definition:
+`OutboundEffectRelay.ComputeBackoffMs` is a pure static function. Its
+inputs are `(options, attemptNumber, effectId, providerRetryAfter,
+IRandomProvider)`; its output is a millisecond integer. Two runs with
+identical inputs MUST produce identical outputs. Seed derivation is
+`$"{effectId:N}:retry:{attemptNumber}"` via
+`OutboundEffectRelay.BackoffSeed`. Architecture test
+`Relay_Backoff_Helper_Is_Replay_Deterministic` scans the method body for
+forbidden entropy sources (`DateTime(Offset).UtcNow/Now`, `.Ticks`,
+`Guid.NewGuid`, `new Random`, `Random.Shared`, `Stopwatch.*`).
+
+Parallel to `R-RETRY-DELIVER-AFTER-DETERMINISM-01` for the Kafka retry
+escalator — identical discipline applied to outbound-effect backoff.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs` — `ComputeBackoffMs`, `BackoffSeed`
+- `tests/integration/integration-system/outbound-effect/OutboundEffectBackoffDeterminismTests.cs`
+- `tests/unit/architecture/OutboundEffectProhibitionTests.cs` — `Relay_Backoff_Helper_Is_Replay_Deterministic`
+
+### R-OUT-EFF-QUEUE-PAYLOAD-REGISTRY-01 — Queue Payload Goes Through Payload Registry
+
+Definition:
+`PostgresOutboundEffectQueueStore` MUST serialize and deserialize queue
+payloads through `IPayloadTypeRegistry`:
+- Serialize: call `TryGetName(type, out name)`; fail with
+  `InvalidOperationException` if the type is not registered.
+- Deserialize: call `Resolve(typeName)` (strict — throws on unknown
+  names); NO fallback to `Type.GetType(assemblyQualifiedName)`.
+
+This is option (a) in the R3.B.3 decision log — fail-closed on unknown
+types so cross-assembly or renamed-type drift surfaces as a loud failure
+rather than silent payload corruption on replay. Payload types are
+registered by their owning domain's bootstrap module via
+`IDomainBootstrapModule.RegisterPayloadTypes`.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/adapters/outbound-effects/PostgresOutboundEffectQueueStore.cs` — `SerializePayload`, `DeserializePayload`
+- `src/shared/contracts/event-fabric/IPayloadTypeRegistry.cs`
+- `tests/integration/integration-system/outbound-effect/PostgresOutboundEffectQueueStorePayloadRegistryTests.cs`
+- `src/platform/host/composition/integration/outbound-effect/OutboundEffectsBootstrap.cs` — `RegisterPayloadTypes`
+
+## Section: R3.B.4 Async Finality + Reconciliation (2026-04-20)
+
+### R-OUT-EFF-FINALITY-COMMAND-01 — Finality Mutations Go Through IOutboundEffectFinalityService
+
+Definition:
+Async finality / reconciliation transitions on an
+`OutboundEffectAggregate` MUST flow through
+`IOutboundEffectFinalityService`. No caller may construct
+`OutboundEffectFinalizedEvent`, `OutboundEffectReconciliationRequiredEvent`,
+or `OutboundEffectReconciledEvent` outside the T2E
+`OutboundEffectLifecycleEventFactory`, and no caller may emit those
+events to the event fabric outside the finality service, the relay, or
+the reconciliation sweeper (which invokes the finality service).
+
+This preserves non-conflation of Acknowledged vs Finalized (ratified
+constraint #1): only one authority can move the aggregate past
+Acknowledged, and it validates preconditions before constructing the
+event.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/outbound-effects/IOutboundEffectFinalityService.cs`
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs`
+
+### R-OUT-EFF-ORPHAN-CALLBACK-01 — Orphan Callbacks Emit Evidence
+
+Definition:
+Inbound webhook callbacks that fail correlation MUST translate to one of
+the deterministic `WebhookIngressOutcome` values (`UnknownEffect`,
+`SignatureInvalid`, `ProviderOperationIdMismatch`, `InvalidStatus`).
+Orphan callbacks MUST NOT silently mutate unrelated state, and MUST NOT
+be silently dropped. Correlated-but-unrecognized outcome codes emit
+`OutboundEffectReconciliationRequiredEvent(ProviderDisagreement)` rather
+than 2xx'ing the caller with a no-op.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/WebhookCallbackIngressHandler.cs`
+- `src/shared/contracts/runtime/outbound-effects/WebhookCallbackIngressRequest.cs`
+
+### R-OUT-EFF-RECONCILE-PRECONDITION-01 — Reconcile Requires ReconciliationRequired
+
+Definition:
+`IOutboundEffectFinalityService.ReconcileAsync` MUST refuse to execute
+unless the target effect is currently in `ReconciliationRequired`
+status. Attempts to reconcile any other status throw
+`InvalidOperationException` before any event is constructed or any
+row is updated. No silent override semantics.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs` — `ReconcileAsync`
+
+### R-OUT-EFF-TIMEOUT-SWEEP-01 — Ack/Finality Timeouts Emit Canonical Lifecycle Evidence
+
+Definition:
+When a queue row's `ack_deadline` elapses while `status = Dispatched`,
+the reconciliation sweeper MUST emit
+`OutboundEffectReconciliationRequiredEvent(AckTimeoutExpired)`. When a
+queue row's `finality_deadline` elapses while `status = Acknowledged`
+AND the adapter's `FinalityStrategy` is NOT `Poll`/`Hybrid`, the
+sweeper MUST emit
+`OutboundEffectReconciliationRequiredEvent(FinalityTimeoutExpired)`.
+For `Poll`/`Hybrid` adapters, the sweeper invokes
+`PollFinalityAsync` first; only poll results of `Unresolvable` emit
+reconciliation-required. `StillPending` / `Transient` poll results
+extend the deadline for the next sweep cycle without emitting a
+lifecycle event.
+
+Logs alone do not satisfy this invariant — explicit lifecycle events
+are required so chain-anchored evidence exists for every timeout.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectReconciliationSweeper.cs`
+
+## Section: R3.B.5 Compensation Emission (2026-04-20)
+
+### R-OUT-EFF-COMPENSATION-EMIT-01 — Compensation Emits On Canonical Problem Outcomes
+
+Definition:
+`OutboundEffectCompensationRequestedEvent` MUST be emitted automatically
+when ANY of the following outcomes occur:
+- `Finalized(BusinessFailed)` — partner terminal failure.
+- `RetryExhausted` — relay could not complete the intent within the budget.
+- `Reconciled(BusinessFailed)` — operator resolution confirmed terminal failure.
+- `Reconciled(PartiallyCompleted)` AND adapter's `IdempotencyShape` is
+  `AtMostOnceRequired` or `CompensatableOnly` — partial completion the
+  provider cannot collapse via re-send.
+
+Emission for `Succeeded`, `ManualIntervention`, `Cancelled`, and
+`PartiallyCompleted × ProviderIdempotent/NaturalKeyIdempotent` is
+EXPLICITLY FORBIDDEN — these outcomes do not require caller-side
+compensation per `OutboundEffectCompensationPolicy.RequiresCompensation`.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/outbound-effects/OutboundEffectCompensationPolicy.cs`
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs` — `FinalizeAsync`, `ReconcileAsync`
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs` — `RetryExhausted` branch
+
+### R-OUT-EFF-COMPENSATION-ATOMIC-01 — Compensation Emits In Same Fabric Batch
+
+Definition:
+When compensation is required, `OutboundEffectCompensationRequestedEvent`
+MUST be added to the SAME `IEventFabric.ProcessAsync` event batch as the
+triggering lifecycle event (`Finalized` / `RetryExhausted` / `Reconciled`).
+This guarantees:
+- **Idempotency per trigger** — one finalize / reconcile / retry-exhaust
+  call produces at most one compensation event.
+- **Replay safety** — the aggregate's `Apply` reconstructs both
+  transitions deterministically on replay; no duplicate emission via
+  post-event listeners.
+- **Durability** — the compensation signal is persisted + chain-anchored
+  together with the triggering event; a crash between the two is
+  structurally impossible.
+
+Post-event-fabric fan-out to in-process
+`IOutboundEffectCompensationHandler` instances (via
+`OutboundEffectCompensationDispatcher`) is best-effort — handler failure
+is logged + metered but does NOT retract the emission.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs`
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs`
+- `src/engines/T2E/outbound-effects/lifecycle/OutboundEffectLifecycleEventFactory.cs` — `CompensationRequested`
+
+### R-OUT-EFF-COMPENSATION-UNHANDLED-01 — Missing Handler Emits Loud Evidence
+
+Definition:
+When a compensation signal is dispatched and
+`IOutboundEffectCompensationHandlerRegistry.ResolveHandlers(effectType)`
+returns zero handlers, `OutboundEffectCompensationDispatcher` MUST:
+- Increment the counter `outbound.effect.compensation.unhandled`
+  (tagged `provider`, `effect_type`).
+- Log at WARN level a message that identifies the `effectId`, effect
+  type, provider id, and triggering outcome, and instructs the operator
+  to register an `IOutboundEffectCompensationHandler` for the effect
+  type.
+
+The compensation event itself remains on the aggregate stream. Late
+handler registration + replay will eventually deliver the signal; the
+missing-handler path is NOT a silent terminal — it is loudly visible
+to operators.
+
+Severity:
+S2
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectCompensationDispatcher.cs`
+- `src/runtime/outbound-effects/OutboundEffectsMeter.cs` — `CompensationUnhandled`
+
+---
+
+## Section: R4.B Admin / Operator Control Surface (2026-04-20)
+
+R4.B is the operator-surface closure layer. Every mutating admin action is a governed runtime action: explicit contract, authorization-bound, policy-evaluated, auditable, correlation-linked. The rules below are the non-negotiable discipline of that surface.
+
+### R-ADMIN-SCOPE-01 — Admin Authorization Policy Gate
+
+Definition:
+Every admin controller under `src/platform/api/controllers/platform/admin/**` MUST either inherit `AdminControllerBase` (which carries `[Authorize(Policy = AdminScope.PolicyName)]`) or declare the attribute directly. The policy is registered via `AdminAuthorizationModule.AddAdminAuthorization()` in `AddInfrastructureComposition` and resolved by `AdminAuthorizationHandler`, which checks the normalized role set surfaced by `ICallerIdentityAccessor.GetRoles()`. Admin scope MUST NOT be reused by non-admin controllers.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/admin/AdminScope.cs`
+- `src/platform/host/authorization/AdminAuthorizationHandler.cs`
+- `src/platform/host/composition/infrastructure/authentication/AdminAuthorizationModule.cs`
+- `src/platform/api/controllers/platform/admin/_shared/AdminControllerBase.cs`
+- `tests/unit/architecture/AdminSurfaceArchitectureTests.cs` — `Every_admin_controller_inherits_admin_controller_base_or_declares_admin_policy`
+
+### R-ADMIN-ROUTE-PREFIX-01 — Admin Route Prefix Is Canonical
+
+Definition:
+Every admin controller route MUST start with `AdminScope.RoutePrefix` (`api/admin`). Public domain controllers MUST NOT route under the admin prefix. The prefix is the single source of truth for operator-surface separation — logging, rate-limit partitioning, and future admin-only middleware all key off it.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/admin/AdminScope.cs`
+- `tests/unit/architecture/AdminSurfaceArchitectureTests.cs` — `Every_admin_controller_routes_under_api_admin_prefix`
+
+### R-ADMIN-NO-AGGREGATE-MUTATION-01 — No Direct Aggregate Mutation From Admin Controller
+
+Definition:
+Admin controllers MUST NOT import `Whycespace.Domain.*` or otherwise reach into aggregate types. Every mutation flows through a sanctioned seam:
+- `ISystemIntentDispatcher.DispatchAsync(command, route)` for command-style lifecycle actions (workflow resume / approve / reject),
+- `IOutboundEffectFinalityService.ReconcileAsync(...)` for reconciliation,
+- `IDeadLetterRedriveService.RedriveAsync(...)` for DLQ re-drive.
+
+The controller owns request shape + audit emission + response mapping. The service owns preconditions + persistence + event emission. These responsibilities never cross.
+
+Severity:
+S1
+
+References:
+- `src/platform/api/Whycespace.Api.csproj` — no `Whycespace.Domain` project reference (enforced by the project file itself)
+- `src/platform/api/controllers/platform/admin/**`
+- `tests/unit/architecture/AdminSurfaceArchitectureTests.cs` — `Admin_controllers_do_not_import_domain_aggregate_namespaces`
+
+### R-ADMIN-AUDIT-EMISSION-01 — Every Mutating Operator Action Emits Evidence
+
+Definition:
+Every mutating admin endpoint MUST route through `IOperatorActionRecorder.RecordAsync` on every outcome branch — accepted, refused, AND failed. The recorder routes the event onto the dedicated runtime operator-action audit stream via `IEventFabric.ProcessAuditAsync` with routing overrides `AdminScope.AuditClassification` / `AdminScope.AuditContext` / `AdminScope.AuditDomain`. The deterministic event id derives from `{CorrelationId}:{ActionType}:{TargetId}` so duplicate dispatches collapse.
+
+The audit envelope MUST carry: operator identity id, tenant id, correlation id, action type, target resource id + type, outcome classification, rationale (when supplied), and failure reason (on refused/failed). Refused/failed branches that short-circuit before reaching the service layer MUST still emit the event — controllers use `AdminControllerBase.AuditAsync` (or a direct recorder call) to ensure this.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/admin/OperatorActionEvent.cs`
+- `src/shared/contracts/runtime/admin/IOperatorActionRecorder.cs`
+- `src/shared/contracts/runtime/admin/OperatorActionOutcomes.cs`
+- `src/runtime/control-plane/admin/OperatorActionAuditRecorder.cs`
+- `src/platform/api/controllers/platform/admin/_shared/AdminControllerBase.cs` — `AuditAsync` helper
+- `tests/unit/runtime/admin/OperatorActionAuditRecorderTests.cs`
+
+### R-ADMIN-REDRIVE-ELIGIBILITY-01 — DLQ Re-Drive Enforces Eligibility Before Publish
+
+Definition:
+`IDeadLetterRedriveService.RedriveAsync` MUST validate — in this order — that the dead-letter entry:
+
+1. exists (`NotFound` refusal otherwise),
+2. is not already reprocessed (`AlreadyReprocessed` refusal — re-drive is one-shot, never idempotent across operator retries),
+3. carries a non-empty source topic AND payload (`Ineligible` refusal otherwise).
+
+Only after all three gates succeed may the service call `IDeadLetterRedrivePublisher.PublishAsync`. On publisher failure the DLQ row MUST NOT be marked reprocessed — the entry remains eligible so the operator may retry after the transport recovers. The service emits `OperatorActionEvent` on every branch: `Refused` on 1–3, `Failed` on publish error, `Accepted` on success.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/admin/IDeadLetterRedriveService.cs`
+- `src/shared/contracts/runtime/admin/DeadLetterRedriveResult.cs`
+- `src/runtime/control-plane/admin/DeadLetterRedriveService.cs`
+- `tests/unit/runtime/admin/DeadLetterRedriveServiceTests.cs`
+
+### R-ADMIN-RECONCILE-PRECONDITION-01 — Operator Reconcile Only On ReconciliationRequired
+
+Definition:
+Admin reconcile (`POST /api/admin/outbound-effects/{id}/reconcile`) MUST delegate to `IOutboundEffectFinalityService.ReconcileAsync`. That seam's existing precondition — the effect's queue status MUST be `ReconciliationRequired` — is the single source of truth; the controller MUST NOT loosen it. The controller maps the seam's `InvalidOperationException` into a refused audit emission + a canonical 400 classification (`platform.admin.outbound_effect.reconcile.precondition_failed`). See R-OUT-EFF-RECONCILE-PRECONDITION-01 for the underlying aggregate-level invariant.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/outbound-effects/IOutboundEffectFinalityService.cs`
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs`
+- `src/platform/api/controllers/platform/admin/outbound-effects/OutboundEffectAdminController.cs`
+
+### R-ADMIN-OP-IDENTITY-01 — Operator Identity Stamped From Authenticated Caller
+
+Definition:
+Every operator-action audit event MUST carry the identity of the authenticated operator, resolved via `ICallerIdentityAccessor.GetActorId()` at the controller boundary — never a hardcoded "system" constant, never a body-supplied operator id. Tenancy follows the same rule via `GetTenantId()`. The resolver throws fail-closed when no HTTP context is present; the authorization gate ensures this path is never taken by unauthenticated callers.
+
+Severity:
+S1
+
+References:
+- `src/shared/contracts/runtime/ICallerIdentityAccessor.cs`
+- `src/platform/api/controllers/platform/admin/_shared/AdminControllerBase.cs` — `OperatorIdentityId()` / `OperatorTenantId()`
+
+### R-ADMIN-COMPOSITION-ORDER-01 — Admin Module Is Registered Last In Composition
+
+Definition:
+`AdminCompositionModuleEntry` is registered in `CompositionRegistry.Modules` with Order = 6 — strictly after Core(0), Runtime(1), Infrastructure(2), Projections(3), Observability(4). The gap at Order=5 is reserved for a future mid-tier slot; admin stays pinned at 6 so composition ordering rules key off stable positions. See `G-COMPLOAD-03` for the canonical locked sequence.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/composition/runtime/admin/AdminCompositionModuleEntry.cs`
+- `src/platform/host/composition/runtime/admin/AdminCompositionModule.cs`
+- `src/platform/host/composition/registry/CompositionRegistry.cs`
+- `claude/guards/infrastructure.guard.md` — `G-COMPLOAD-03`
+- `tests/unit/architecture/AdminSurfaceArchitectureTests.cs` — `Admin_composition_module_is_registered_in_registry_at_locked_order`
+
+---
+
+## Section: R5.B Chaos / Failure Certification (2026-04-20)
+
+R5.B is Phase 1 of R5 (proof). It bolts the mapping {canonical fault → exception → handler → HTTP status → type URI → degraded reason → R4.A alert} into an executable invariant, so new handlers/alerts/faults can't land without a matching catalog entry. Integration-level fault injection against running services is R5.B follow-up — the rules below cover the source-of-truth catalog + its validators.
+
+### R-CHAOS-FAILURE-MODE-REGISTRY-01 — Canonical Failure-Mode Catalog Is Authoritative
+
+Definition:
+The source of truth for the canonical runtime failure-mode catalog is `infrastructure/observability/certification/runtime-failure-modes.yml`. The C# mirror at `tests/unit/certification/CanonicalFailureModes.cs` MUST stay in sync — every id in the C# registry MUST appear in the YAML, every `operational_only_alerts` entry in the YAML MUST appear in the C# list. Every failure-mode entry MUST declare a `status` of either `certified` or `unproven`; every `unproven` entry MUST carry a non-empty `rationale:` block in the YAML.
+
+Severity:
+S1
+
+References:
+- `infrastructure/observability/certification/runtime-failure-modes.yml`
+- `tests/unit/certification/CanonicalFailureModes.cs`
+- `tests/unit/certification/FailureModeManifestTests.cs`
+
+### R-CHAOS-HANDLER-COVERAGE-01 — Every Handler Is Registered + Status-Mapped Correctly
+
+Definition:
+For every failure-mode entry with a non-null `exception_handler`:
+
+1. A file `src/platform/api/middleware/{ExceptionHandler}.cs` MUST exist.
+2. That file MUST declare the cataloged `type_uri` as a string literal.
+3. That file MUST write `Response.StatusCode = StatusCodes.Status{N}{Name}` matching the cataloged `http_status`.
+4. `src/platform/host/Program.cs` MUST call `AddExceptionHandler<{ExceptionHandler}>()`.
+
+Any `*ExceptionHandler.cs` file under `src/platform/api/middleware/` without a matching catalog entry is an orphan handler and MUST be added to the catalog before merge.
+
+Severity:
+S1
+
+References:
+- `src/platform/api/middleware/*ExceptionHandler.cs`
+- `src/platform/host/Program.cs`
+- `tests/unit/certification/CanonicalHandlerCoverageTests.cs`
+
+### R-CHAOS-ALERT-PROVENANCE-01 — Every R4.A Alert Is Provenanced
+
+Definition:
+Every `- alert: …` block under `infrastructure/observability/prometheus/rules/*.yml` MUST be one of:
+
+- Linked to at least one failure-mode entry via `r4a_alerts:`, OR
+- Declared on the `operational_only_alerts:` allowlist with an inline rationale explaining why the alert has no canonical fault (typical rationales: scrape-layer signal, load signal, meta-signal, governance signal).
+
+An alert that appears in neither list is an orphan — either a real gap, a vanity alert, or a documentation lapse. No alert may appear on BOTH lists.
+
+Severity:
+S1
+
+References:
+- `infrastructure/observability/prometheus/rules/*.yml`
+- `infrastructure/observability/certification/runtime-failure-modes.yml`
+- `tests/unit/certification/AlertToFailureModeMappingTests.cs`
+
+### R-CHAOS-ALERT-EXPR-SANITY-01 — PromQL Expressions Reference Only Canonical Metric Families
+
+Definition:
+Every PromQL expression in `infrastructure/observability/prometheus/rules/*.yml` MUST reference only metric-name identifiers that start with one of the canonical metric prefixes derived from the runtime's meter declarations (`whyce_runtime_*`, `whyce_enforcement_*`, `intake_*`, `outbox_*`, `postgres_pool_*`, `event_store_*`, `policy_evaluate_*`, `chain_anchor_*`, `outbound_effect_*`, `workflow_*`, `consumer_*`, `projection_lag_*`, `request_*`, `error_*`, `engine_execution_duration_*`, `process_*`, `up`). prometheus-net collapses dots to underscores and appends `_total` / `_bucket` / `_count` / `_sum` — the prefix check handles that by matching on the naming base.
+
+The validator specifically skips: PromQL keywords + functions, label names inside `by (...)` / `without (...)` groupings, label keys preceding `=`, label values inside `{…}` selectors. Expressions with multi-line bodies are out of scope — R4.A alerts use single-line expressions.
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/AlertExpressionMetricReferenceTests.cs`
+- `infrastructure/observability/prometheus/rules/*.yml`
+
+### R-CHAOS-PROOF-EXISTS-01 — Certified Entries Have Executable Proof Files
+
+Definition:
+Every failure-mode entry with `status: certified` MUST declare a non-null `proof_test:` path, and that file MUST exist on disk under the repository root. Entries with `status: unproven` MUST have `proof_test: null` and MUST carry a `rationale:` block explaining why the proof is deferred. Promoting an entry from unproven → certified requires landing the proof test and flipping the status simultaneously.
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/FailureModeManifestTests.cs` — `Every_certified_failure_mode_has_existing_proof_test_file` + `Every_unproven_failure_mode_has_null_proof_test_and_nonempty_rationale_in_yaml`
+
+---
+
+## Section: R5.A Tracing Pipeline (2026-04-20)
+
+R5.A adds an OpenTelemetry tracing pipeline to the runtime. Spans light up at sanctioned seams so operators can drill into individual request executions and join traces to R4.A metrics via exemplars (Phase 2). Phase 1 delivers the vocabulary + two high-value instrumentation points + the OTLP exporter + correlation bridge. Broader seam instrumentation is Phase 2 / R5.C.
+
+### R-TRACE-SOURCE-VOCABULARY-01 — Canonical ActivitySource Vocabulary
+
+Definition:
+`Whycespace.Runtime.Observability.WhyceActivitySources` is the authoritative registry of canonical `ActivitySource` names + span-name constants. New sources / span names MUST be added here and MUST be registered in `TracingInfrastructureModule.AddTracing`. Span names MUST be low-cardinality constants — per-request dimensions (command type, workflow name, action type) live on **span attributes**, never in the span name. Attribute keys MUST use the constants on `WhyceActivitySources.Attributes` so the vocabulary is consistent across instrumented seams.
+
+Span attributes MAY include higher-cardinality dimensions (correlation_id, aggregate_id, actor_id) — the low-cardinality discipline from R4.A applies only to **metric labels**, not to span attributes.
+
+Severity:
+S1
+
+References:
+- `src/runtime/observability/WhyceActivitySources.cs`
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `Canonical_activity_source_names_are_declared` + `Canonical_span_names_are_low_cardinality_constants`
+
+### R-TRACE-DISPATCH-SPAN-01 — Every Command Dispatch Emits A Span
+
+Definition:
+`SystemIntentDispatcher.DispatchInternalAsync` MUST wrap the `IRuntimeControlPlane.ExecuteAsync` call in a `WhyceActivitySources.Spans.CommandDispatch` span on `WhyceActivitySources.ControlPlane`. The span MUST carry: `command.type`, `classification`, `context`, `domain`, `aggregate.id`, `actor.id`, `tenant.id`, `correlation.id`. On success the span status MUST be `Ok` + outcome=`success`; on `CommandResult.Failure` the span MUST be `Error` + outcome=`failure` + failure_reason (when set); on unexpected exception the span MUST be `Error` + outcome=`exception` and the exception MUST re-propagate untouched.
+
+Severity:
+S1
+
+References:
+- `src/runtime/dispatcher/SystemIntentDispatcher.cs`
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `SystemIntentDispatcher_uses_canonical_control_plane_source_and_dispatch_span`
+
+### R-TRACE-OPERATOR-ACTION-SPAN-01 — Every Operator Action Emits A Span
+
+Definition:
+`OperatorActionAuditRecorder.RecordAsync` MUST wrap its audit-emission body in a `WhyceActivitySources.Spans.OperatorAction` span on `WhyceActivitySources.Admin`. The span MUST carry `action.type`, `target.resource_type`, `target.id`, `outcome`, `actor.id`, `tenant.id`, `correlation.id`. The span MUST be emitted on every outcome branch (accepted / refused / failed) so refusal paths leave a span trail mirroring the audit-evidence trail (R-ADMIN-AUDIT-EMISSION-01).
+
+Severity:
+S1
+
+References:
+- `src/runtime/control-plane/admin/OperatorActionAuditRecorder.cs`
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `OperatorActionAuditRecorder_uses_canonical_admin_source_and_operator_action_span`
+
+### R-TRACE-EXPORTER-OTEL-01 — OTEL Exporter Composition Is Canonical
+
+Definition:
+`Whycespace.Host.csproj` MUST declare the following NuGet packages:
+- `OpenTelemetry.Extensions.Hosting`
+- `OpenTelemetry.Instrumentation.AspNetCore`
+- `OpenTelemetry.Instrumentation.Http`
+- `OpenTelemetry.Exporter.OpenTelemetryProtocol`
+
+`TracingInfrastructureModule.AddTracing` MUST register both canonical sources (`WhyceActivitySources.ControlPlaneName` + `WhyceActivitySources.AdminName`), wire AspNetCore + Http auto-instrumentation, and configure the OTLP exporter. The default exporter endpoint MUST be `http://jaeger:4317` (matches the `jaeger` service in `infrastructure/deployment/docker-compose.yml`); overridable via the `Otel:Endpoint` configuration key.
+
+Severity:
+S1
+
+References:
+- `src/platform/host/Whycespace.Host.csproj`
+- `src/platform/host/composition/infrastructure/observability/TracingInfrastructureModule.cs`
+- `infrastructure/deployment/docker-compose.yml` — `jaeger` service
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `Host_csproj_declares_required_otel_packages` + `Tracing_infrastructure_module_registers_both_canonical_sources` + `Docker_compose_wires_jaeger_service_with_otlp_port`
+
+### R-TRACE-CORRELATION-BRIDGE-01 — Trace ↔ Correlation Id Bridge
+
+Definition:
+`TraceCorrelationMiddleware` (platform/api) MUST:
+1. On inbound request (after `CorrelationIdMiddleware` has populated `HttpContext.Items[whyce.correlation_id]`), tag the current `Activity` with attribute key `whyce.correlation_id` set to the correlation id Guid.
+2. On response start, echo the current trace id back as the `traceresponse` header in W3C trace-context format `00-{traceId}-{spanId}-{flags}`.
+
+The middleware MUST be registered in `Program.cs` AFTER `CorrelationIdMiddleware` (so the correlation id is already on the items bag) and AFTER `UseRouting` (so the AspNetCore auto-instrumentation root span is in scope).
+
+Severity:
+S1
+
+References:
+- `src/platform/api/middleware/TraceCorrelationMiddleware.cs`
+- `src/platform/host/Program.cs`
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `Trace_correlation_middleware_uses_canonical_whyce_correlation_id_attribute_key` + `Program_cs_registers_trace_correlation_middleware_after_correlation_middleware`
+
+### R-TRACE-LAYER-DISCIPLINE-01 — Runtime Layer Uses Stdlib Only
+
+Definition:
+`src/runtime/Whycespace.Runtime.csproj` MUST NOT reference any observability-infra NuGet package. The runtime emits spans via the `System.Diagnostics.ActivitySource` stdlib API and emits metrics via `System.Diagnostics.Metrics`; OTEL SDK + exporters + `prometheus-net` + any equivalent infra package live exclusively in `Whycespace.Host`.
+
+Concretely forbidden in `Whycespace.Runtime.csproj`:
+- Any `OpenTelemetry.*` package.
+- `prometheus-net` / `prometheus-net.AspNetCore` / any prometheus-client package.
+- Any third-party logging-SDK package (Serilog, NLog, log4net, etc.).
+
+Allowed runtime csproj dependency set (closed allow-list, pinned by test):
+- `Microsoft.AspNetCore.Http.Abstractions`
+- `Microsoft.Extensions.DependencyInjection.Abstractions`
+- `Microsoft.Extensions.Logging.Abstractions`
+- `System.Threading.RateLimiting`
+
+Extending the allow-list is a deliberate, reviewed change: update both `RuntimePackageAllowList` in the pinning test AND this rule in the same commit.
+
+Runtime's project-to-project references (`Whycespace.Domain`, `Whycespace.Shared`, `Whycespace.Engines`) are orthogonal to this rule; the rule governs only NuGet PackageReference drift.
+
+Platform_api controllers + middleware MUST NOT reference `Whycespace.Runtime.Observability.WhyceActivitySources` directly (Api depends only on Shared + Systems). When the Api layer needs a canonical span attribute key it MUST inline the string with a comment pointing to the authoritative runtime-layer constant, and a validator test MUST pin the inlined value to the constant to catch drift.
+
+Severity:
+S1
+
+References:
+- `src/runtime/Whycespace.Runtime.csproj`
+- `src/platform/host/observability/HttpMetricsMiddleware.cs` — the prometheus-net seam, deliberately host-side per this rule
+- `src/platform/api/middleware/TraceCorrelationMiddleware.cs` — inlined `whyce.correlation_id` per this rule
+- `tests/unit/observability/R5ATracingPipelineTests.cs` — `Runtime_csproj_does_not_reference_opentelemetry` + `Runtime_csproj_package_references_are_on_allow_list` + `Runtime_csproj_does_not_reference_prometheus_net` + `HttpMetricsMiddleware_lives_in_platform_host_not_runtime` + `Trace_correlation_middleware_uses_canonical_whyce_correlation_id_attribute_key`
+
+### R-TRACE-EVENT-FABRIC-SPAN-01 — Event Fabric Emits Canonical Span Per Batch
+
+Definition:
+`EventFabric.ProcessAsync` MUST wrap its `ProcessInternalAsync` call in a `WhyceActivitySources.Spans.EventFabricProcess` span on `WhyceActivitySources.EventFabric`. `EventFabric.ProcessAuditAsync` MUST use the distinct `WhyceActivitySources.Spans.EventFabricProcessAudit` span name so operators can filter audit-stream emissions separately from domain-aggregate emissions in Jaeger. Both spans MUST carry: `event.count`, `aggregate.id`, `classification`, `context`, `domain`, `correlation.id`. Exceptions re-propagate untouched; span status MUST be `Error` with the exception type name on failure.
+
+Severity:
+S1
+
+References:
+- `src/runtime/event-fabric/EventFabric.cs`
+- `tests/unit/observability/R5APhase2TracingTests.cs` — `EventFabric_uses_canonical_source_and_process_spans`
+
+### R-TRACE-OUTBOUND-SCHEDULE-SPAN-01 — Outbound-Effect Schedule Emits Canonical Span
+
+Definition:
+`OutboundEffectDispatcher.ScheduleAsync` MUST wrap the post-argument-validation body in a `WhyceActivitySources.Spans.OutboundEffectSchedule` span on `WhyceActivitySources.OutboundEffects`. Attributes MUST carry: `provider.id`, `effect.type`, `idempotency.key`, `correlation.id`. Outcome tag is one of: `dedup_hit` (idempotency-key match short-circuit), `scheduled` (new effect), `provider_not_registered`, `options_missing`. The `dedup.hit` boolean + `target.id` (effect id) MUST be set on both dedup-hit and scheduled branches.
+
+Argument-validation failures (null intent, empty provider / effect type) MUST stay on the caller's span — the dispatcher span is started AFTER validation so malformed-intent telemetry does not pollute the dispatcher span-stream.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectDispatcher.cs`
+- `tests/unit/observability/R5APhase2TracingTests.cs` — `OutboundEffectDispatcher_uses_canonical_source_and_schedule_span`
+
+### R-TRACE-LOG-CORRELATION-01 — Every Request Has An ILogger Scope With Canonical Keys
+
+Definition:
+`LogCorrelationMiddleware` MUST wrap every request in an `ILogger.BeginScope(IDictionary<string,object?>)` carrying the canonical correlation keys `trace_id`, `span_id`, `correlation_id`, and (when the `X-Tenant-Id` header is present) `tenant_id`. Scope keys use the dot-to-underscore convention so structured logging frameworks (Seq, Loki, Kibana) treat them as first-class fields.
+
+Ordering contract: registered AFTER `CorrelationIdMiddleware` AND `TraceCorrelationMiddleware` so both the correlation id (on `HttpContext.Items`) and the AspNetCore auto-instrumentation root `Activity` are in scope before the log scope opens. Tenant id is advisory — absent = the key is omitted rather than a synthetic default being invented.
+
+Severity:
+S1
+
+References:
+- `src/platform/api/middleware/LogCorrelationMiddleware.cs`
+- `src/platform/host/Program.cs` — middleware ordering
+- `tests/unit/observability/R5APhase2TracingTests.cs` — `LogCorrelationMiddleware_exists_and_declares_canonical_scope_keys` + `LogCorrelationMiddleware_registered_after_trace_correlation_middleware`
+
+### R-TRACE-EXEMPLAR-DEFERRED-01 — System.Diagnostics Exemplars Are Structurally Deferred
+
+Definition:
+Exemplars on the runtime's high-value histograms (command.duration, workflow.execution.duration, outbound.effect.{dispatch,ack,finality}.duration, chain.anchor.wait_ms, event_store.append.advisory_lock_wait_ms, consumer.lag_messages, etc.) are DEFERRED because:
+
+1. These histograms are declared via `System.Diagnostics.Metrics.Meter.CreateHistogram<T>`. The stdlib API does not yet expose exemplar hooks on histogram observations.
+2. prometheus-net's native histograms DO support exemplars, but switching the runtime histograms to native prometheus-net would force a `prometheus-net` NuGet reference into `Whycespace.Runtime.csproj`, violating the observability-infra ban in `R-TRACE-LAYER-DISCIPLINE-01`. (The existing host-side `HttpMetricsMiddleware` at `src/platform/host/observability/` is the canonical home for prometheus-net; its instruments are HTTP-boundary concerns, not runtime-pipeline concerns.)
+3. The prometheus-net → stdlib bridge (via `MeterListener`) may auto-attach the current Activity's trace id as an exemplar, but that behavior is implicit and version-dependent; any explicit API lights up only via native histograms.
+
+Action: revisit when the stdlib adds exemplar support. Until then operators drill from metric → trace via the `traceresponse` response header (R-TRACE-CORRELATION-BRIDGE-01), the R4.A dashboards' time-range filters, and the log-scope `trace_id` (R-TRACE-LOG-CORRELATION-01) joined on the correlation id.
+
+Severity:
+S3 (documentation-only; not a blocker)
+
+References:
+- prometheus-net 8.2.1 installed at the host seam (`src/platform/host/observability/HttpMetricsMiddleware.cs`); stdlib `System.Diagnostics.Metrics` exemplar API tracked on .NET roadmap
+- R4.A dashboards provide time-range + label-filter drill-down as the interim metric↔trace join path
+
+### R-TRACE-OUTBOUND-DISPATCH-SPAN-01 — Every Dispatch Attempt Emits A Span
+
+Definition:
+`OutboundEffectRelay.DispatchOneAsync` MUST wrap the entire method body in a `WhyceActivitySources.Spans.OutboundEffectDispatch` span on `WhyceActivitySources.OutboundEffects`, with `ActivityKind.Client` (the method IS the provider call from a distributed-tracing perspective). The span MUST carry `target.id` (effect id), `provider.id`, `effect.type`, `attempt.number`. The outcome tag MUST match the canonical `OutcomeTag(result)` string emitted on the `outbound.effect.dispatch.duration` meter — span + metric stay aligned on the same low-cardinality vocabulary.
+
+The span emits once per dispatch ATTEMPT. A retrying effect produces multiple dispatch spans (one per attempt), which is the operator-useful shape for tracking retry behavior — each attempt's breaker / timeout / provider-response state is visible.
+
+The `provider_not_registered` and `options_missing` branches MUST also tag an outcome (so these rare mis-config paths leave a span trail even though they short-circuit before adapter invocation).
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectRelay.cs`
+- `tests/unit/observability/R5APhase3TracingTests.cs` — `OutboundEffectRelay_uses_dispatch_span_with_attempt_number`
+
+### R-TRACE-OUTBOUND-FINALIZE-SPAN-01 — Finality Transitions Emit Spans
+
+Definition:
+`OutboundEffectFinalityService.FinalizeAsync` MUST wrap its body (after argument validation) in a `WhyceActivitySources.Spans.OutboundEffectFinalize` span. Attributes MUST carry: `target.id`, `outcome` (the canonical `OutboundFinalityOutcome` name), `finality.source`, `provider.id`, `effect.type`, and `compensation.emitted` (true when an atomic compensation event accompanied the finalize, per R-OUT-EFF-COMPENSATION-ATOMIC-01).
+
+Precondition failures (invalid source status) re-propagate as `InvalidOperationException` and land on the caller's span. Malformed-argument validation failures happen BEFORE the span starts so they do not pollute the finalize-span stream.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs`
+- `tests/unit/observability/R5APhase3TracingTests.cs` — `OutboundEffectFinalityService_uses_finalize_and_reconcile_spans`
+
+### R-TRACE-OUTBOUND-RECONCILE-SPAN-01 — Operator Reconcile Emits Span; Sweeper Path Is Unwrapped
+
+Definition:
+`OutboundEffectFinalityService.ReconcileAsync` (the OPERATOR-driven seam invoked by the R4.B admin controller) MUST wrap its body (after argument validation) in a `WhyceActivitySources.Spans.OutboundEffectReconcile` span. Attributes MUST carry: `target.id`, `outcome`, `reconciler.actor_id`, `provider.id`, `effect.type`, `compensation.emitted`. The span pairs naturally as a child of the admin controller's `runtime.admin.operator_action` span in the trace tree.
+
+`OutboundEffectFinalityService.MarkReconciliationRequiredAsync` MUST NOT be span-wrapped. That method runs on the background sweeper worker timer, not on a per-request path; span-wrapping it produces continuous timer-driven span noise that pollutes Jaeger storage and buries useful operator traces. The test `Phase3_sweeper_MarkReconciliationRequired_is_intentionally_unwrapped` pins this choice.
+
+Severity:
+S1
+
+References:
+- `src/runtime/outbound-effects/OutboundEffectFinalityService.cs`
+- `tests/unit/observability/R5APhase3TracingTests.cs` — `OutboundEffectFinalityService_uses_finalize_and_reconcile_spans` + `Phase3_sweeper_MarkReconciliationRequired_is_intentionally_unwrapped`
+
+### R-TRACE-WORKFLOW-ENGINE-SPAN-DEFERRED-01 — Workflow Engine Per-Step Spans Deferred (Layer Issue)
+
+Definition:
+Workflow engine per-step spans (on `WorkflowStepExecutor.ExecuteAsync` and `T1MWorkflowEngine.ExecuteAsync`) are DEFERRED to Phase 4 because:
+
+1. These seams live in `Whycespace.Engines.T1M` (the engine project), which references only `Whycespace.Domain` + `Whycespace.Shared` (NOT `Whycespace.Runtime`).
+2. `WhyceActivitySources` lives in `Whycespace.Runtime.Observability` and cannot be imported from the engine layer without violating DG-R5-01 (engine layer's allowed-reference set).
+
+Two clean resolution paths exist for Phase 4:
+- Move the NAME constants (strings only — no `ActivitySource` instances) to `Whycespace.Shared.Kernel.Observability`, letting engines reference them while the `ActivitySource` instances stay in runtime.
+- Declare a peer `EnginesActivitySources` inside `Whycespace.Engines` mirroring the Whyce-* prefix convention, documented as a second canonical source.
+
+Either is a clean Phase 4 scope; bundling it into Phase 3 would muddle the layer-discipline discussion.
+
+Severity:
+S3 (documentation-only; not a blocker)
+
+References:
+- `src/engines/Whycespace.Engines.csproj` — reference set (Domain + Shared)
+- `src/engines/T1M/core/step-executor/WorkflowStepExecutor.cs`
+- `src/engines/T1M/core/workflow-engine/WorkflowEngine.cs`
+
+---
+
+## Section: R5.C.1 Replay-Equivalence Certification (2026-04-20)
+
+R5.C.1 formalizes the runtime's determinism claims — the architectural assertion that replay produces byte-identical state / hashes — into a guard-locked, executable invariant catalog. Parallel in shape + discipline to R5.B's failure-mode catalog: YAML source of truth + C# mirror + validator tests + certified/unproven status.
+
+### R-REPLAY-CERTIFICATION-REGISTRY-01 — Replay-Equivalence Catalog Is Authoritative
+
+Definition:
+The source of truth for the canonical replay-equivalence invariant catalog is `infrastructure/observability/certification/replay-equivalence.yml`. The C# mirror at `tests/unit/certification/CanonicalReplayInvariants.cs` MUST stay in sync — every id in the C# registry MUST appear in the YAML, and every YAML id (in `invariants:` or `unproven_invariants:`) MUST appear in one of the C# lists.
+
+Every invariant entry MUST declare:
+- a `claim:` block (the determinism statement)
+- an `invariant_family:` (e.g. `type-a`, `type-b`, `round-trip`, `primitive`, `workflow-replay`, `replay-seam`, `projection-replay`, `projection-rebuild`, `multi-instance`, `chain-replay`)
+- at least one entry in `canonical_primitives:` (the determinism seams the claim rests on)
+- a `status:` of exactly `certified` or `unproven`
+- for `unproven`: a non-empty `rationale:` block
+
+No invariant MAY appear in both `invariants:` and `unproven_invariants:`.
+
+Severity:
+S1
+
+References:
+- `infrastructure/observability/certification/replay-equivalence.yml`
+- `tests/unit/certification/CanonicalReplayInvariants.cs`
+- `tests/unit/certification/ReplayInvariantManifestTests.cs`
+
+### R-REPLAY-CERTIFICATION-PROOF-EXISTS-01 — Certified Invariants Have Executable Proof
+
+Definition:
+Every catalog entry with `status: certified` MUST declare a non-null `proof_test:` path, and that file MUST exist on disk under the repository root. Promoting an invariant from unproven → certified requires landing the proof test file and flipping the status simultaneously. Demoting certified → unproven requires updating the `proof_test:` to null and adding a `rationale:`.
+
+The proof-existence rule is validator-pinned: `Every_certified_invariant_has_existing_proof_test_file` reads the C# mirror and probes each path. A new canonical determinism claim cannot land as `certified` without a test, and a test cannot be deleted without flipping the status (which requires the rationale block, which is reviewer-visible).
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/ReplayInvariantManifestTests.cs` — `Every_certified_invariant_has_existing_proof_test_file` + `Every_unproven_invariant_has_null_proof_test_and_rationale_in_yaml`
+
+### R-REPLAY-DETERMINISM-PRIMITIVES-01 — Canonical Determinism Seams Are Reference Set
+
+Definition:
+The catalog's `canonical_primitives:` vocabulary is a controlled list. Every invariant MUST cite at least one of:
+
+- `ExecutionHash` — composite command+identity+policy+events hash (`src/runtime/deterministic/ExecutionHash.cs`)
+- `DeterministicIdGenerator` — SHA256-seeded Guid generation (`src/platform/host/composition/core/DeterministicIdGenerator.cs`)
+- `ChainHasher` — chain-anchor block hash composition (`src/engines/T0U/whycechain/hashing/ChainHasher.cs`)
+- `DeterministicRandomProvider` — seeded RNG (`src/runtime/resilience/DeterministicRandomProvider.cs`)
+- `TestClock` / frozen-IClock harness — clock determinism
+- `EventDeserializer` + `EventSchemaRegistry` — lossless envelope round-trip
+- `AggregateReplayHarness` — per-aggregate round-trip infrastructure
+- `CommandContext` (via `ResetForReplay()` seam) — replay-reset write-once contract
+- `ProjectionDispatcher` / `ProjectionRebuilder` / `EventReplayService` — projection replay orchestration
+- aggregate names (e.g. `OutboundEffectAggregate`) when the invariant is per-aggregate
+
+Adding a new primitive to the vocabulary requires promoting it into this list. Architecture-test check not required in R5.C.1 — the controlled list is documentation-only; validator tests verify list membership is `> 0` (non-empty) which preserves the discipline without hand-maintaining a strict match.
+
+Severity:
+S2
+
+References:
+- `infrastructure/observability/certification/replay-equivalence.yml` — canonical_primitives values
+- `tests/unit/certification/ReplayInvariantManifestTests.cs` — `Every_invariant_lists_at_least_one_canonical_primitive`
+
+---
+
+## Section: R5.C.2 Chaos Observability-Loop Certification (2026-04-20)
+
+R5.C.2 Phase 1 formalizes the FULL observability loop per canonical fault: fault → exception → handler → HTTP status → feeding metric → R4.A alert → R5.A span family → log-scope contract. The catalog binds every R5.B certified failure mode to a single cross-referenced entry. Phase 2 (deferred) flips entries from `cataloged` to `live_proven` as the chaos harness executes end-to-end against running infrastructure.
+
+### R-CHAOS-LOOP-COVERAGE-01 — Every Certified Failure Mode Has A Chaos Loop
+
+Definition:
+Every R5.B catalog entry with `status: certified` MUST have a corresponding entry in `infrastructure/observability/certification/chaos-observability-loop.yml`, cross-referenced via the `failure_mode:` field. The reverse direction is not required — a chaos loop MAY reference an `unproven` R5.B failure mode — but every certified failure mode MUST trace through a loop.
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_certified_R5B_failure_mode_has_a_chaos_loop` + `Every_chaos_loop_references_a_real_R5B_failure_mode`
+
+### R-CHAOS-LOOP-ALERT-EXISTS-01 — Cited R4.A Alerts Must Exist
+
+Definition:
+Every chaos-loop entry with a non-null `r4a_alert:` field MUST cite an alert name that is defined in `infrastructure/observability/prometheus/rules/*.yml`. Loops may have `r4a_alert: null` when the failure mode is covered by an operational-only aggregate alert (per R5.B's `operational_only_alerts:` allowlist); the null entry carries a `rationale:` block explaining the absence.
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_cited_r4a_alert_exists_in_rules_files`
+
+### R-CHAOS-LOOP-SPAN-EXISTS-01 — Cited Span Families Must Be Canonical
+
+Definition:
+Every chaos-loop's `span_family:` field MUST be a value that appears in the canonical span-name set, cross-referenced against `Whycespace.Runtime.Observability.WhyceActivitySources.Spans.*` constants. The canonical set is mirrored in `CanonicalChaosLoops.CanonicalSpanFamilies`; a test enforces that this mirror stays in sync with the runtime constants.
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_cited_span_family_exists_as_canonical_span_constant` + `Canonical_span_family_list_matches_WhyceActivitySources_constants`
+
+### R-CHAOS-LOOP-METRIC-PREFIX-01 — Cited Metrics Match Canonical Prefix Set
+
+Definition:
+Every chaos-loop's `feeding_metric:` field (when non-null) MUST start with one of the canonical metric prefixes enumerated in R4.A's `AlertExpressionMetricReferenceTests`. This prevents loops from citing typo'd or undeclared metric families. Null values are permitted for failure modes whose metric link is operational-only (aggregate 5xx, degraded-reason-only).
+
+Severity:
+S1
+
+References:
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_cited_metric_matches_a_canonical_prefix`
+
+### R-CHAOS-LOOP-LOG-SCOPE-CONTRACT-01 — Log-Scope Keys Match Middleware Contract
+
+Definition:
+`CanonicalChaosLoops.RequiredLogScopeKeys` MUST exactly match the required keys emitted by `LogCorrelationMiddleware` (`trace_id`, `span_id`, `correlation_id`). `OptionalLogScopeKeys` MUST exactly match the optional keys (`tenant_id`). A drift in either direction fails the `Log_scope_keys_match_trace_correlation_middleware_contract` test red.
+
+Severity:
+S1
+
+References:
+- `src/platform/api/middleware/LogCorrelationMiddleware.cs`
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Log_scope_keys_match_trace_correlation_middleware_contract`
+
+### R-CHAOS-LOOP-PROOF-STATUS-01 — Cataloged vs Live-Proven
+
+Definition:
+Every chaos-loop entry's `loop_proof_status:` MUST be either `cataloged` (the contract is declared + cross-reference-validated but not yet proven against running infrastructure) or `live_proven` (R5.C.2 Phase 2 has executed the full loop under load + fault injection). Phase 1 populates every entry as `cataloged`. Promoting to `live_proven` requires landing an executable live-infrastructure chaos test as part of Phase 2.
+
+Severity:
+S2
+
+References:
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_loop_proof_status_is_cataloged_or_live_proven`
+
+### R-CHAOS-LOOP-LIVE-PROOF-01 — Live-Proven Loops Have Executable Proof Files
+
+Definition:
+Every chaos-loop entry with `loop_proof_status: live_proven` MUST declare a non-null `proof_test:` path, and that file MUST exist on disk under the repository root. The proof test exercises the full signal chain end-to-end — canonical exception → canonical handler → canonical HTTP status + ProblemDetails type URI → wrapping Activity Error status + failure-reason tag. Metric + log observation inside the test is optional per R5.C.2 Phase 2 scope (those contracts are pinned separately by R4.A's own tests + R-TRACE-LOG-CORRELATION-01).
+
+Conversely, every loop with `loop_proof_status: cataloged` MUST have `proof_test: null`. Promoting `cataloged` → `live_proven` requires landing the proof test and flipping the status simultaneously; demoting requires removing the test + flipping back, which surfaces the change in review.
+
+R5.C.2 Phase 2 landed three initial proofs using the `ChaosLoopHarness` pattern:
+- `domain-invariant-violation-loop` → `tests/integration/chaos/DomainInvariantChaosLoopTest.cs`
+- `concurrency-conflict-loop` → `tests/integration/chaos/ConcurrencyConflictChaosLoopTest.cs`
+- `outbox-saturated-loop` → `tests/integration/chaos/OutboxSaturatedChaosLoopTest.cs`
+
+The remaining 6 loops (`opa-unavailable`, `chain-anchor-wait-timeout`, `chain-anchor-unavailable`, `workflow-saturated`, `workflow-timeout`, `postgres-pool-exhaustion`) stay at `cataloged`; their fault-fabrication path requires either deeper handler mocks or live infrastructure, which is R5.C.2 Phase 3 scope.
+
+Severity:
+S1
+
+References:
+- `tests/integration/chaos/ChaosLoopHarness.cs` — canonical in-memory harness
+- `tests/integration/chaos/*ChaosLoopTest.cs` — per-loop proof tests
+- `tests/unit/certification/ChaosObservabilityLoopTests.cs` — `Every_live_proven_loop_has_existing_proof_test_file` + `Every_cataloged_only_loop_has_null_proof_test`

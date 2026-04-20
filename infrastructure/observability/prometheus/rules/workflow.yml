@@ -1,0 +1,69 @@
+groups:
+  # R4.A / R-OBS-ALERT-WORKFLOW-01 — workflow runtime alerts.
+  # Keyed on canonical workflow execution outcome tags
+  # {success, failed, timeout_step, timeout_execution, cancelled, suspended}.
+  - name: workflow-runtime
+    interval: 30s
+    rules:
+      - alert: WorkflowTimeoutRateHigh
+        expr: sum(rate(workflow_execution_duration_count{outcome=~"timeout_step|timeout_execution"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          family: workflow-runtime
+        annotations:
+          summary: Workflow timeouts above 0.1/s sustained (5m).
+          description: |
+            workflow_execution_duration_count with outcome=timeout_step or
+            timeout_execution is incrementing. Pair with the
+            WorkflowTimeoutExceptionHandler 503 rate on the control-plane
+            dashboard. Likely causes: downstream outbound-effect provider
+            is slow, or a workflow step is blocked on a dependency that
+            triggered an intra-step CancellationToken timeout.
+
+      - alert: WorkflowAdmissionRejectionSustained
+        expr: sum(rate(workflow_rejected_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          family: workflow-runtime
+        annotations:
+          summary: Workflow admission is refusing starts at >1/s (5m).
+          description: |
+            WorkflowAdmissionGate is at capacity. WorkflowSaturatedExceptionHandler
+            translates the refusal to 503 + Retry-After. Tune
+            WorkflowOptions:MaxConcurrency / PerWorkflowConcurrency or
+            scale the host. Partition tag identifies tenant vs IP
+            partitioning for the rejection.
+
+      - alert: WorkflowStepTerminalFailureSpike
+        expr: sum(rate(workflow_step_terminal_failures_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          family: workflow-runtime
+        annotations:
+          summary: Workflow step terminal failures sustained (>0.05/s).
+          description: |
+            A workflow step has exhausted its retry policy and the
+            engine routed the execution to Failed. Inspect the
+            category label to identify the RuntimeFailureCategory
+            (DependencyUnavailable, Timeout, ValidationFailed, …).
+            Operator-driven resume is possible via
+            POST /api/admin/workflow/{id}/resume once root cause is
+            addressed.
+
+      - alert: WorkflowStepRetryAttemptsBurst
+        expr: sum(rate(workflow_step_retry_attempts_total[1m])) > 2
+        for: 3m
+        labels:
+          severity: info
+          family: workflow-runtime
+        annotations:
+          summary: Elevated workflow step retry rate (>2/s).
+          description: |
+            High retry rate is early warning for downstream instability.
+            Split by workflow_name / step_name and correlate with the
+            outbound-effect provider metrics on that step. Not itself a
+            paging condition unless it persists into terminal-failure
+            territory.

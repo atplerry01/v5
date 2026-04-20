@@ -14,9 +14,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="prometheus-net" Version="8.2.1" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <!-- ILogger<T> abstraction. Framework-layer, not observability-infra:
+         R-TRACE-LAYER-DISCIPLINE-01 bans third-party logging SDKs (Serilog,
+         NLog, etc.) but permits the stdlib-adjacent ILogger<T> abstraction
+         (same class as DependencyInjection.Abstractions above). Previously
+         arrived transitively via prometheus-net; now explicit. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
     <!-- phase1.5-S5.2.2 / KC-6 (WORKFLOW-ADMISSION-01): WorkflowAdmissionGate
          uses System.Threading.RateLimiting.PartitionedRateLimiter. The
          host project gets this transitively via Microsoft.AspNetCore.RateLimiting

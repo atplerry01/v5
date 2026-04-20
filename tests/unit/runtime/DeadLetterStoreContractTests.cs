@@ -69,6 +69,22 @@ public sealed class DeadLetterStoreContractTests
             }
             return Task.CompletedTask;
         }
+
+        public Task<IReadOnlyList<DeadLetterEntry>> ListAllAsync(
+            DateTimeOffset? since = null,
+            int limit = 100,
+            bool includeReprocessed = false,
+            CancellationToken cancellationToken = default)
+        {
+            var effectiveLimit = Math.Min(Math.Max(1, limit), 1000);
+            var results = _store.Values
+                .Where(e => includeReprocessed || e.ReprocessedAt is null)
+                .Where(e => since is null || e.EnqueuedAt >= since)
+                .OrderByDescending(e => e.EnqueuedAt)
+                .Take(effectiveLimit)
+                .ToList();
+            return Task.FromResult<IReadOnlyList<DeadLetterEntry>>(results);
+        }
     }
 
     private static DeadLetterEntry NewEntry(

@@ -45,4 +45,30 @@ public sealed class InMemoryWorkflowExecutionProjectionStore : IWorkflowExecutio
         _store[model.WorkflowExecutionId] = stored;
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<WorkflowExecutionReadModel>> ListByStatusAsync(
+        string status,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+        => ListAsync(status: status, workflowName: null, approvalState: null, limit: limit, cancellationToken);
+
+    public Task<IReadOnlyList<WorkflowExecutionReadModel>> ListAsync(
+        string? status = null,
+        string? workflowName = null,
+        string? approvalState = null,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveLimit = Math.Min(Math.Max(1, limit), 1000);
+        var results = _store.Values
+            .Where(m => status is null || string.Equals(m.Status, status, StringComparison.Ordinal))
+            .Where(m => workflowName is null || string.Equals(m.WorkflowName, workflowName, StringComparison.Ordinal))
+            .Where(m => approvalState is null || string.Equals(m.ApprovalState, approvalState, StringComparison.Ordinal))
+            .OrderBy(m => m.WorkflowName, StringComparer.Ordinal)
+            .ThenBy(m => m.WorkflowExecutionId)
+            .Take(effectiveLimit)
+            .Select(m => m with { StepOutputs = new Dictionary<string, object?>(m.StepOutputs) })
+            .ToList();
+        return Task.FromResult<IReadOnlyList<WorkflowExecutionReadModel>>(results);
+    }
 }

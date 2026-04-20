@@ -1,0 +1,3 @@
+namespace Whycespace.Domain.BusinessSystem.Provider.ProviderGovernance.ProviderAgreement;
+
+public sealed record ProviderAgreementTerminatedEvent(ProviderAgreementId ProviderAgreementId, DateTimeOffset TerminatedAt);

@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Whycespace.Runtime.Deterministic;
+using Whycespace.Runtime.Observability;
 using Whycespace.Shared.Contracts.Runtime;
 using Whycespace.Shared.Kernel.Domain;
 
@@ -44,18 +46,36 @@ public sealed class EventFabric : IEventFabric
         _clock = clock;
     }
 
-    public Task ProcessAsync(
+    public async Task ProcessAsync(
         IReadOnlyList<object> domainEvents,
         CommandContext context,
-        CancellationToken cancellationToken = default) =>
-        ProcessInternalAsync(
-            domainEvents,
-            context,
-            aggregateIdOverride: null,
-            classificationOverride: null,
-            contextOverride: null,
-            domainOverride: null,
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // R5.A Phase 2 / R-TRACE-EVENT-FABRIC-SPAN-01 — wrap the canonical
+        // persist → chain → outbox orchestration. Low-cardinality span name;
+        // dimensions on attributes. Failures re-propagate — the fabric
+        // layer never swallows (TC-2 / TC-3 canonical behavior).
+        using var activity = WhyceActivitySources.EventFabric.StartActivity(
+            WhyceActivitySources.Spans.EventFabricProcess,
+            ActivityKind.Internal);
+        SetFabricTags(activity, domainEvents.Count, context.AggregateId,
+            context.Classification, context.Context, context.Domain, context.CorrelationId);
+        try
+        {
+            await ProcessInternalAsync(
+                domainEvents, context,
+                aggregateIdOverride: null, classificationOverride: null,
+                contextOverride: null, domainOverride: null,
+                cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+            activity?.SetTag(WhyceActivitySources.Attributes.FailureReason, ex.GetType().Name);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Processes an audit emission with explicit routing overrides. Used by the
@@ -63,18 +83,56 @@ public sealed class EventFabric : IEventFabric
     /// to a dedicated stream and published to a dedicated topic, isolated from
     /// the command's domain aggregate stream.
     /// </summary>
-    public Task ProcessAuditAsync(
+    public async Task ProcessAuditAsync(
         AuditEmission audit,
         CommandContext context,
-        CancellationToken cancellationToken = default) =>
-        ProcessInternalAsync(
-            audit.Events,
-            context,
-            aggregateIdOverride: audit.AggregateId,
-            classificationOverride: audit.Classification,
-            contextOverride: audit.Context,
-            domainOverride: audit.Domain,
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // R5.A Phase 2 — distinct span name for audit emissions so operators
+        // can filter the audit stream separately from domain-aggregate
+        // streams in Jaeger. Routing overrides surface as attributes on the
+        // audit span, not the caller's span.
+        using var activity = WhyceActivitySources.EventFabric.StartActivity(
+            WhyceActivitySources.Spans.EventFabricProcessAudit,
+            ActivityKind.Internal);
+        SetFabricTags(activity, audit.Events.Count, audit.AggregateId,
+            audit.Classification, audit.Context, audit.Domain, context.CorrelationId);
+        try
+        {
+            await ProcessInternalAsync(
+                audit.Events, context,
+                aggregateIdOverride: audit.AggregateId,
+                classificationOverride: audit.Classification,
+                contextOverride: audit.Context,
+                domainOverride: audit.Domain,
+                cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+            activity?.SetTag(WhyceActivitySources.Attributes.FailureReason, ex.GetType().Name);
+            throw;
+        }
+    }
+
+    private static void SetFabricTags(
+        Activity? activity,
+        int eventCount,
+        Guid aggregateId,
+        string classification,
+        string contextName,
+        string domainName,
+        Guid correlationId)
+    {
+        if (activity is null) return;
+        activity.SetTag(WhyceActivitySources.Attributes.EventCount, eventCount);
+        activity.SetTag(WhyceActivitySources.Attributes.AggregateId, aggregateId);
+        activity.SetTag(WhyceActivitySources.Attributes.Classification, classification);
+        activity.SetTag(WhyceActivitySources.Attributes.Context, contextName);
+        activity.SetTag(WhyceActivitySources.Attributes.Domain, domainName);
+        activity.SetTag(WhyceActivitySources.Attributes.CorrelationId, correlationId);
+    }
 
     private async Task ProcessInternalAsync(
         IReadOnlyList<object> domainEvents,

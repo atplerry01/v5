@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Document.ContractDocument;
-
-public sealed record ContractDocumentCreatedEvent(ContractDocumentId ContractDocumentId, ContractReferenceId ContractReferenceId);

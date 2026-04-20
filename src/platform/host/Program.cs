@@ -182,13 +182,25 @@ using (var scope = app.Services.CreateScope())
     await validator.ValidateAsync();
 }
 
-// HTTP observability middleware (Prometheus) — before routing
-app.UseMiddleware<Whycespace.Runtime.Observability.HttpMetricsMiddleware>();
+// HTTP observability middleware (Prometheus) — before routing.
+// Lives in the host (not runtime) per R-TRACE-LAYER-DISCIPLINE-01:
+// prometheus-net is an infra-layer dependency, not a runtime-layer one.
+app.UseMiddleware<Whycespace.Platform.Host.Observability.HttpMetricsMiddleware>();
 // Closed-loop correlation: stamp X-Correlation-Id on every request +
 // echo on every response. Must run before MapControllers so the value is
 // available to ControllerBase.RequestCorrelationId().
 app.UseMiddleware<Whycespace.Platform.Api.Middleware.CorrelationIdMiddleware>();
 app.UseRouting();
+// R5.A / R-TRACE-CORRELATION-BRIDGE-01 — tags the current Activity with
+// whyce.correlation_id and echoes the trace id back on `traceresponse`.
+// Runs AFTER UseRouting so the AspNetCore auto-instrumentation root span
+// is already in scope.
+app.UseMiddleware<Whycespace.Platform.Api.Middleware.TraceCorrelationMiddleware>();
+// R5.A Phase 2 / R-TRACE-LOG-CORRELATION-01 — wraps every request in an
+// ILogger scope carrying trace_id / span_id / correlation_id / tenant_id
+// so downstream log lines are trace-joinable. Runs AFTER both correlation
+// middlewares so both ids are populated before the scope opens.
+app.UseMiddleware<Whycespace.Platform.Api.Middleware.LogCorrelationMiddleware>();
 
 // phase1.5-S5.2.1 / PC-1 (INTAKE-CONFIG-01): runtime intake admission
 // limiter. MUST sit in front of MapControllers so every controller

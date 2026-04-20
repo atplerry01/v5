@@ -1,3 +1,0 @@
-namespace Whycespace.Domain.BusinessSystem.Scheduler.Slot;
-
-public sealed record SlotCancelledEvent(SlotId SlotId);

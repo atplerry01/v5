@@ -1,0 +1,83 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "title": "Runtime — Persistence & Outbox",
+  "tags": ["whycespace", "postgres", "outbox", "r4a"],
+  "timezone": "utc",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Persistence tier — Postgres pool acquisitions, outbox depth + aging, chain-anchor serializer timing, event-store append I/O. Sustained non-zero 'oldest pending age' is the primary alert signal for outbox saturation / relay lag. Source meters: Whycespace.Postgres, Whycespace.Outbox, Whycespace.EventStore, Whycespace.Chain.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Postgres pool acquisitions (by pool)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (pool) (rate(postgres_pool_acquisitions_total[1m]))", "legendFormat": "{{pool}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Postgres pool acquisition failures (by pool × reason)",
+      "description": "Non-zero failures typically map to pool exhaustion or transient transport faults. Investigate via the degraded-mode 'postgres_high_wait' reason on /Health.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (pool, reason) (rate(postgres_pool_acquisition_failures_total[5m]))", "legendFormat": "{{pool}} / {{reason}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Outbox depth + oldest pending age",
+      "description": "'Depth' is the high-water-mark admission signal; 'oldest pending age' bounds staleness. Pair with OutboxSaturatedExceptionHandler 503 refusals on the runtime dashboard.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "outbox_depth", "legendFormat": "depth" },
+        { "expr": "outbox_oldest_pending_age_seconds", "legendFormat": "oldest pending (s)" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Outbox relay throughput",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(outbox_published_total[1m]))", "legendFormat": "published" },
+        { "expr": "sum(rate(outbox_failed_total[1m]))", "legendFormat": "failed" },
+        { "expr": "sum(rate(outbox_deadlettered_total[1m]))", "legendFormat": "deadlettered" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Event-store append I/O (advisory wait / hold / replay rows)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(event_store_append_advisory_lock_wait_ms_bucket[5m])))", "legendFormat": "advisory-wait p95 (ms)" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(event_store_append_hold_ms_bucket[5m])))", "legendFormat": "hold p95 (ms)" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Chain anchor serializer wait / hold (p95, ms)",
+      "description": "Chain anchor ProcessAuditAsync serializes to a single permit. Sustained p95 > 1s on wait_ms implies anchor-tier saturation — correlates with ChainAnchorWaitTimeoutExceptionHandler 503 refusals.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(chain_anchor_wait_ms_bucket[5m])))", "legendFormat": "wait p95" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(chain_anchor_hold_ms_bucket[5m])))", "legendFormat": "hold p95" }
+      ]
+    }
+  ]
+}
