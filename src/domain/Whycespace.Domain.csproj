@@ -5,4 +5,14 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Whycespace.Domain</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      2026-04-20 — Shared reference wired per the dependency-graph
+      ALLOWED matrix in scripts/dependency-check.sh: [domain]="Whycespace.Shared".
+      Introduced to let DomainException implement the shared-layer
+      IDomainInvariantViolation marker (DG-R5-01 remediation).
+    -->
+    <ProjectReference Include="..\shared\Whycespace.Shared.csproj" />
+  </ItemGroup>
 </Project>

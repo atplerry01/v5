@@ -14,7 +14,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Whycespace.Shared.csproj" />
     <ProjectReference Include="..\..\systems\Whycespace.Systems.csproj" />
-    <ProjectReference Include="..\..\domain\Whycespace.Domain.csproj" />
+    <!--
+      2026-04-20 — Whycespace.Domain reference REMOVED per DG-R5-01
+      (dependency-graph ALLOWED matrix: platform_api → Shared + Systems
+      only). Domain invariant violations are now caught at the HTTP edge
+      via the IDomainInvariantViolation marker interface in
+      src/shared/kernel/domain/. See DomainExceptionHandler.cs.
+    -->
   </ItemGroup>
 
   <ItemGroup>

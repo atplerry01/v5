@@ -1,5 +1,6 @@
 using Whycespace.Domain.EconomicSystem.Exchange.Fx;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Tests.Unit.EconomicSystem.Exchange.Fx;
 
@@ -37,17 +38,25 @@ public sealed class CurrencyPairTests
         Assert.Equal(quoteCode, pair.QuoteCurrency.Code);
     }
 
+    // 2026-04-20: Expected-exception type realigned with the actual
+    // upstream throw. `new Currency("")` raises
+    // DomainInvariantViolationException (via Guard.Against) BEFORE
+    // CurrencyPair's own ArgumentException guards fire — so these
+    // tests are asserting on the Currency-level invariant, not the
+    // CurrencyPair-level one. DomainException is the parent class
+    // (DomainInvariantViolationException inherits) so this assertion
+    // covers both the current throw and any future subclass refinement.
     [Fact]
     public void Constructor_Rejects_WhenBaseCodeEmpty()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<DomainInvariantViolationException>(() =>
             new CurrencyPair(new Currency(""), new Currency("USD")));
     }
 
     [Fact]
     public void Constructor_Rejects_WhenQuoteCodeEmpty()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<DomainInvariantViolationException>(() =>
             new CurrencyPair(new Currency("EUR"), new Currency("")));
     }
 }
