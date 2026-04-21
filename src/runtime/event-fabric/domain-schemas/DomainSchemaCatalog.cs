@@ -35,4 +35,11 @@ public static class DomainSchemaCatalog
     /// <summary>R3.B.1 — integration/outbound-effect lifecycle schema bindings.</summary>
     public static void RegisterIntegrationOutboundEffect(EventSchemaRegistry registry)
         => new OutboundEffectSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Content-system vertical — document/core-object/document BC schema bindings.
+    /// Exemplar delivery (2026-04-21); one method per BC as full vertical expands.
+    /// </summary>
+    public static void RegisterContentDocumentCoreObjectDocument(EventSchemaRegistry registry)
+        => new ContentDocumentCoreObjectDocumentSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }
