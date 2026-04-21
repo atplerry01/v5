@@ -6,5 +6,5 @@ public sealed class CanInitiateTransactionSpecification : Specification<WalletAg
 {
     public override bool IsSatisfiedBy(WalletAggregate wallet) =>
         wallet.Status == WalletStatus.Active &&
-        wallet.AccountId != Guid.Empty;
+        wallet.AccountId.Value != Guid.Empty;
 }

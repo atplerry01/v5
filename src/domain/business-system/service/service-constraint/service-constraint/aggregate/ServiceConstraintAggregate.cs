@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceConstraint;
 
-public sealed class ServiceConstraintAggregate
+public sealed class ServiceConstraintAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceConstraintId Id { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public ConstraintKind Kind { get; private set; }
     public ConstraintDescriptor Descriptor { get; private set; }
     public ConstraintStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceConstraintAggregate() { }
 
     public static ServiceConstraintAggregate Create(
         ServiceConstraintId id,
@@ -22,12 +18,10 @@ public sealed class ServiceConstraintAggregate
         ConstraintDescriptor descriptor)
     {
         var aggregate = new ServiceConstraintAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceConstraintErrors.AlreadyInitialized();
 
-        var @event = new ServiceConstraintCreatedEvent(id, serviceDefinition, kind, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceConstraintCreatedEvent(id, serviceDefinition, kind, descriptor));
         return aggregate;
     }
 
@@ -35,10 +29,7 @@ public sealed class ServiceConstraintAggregate
     {
         EnsureMutable();
 
-        var @event = new ServiceConstraintUpdatedEvent(Id, kind, descriptor);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceConstraintUpdatedEvent(Id, kind, descriptor));
     }
 
     public void Activate()
@@ -47,10 +38,7 @@ public sealed class ServiceConstraintAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceConstraintErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceConstraintActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceConstraintActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,39 +46,7 @@ public sealed class ServiceConstraintAggregate
         if (Status == ConstraintStatus.Archived)
             throw ServiceConstraintErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceConstraintArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
-    }
-
-    private void Apply(ServiceConstraintCreatedEvent @event)
-    {
-        Id = @event.ServiceConstraintId;
-        ServiceDefinition = @event.ServiceDefinition;
-        Kind = @event.Kind;
-        Descriptor = @event.Descriptor;
-        Status = ConstraintStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceConstraintUpdatedEvent @event)
-    {
-        Kind = @event.Kind;
-        Descriptor = @event.Descriptor;
-        Version++;
-    }
-
-    private void Apply(ServiceConstraintActivatedEvent @event)
-    {
-        Status = ConstraintStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceConstraintArchivedEvent @event)
-    {
-        Status = ConstraintStatus.Archived;
-        Version++;
+        RaiseDomainEvent(new ServiceConstraintArchivedEvent(Id));
     }
 
     private void EnsureMutable()
@@ -100,11 +56,31 @@ public sealed class ServiceConstraintAggregate
             throw ServiceConstraintErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceConstraintCreatedEvent e:
+                Id = e.ServiceConstraintId;
+                ServiceDefinition = e.ServiceDefinition;
+                Kind = e.Kind;
+                Descriptor = e.Descriptor;
+                Status = ConstraintStatus.Draft;
+                break;
+            case ServiceConstraintUpdatedEvent e:
+                Kind = e.Kind;
+                Descriptor = e.Descriptor;
+                break;
+            case ServiceConstraintActivatedEvent:
+                Status = ConstraintStatus.Active;
+                break;
+            case ServiceConstraintArchivedEvent:
+                Status = ConstraintStatus.Archived;
+                break;
+        }
+    }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceConstraintErrors.MissingId();

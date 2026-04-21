@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.stream_core.availability.commands",
+    "whyce.content.streaming.stream_core.availability.events",
+    "whyce.content.streaming.stream_core.availability.retry",
+    "whyce.content.streaming.stream_core.availability.deadletter"
+  ]
+}

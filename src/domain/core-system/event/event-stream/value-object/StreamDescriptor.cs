@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventStream;
 
 public readonly record struct StreamDescriptor
@@ -7,10 +9,8 @@ public readonly record struct StreamDescriptor
 
     public StreamDescriptor(string streamName, string aggregateType)
     {
-        if (string.IsNullOrWhiteSpace(streamName))
-            throw new ArgumentException("StreamName must not be null or empty.", nameof(streamName));
-        if (string.IsNullOrWhiteSpace(aggregateType))
-            throw new ArgumentException("AggregateType must not be null or empty.", nameof(aggregateType));
+        Guard.Against(string.IsNullOrWhiteSpace(streamName), "StreamName must not be null or empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(aggregateType), "AggregateType must not be null or empty.");
 
         StreamName = streamName;
         AggregateType = aggregateType;

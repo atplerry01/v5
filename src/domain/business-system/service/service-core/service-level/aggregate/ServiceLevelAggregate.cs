@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceLevel;
 
-public sealed class ServiceLevelAggregate
+public sealed class ServiceLevelAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceLevelId Id { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public LevelCode Code { get; private set; }
     public LevelName Name { get; private set; }
     public ServiceLevelTarget Target { get; private set; }
     public ServiceLevelStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceLevelAggregate() { }
 
     public static ServiceLevelAggregate Create(
         ServiceLevelId id,
@@ -24,12 +20,10 @@ public sealed class ServiceLevelAggregate
         ServiceLevelTarget target)
     {
         var aggregate = new ServiceLevelAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceLevelErrors.AlreadyInitialized();
 
-        var @event = new ServiceLevelCreatedEvent(id, serviceDefinition, code, name, target);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceLevelCreatedEvent(id, serviceDefinition, code, name, target));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class ServiceLevelAggregate
     {
         EnsureMutable();
 
-        var @event = new ServiceLevelUpdatedEvent(Id, name, target);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceLevelUpdatedEvent(Id, name, target));
     }
 
     public void Activate()
@@ -49,10 +40,7 @@ public sealed class ServiceLevelAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceLevelErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceLevelActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceLevelActivatedEvent(Id));
     }
 
     public void Archive()
@@ -60,40 +48,7 @@ public sealed class ServiceLevelAggregate
         if (Status == ServiceLevelStatus.Archived)
             throw ServiceLevelErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceLevelArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
-    }
-
-    private void Apply(ServiceLevelCreatedEvent @event)
-    {
-        Id = @event.ServiceLevelId;
-        ServiceDefinition = @event.ServiceDefinition;
-        Code = @event.Code;
-        Name = @event.Name;
-        Target = @event.Target;
-        Status = ServiceLevelStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceLevelUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Target = @event.Target;
-        Version++;
-    }
-
-    private void Apply(ServiceLevelActivatedEvent @event)
-    {
-        Status = ServiceLevelStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceLevelArchivedEvent @event)
-    {
-        Status = ServiceLevelStatus.Archived;
-        Version++;
+        RaiseDomainEvent(new ServiceLevelArchivedEvent(Id));
     }
 
     private void EnsureMutable()
@@ -103,11 +58,32 @@ public sealed class ServiceLevelAggregate
             throw ServiceLevelErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceLevelCreatedEvent e:
+                Id = e.ServiceLevelId;
+                ServiceDefinition = e.ServiceDefinition;
+                Code = e.Code;
+                Name = e.Name;
+                Target = e.Target;
+                Status = ServiceLevelStatus.Draft;
+                break;
+            case ServiceLevelUpdatedEvent e:
+                Name = e.Name;
+                Target = e.Target;
+                break;
+            case ServiceLevelActivatedEvent:
+                Status = ServiceLevelStatus.Active;
+                break;
+            case ServiceLevelArchivedEvent:
+                Status = ServiceLevelStatus.Archived;
+                break;
+        }
+    }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceLevelErrors.MissingId();

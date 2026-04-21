@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Plan;
 
 public readonly record struct PlanDescriptor
@@ -7,13 +9,10 @@ public readonly record struct PlanDescriptor
 
     public PlanDescriptor(string planName, string planTier)
     {
-        if (string.IsNullOrWhiteSpace(planName))
-            throw new ArgumentException("PlanName must not be empty.", nameof(planName));
+        Guard.Against(string.IsNullOrWhiteSpace(planName), "PlanName must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(planTier), "PlanTier must not be empty.");
 
-        if (string.IsNullOrWhiteSpace(planTier))
-            throw new ArgumentException("PlanTier must not be empty.", nameof(planTier));
-
-        PlanName = planName;
-        PlanTier = planTier;
+        PlanName = planName!;
+        PlanTier = planTier!;
     }
 }

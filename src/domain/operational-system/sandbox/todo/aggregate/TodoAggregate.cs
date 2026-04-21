@@ -56,6 +56,8 @@ public sealed class TodoAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        Guard.Against(Id.Value == Guid.Empty, TodoErrors.EmptyIdentity);
+        if (!_isCompleted)
+            Guard.Against(string.IsNullOrWhiteSpace(_title), TodoErrors.TitleRequired);
     }
 }

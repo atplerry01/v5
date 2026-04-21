@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Configuration;
 
 public readonly record struct ConfigurationId
@@ -6,9 +8,7 @@ public readonly record struct ConfigurationId
 
     public ConfigurationId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ConfigurationId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ConfigurationId cannot be empty.");
         Value = value;
     }
 }

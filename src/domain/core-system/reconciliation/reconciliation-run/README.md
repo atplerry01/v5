@@ -24,10 +24,6 @@ Defines the foundational structure for reconciliation runs — a single executio
 
   * Manages the lifecycle and state of a reconciliation run instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * ReconciliationRunId — Unique identifier for a reconciliation run instance
@@ -35,16 +31,10 @@ Defines the foundational structure for reconciliation runs — a single executio
 ## Domain Events
 
 * ReconciliationRunCreatedEvent — Raised when a new reconciliation run is created
-* ReconciliationRunUpdatedEvent — Raised when reconciliation run metadata is updated
-* ReconciliationRunStateChangedEvent — Raised when reconciliation run lifecycle state transitions
 
 ## Specifications
 
 * ReconciliationRunSpecification — Validates reconciliation run structure and completeness
-
-## Domain Services
-
-* ReconciliationRunService — Domain operations for reconciliation run management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for reconciliation runs — a single executio
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

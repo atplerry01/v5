@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.Allocation;
 
 public readonly record struct ResourceId
@@ -6,8 +8,7 @@ public readonly record struct ResourceId
 
     public ResourceId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ResourceId value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "ResourceId cannot be empty.");
         Value = value;
     }
 }

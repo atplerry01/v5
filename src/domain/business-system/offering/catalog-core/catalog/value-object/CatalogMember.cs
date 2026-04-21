@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Catalog;
 
 public enum CatalogMemberKind
@@ -10,15 +12,12 @@ public enum CatalogMemberKind
 public readonly record struct CatalogMember
 {
     public CatalogMemberKind Kind { get; }
-    public Guid MemberId { get; }
+    public CatalogMemberId MemberId { get; }
 
-    public CatalogMember(CatalogMemberKind kind, Guid memberId)
+    public CatalogMember(CatalogMemberKind kind, CatalogMemberId memberId)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("CatalogMemberKind is invalid.", nameof(kind));
-
-        if (memberId == Guid.Empty)
-            throw new ArgumentException("CatalogMember MemberId must not be empty.", nameof(memberId));
+        Guard.Against(!Enum.IsDefined(kind), "CatalogMemberKind is invalid.");
+        Guard.Against(memberId == default, "CatalogMember MemberId must not be empty.");
 
         Kind = kind;
         MemberId = memberId;

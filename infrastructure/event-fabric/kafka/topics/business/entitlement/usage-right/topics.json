@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.entitlement.usage-right.commands",
+    "whyce.business.entitlement.usage-right.events",
+    "whyce.business.entitlement.usage-right.retry",
+    "whyce.business.entitlement.usage-right.deadletter"
+  ]
+}

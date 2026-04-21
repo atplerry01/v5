@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,8 +7,8 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Instruction;
 public sealed class TransactionInstructionAggregate : AggregateRoot
 {
     public InstructionId InstructionId { get; private set; }
-    public Guid FromAccountId { get; private set; }
-    public Guid ToAccountId { get; private set; }
+    public AccountId FromAccountId { get; private set; }
+    public AccountId ToAccountId { get; private set; }
     public Amount Amount { get; private set; }
     public Currency Currency { get; private set; }
     public InstructionType Type { get; private set; }
@@ -20,6 +21,25 @@ public sealed class TransactionInstructionAggregate : AggregateRoot
 
     public static TransactionInstructionAggregate CreateInstruction(
         InstructionId instructionId,
+        AccountId fromAccountId,
+        AccountId toAccountId,
+        Amount amount,
+        Currency currency,
+        InstructionType type,
+        Timestamp createdAt)
+    {
+        if (amount.Value <= 0m) throw InstructionErrors.InvalidAmount();
+        if (fromAccountId.Value == toAccountId.Value) throw InstructionErrors.AccountsMustDiffer();
+
+        var aggregate = new TransactionInstructionAggregate();
+        aggregate.RaiseDomainEvent(new TransactionInstructionCreatedEvent(
+            instructionId, fromAccountId.Value, toAccountId.Value, amount, currency, type, createdAt));
+        return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed refs.
+    public static TransactionInstructionAggregate CreateInstruction(
+        InstructionId instructionId,
         Guid fromAccountId,
         Guid toAccountId,
         Amount amount,
@@ -27,15 +47,13 @@ public sealed class TransactionInstructionAggregate : AggregateRoot
         InstructionType type,
         Timestamp createdAt)
     {
-        if (amount.Value <= 0m) throw InstructionErrors.InvalidAmount();
         if (fromAccountId == Guid.Empty) throw InstructionErrors.InvalidFromAccount();
         if (toAccountId == Guid.Empty) throw InstructionErrors.InvalidToAccount();
-        if (fromAccountId == toAccountId) throw InstructionErrors.AccountsMustDiffer();
-
-        var aggregate = new TransactionInstructionAggregate();
-        aggregate.RaiseDomainEvent(new TransactionInstructionCreatedEvent(
-            instructionId, fromAccountId, toAccountId, amount, currency, type, createdAt));
-        return aggregate;
+        return CreateInstruction(
+            instructionId,
+            new AccountId(fromAccountId),
+            new AccountId(toAccountId),
+            amount, currency, type, createdAt);
     }
 
     // ── Behavior ─────────────────────────────────────────────────
@@ -66,8 +84,8 @@ public sealed class TransactionInstructionAggregate : AggregateRoot
         {
             case TransactionInstructionCreatedEvent e:
                 InstructionId = e.InstructionId;
-                FromAccountId = e.FromAccountId;
-                ToAccountId = e.ToAccountId;
+                FromAccountId = new AccountId(e.FromAccountId);
+                ToAccountId = new AccountId(e.ToAccountId);
                 Amount = e.Amount;
                 Currency = e.Currency;
                 Type = e.Type;

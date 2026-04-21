@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Grant;
 
 public readonly record struct GrantId
@@ -6,9 +8,7 @@ public readonly record struct GrantId
 
     public GrantId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("GrantId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "GrantId cannot be empty.");
         Value = value;
     }
 }

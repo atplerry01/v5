@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,7 +7,7 @@ namespace Whycespace.Domain.EconomicSystem.Capital.Asset;
 public sealed class AssetAggregate : AggregateRoot
 {
     public AssetId AssetId { get; private set; }
-    public Guid OwnerId { get; private set; }
+    public OwnerId OwnerId { get; private set; }
     public Amount Value { get; private set; }
     public Currency Currency { get; private set; }
     public AssetStatus Status { get; private set; }
@@ -19,25 +20,33 @@ public sealed class AssetAggregate : AggregateRoot
 
     public static AssetAggregate Create(
         AssetId assetId,
-        Guid ownerId,
+        OwnerId ownerId,
         Amount initialValue,
         Currency currency,
         Timestamp createdAt)
     {
-        Guard.Against(ownerId == Guid.Empty, "Owner ID cannot be empty.");
         Guard.Against(initialValue.Value <= 0m, "Initial value must be greater than zero.");
 
         var aggregate = new AssetAggregate();
 
         aggregate.RaiseDomainEvent(new AssetCreatedEvent(
             assetId,
-            ownerId,
+            ownerId.Value,
             initialValue,
             currency,
             createdAt));
 
         return aggregate;
     }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static AssetAggregate Create(
+        AssetId assetId,
+        Guid ownerId,
+        Amount initialValue,
+        Currency currency,
+        Timestamp createdAt)
+        => Create(assetId, new OwnerId(ownerId), initialValue, currency, createdAt);
 
     // ── Behavior ─────────────────────────────────────────────────
 
@@ -75,7 +84,7 @@ public sealed class AssetAggregate : AggregateRoot
         {
             case AssetCreatedEvent e:
                 AssetId = e.AssetId;
-                OwnerId = e.OwnerId;
+                OwnerId = new OwnerId(e.OwnerId);
                 Value = e.InitialValue;
                 Currency = e.Currency;
                 Status = AssetStatus.Active;
@@ -104,7 +113,7 @@ public sealed class AssetAggregate : AggregateRoot
 
         if (Status != AssetStatus.Disposed)
         {
-            Guard.Against(OwnerId == Guid.Empty, "OwnerId must not be empty for a non-disposed asset.");
+            Guard.Against(OwnerId.Value == Guid.Empty, "OwnerId must not be empty for a non-disposed asset.");
         }
     }
 }

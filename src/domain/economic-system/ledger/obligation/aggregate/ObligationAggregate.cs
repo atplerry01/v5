@@ -6,7 +6,7 @@ namespace Whycespace.Domain.EconomicSystem.Ledger.Obligation;
 public sealed class ObligationAggregate : AggregateRoot
 {
     public ObligationId ObligationId { get; private set; }
-    public Guid CounterpartyId { get; private set; }
+    public CounterpartyRef CounterpartyId { get; private set; }
     public ObligationType Type { get; private set; }
     public Amount Amount { get; private set; }
     public Currency Currency { get; private set; }
@@ -17,26 +17,38 @@ public sealed class ObligationAggregate : AggregateRoot
 
     public static ObligationAggregate Create(
         ObligationId obligationId,
-        Guid counterpartyId,
+        CounterpartyRef counterpartyId,
         ObligationType type,
         Amount amount,
         Currency currency,
         Timestamp createdAt)
     {
         Guard.Against(amount.Value <= 0, ObligationErrors.InvalidAmount().Message);
-        Guard.Against(counterpartyId == Guid.Empty, ObligationErrors.InvalidCounterparty().Message);
 
         var aggregate = new ObligationAggregate();
 
         aggregate.RaiseDomainEvent(new ObligationCreatedEvent(
             obligationId,
-            counterpartyId,
+            counterpartyId.Value,
             type,
             amount,
             currency,
             createdAt));
 
         return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static ObligationAggregate Create(
+        ObligationId obligationId,
+        Guid counterpartyId,
+        ObligationType type,
+        Amount amount,
+        Currency currency,
+        Timestamp createdAt)
+    {
+        Guard.Against(counterpartyId == Guid.Empty, ObligationErrors.InvalidCounterparty().Message);
+        return Create(obligationId, new CounterpartyRef(counterpartyId), type, amount, currency, createdAt);
     }
 
     public void Fulfil(Guid settlementId, Timestamp fulfilledAt)
@@ -73,7 +85,7 @@ public sealed class ObligationAggregate : AggregateRoot
         {
             case ObligationCreatedEvent e:
                 ObligationId = e.ObligationId;
-                CounterpartyId = e.CounterpartyId;
+                CounterpartyId = new CounterpartyRef(e.CounterpartyId);
                 Type = e.Type;
                 Amount = e.Amount;
                 Currency = e.Currency;

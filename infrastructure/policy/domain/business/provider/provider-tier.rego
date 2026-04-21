@@ -1,0 +1,60 @@
+package whyce.policy.business.provider.provider_tier
+
+import rego.v1
+
+default allow := false
+
+# whyce.business.provider.provider-core.provider-tier.create
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.create"
+    input.subject.role == "owner"
+    valid_resource
+}
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.create"
+    input.subject.role == "operator"
+    valid_resource
+}
+
+# whyce.business.provider.provider-core.provider-tier.update
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.update"
+    input.subject.role == "owner"
+    input.subject.is_owner_of_resource == true
+    valid_resource
+}
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.update"
+    input.subject.role == "operator"
+    valid_resource
+}
+
+# whyce.business.provider.provider-core.provider-tier.activate
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.activate"
+    input.subject.role == "owner"
+    input.subject.is_owner_of_resource == true
+    valid_resource
+}
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.activate"
+    input.subject.role == "operator"
+    valid_resource
+}
+
+# whyce.business.provider.provider-core.provider-tier.archive
+allow if {
+    input.policy_id == "whyce.business.provider.provider-core.provider-tier.archive"
+    input.subject.role == "admin"
+    valid_resource
+}
+
+valid_resource if {
+    input.resource.classification == "business"
+    input.resource.context == "provider"
+    input.resource.domain == "provider-tier"
+}
+
+deny if { not input.policy_id }
+deny if { not input.subject.role }
+deny if { not input.resource.classification }

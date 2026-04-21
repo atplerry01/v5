@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.RateCard;
 
 public readonly record struct RateEntry
@@ -11,20 +13,11 @@ public readonly record struct RateEntry
 
     public RateEntry(string code, decimal amount, string unit)
     {
-        if (string.IsNullOrWhiteSpace(code))
-            throw new ArgumentException("RateEntry code must not be empty.", nameof(code));
-
-        if (code.Trim().Length > CodeMaxLength)
-            throw new ArgumentException($"RateEntry code exceeds {CodeMaxLength} characters.", nameof(code));
-
-        if (amount < 0m)
-            throw new ArgumentException("RateEntry amount must be non-negative.", nameof(amount));
-
-        if (string.IsNullOrWhiteSpace(unit))
-            throw new ArgumentException("RateEntry unit must not be empty.", nameof(unit));
-
-        if (unit.Trim().Length > UnitMaxLength)
-            throw new ArgumentException($"RateEntry unit exceeds {UnitMaxLength} characters.", nameof(unit));
+        Guard.Against(string.IsNullOrWhiteSpace(code), "RateEntry code must not be empty.");
+        Guard.Against(code!.Trim().Length > CodeMaxLength, $"RateEntry code exceeds {CodeMaxLength} characters.");
+        Guard.Against(amount < 0m, "RateEntry amount must be non-negative.");
+        Guard.Against(string.IsNullOrWhiteSpace(unit), "RateEntry unit must not be empty.");
+        Guard.Against(unit!.Trim().Length > UnitMaxLength, $"RateEntry unit exceeds {UnitMaxLength} characters.");
 
         Code = code.Trim();
         Amount = amount;

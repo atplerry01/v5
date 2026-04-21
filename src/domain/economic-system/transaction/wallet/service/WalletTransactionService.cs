@@ -4,9 +4,9 @@ public sealed class WalletTransactionService
 {
     public Guid GetAccountId(WalletAggregate wallet)
     {
-        if (wallet.AccountId == Guid.Empty)
+        if (wallet.AccountId.Value == Guid.Empty)
             throw WalletErrors.NoAccountMapped();
 
-        return wallet.AccountId;
+        return wallet.AccountId.Value;
     }
 }

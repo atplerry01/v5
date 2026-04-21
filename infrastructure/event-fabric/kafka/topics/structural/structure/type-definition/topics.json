@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.structure.type_definition.commands",
+    "whyce.structural.structure.type_definition.events",
+    "whyce.structural.structure.type_definition.retry",
+    "whyce.structural.structure.type_definition.deadletter"
+  ]
+}

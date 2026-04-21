@@ -22,11 +22,7 @@ Defines the foundational structure for event and operation ordering — the rule
 
 * OrderingAggregate
 
-  * Represents an ordering instance and its sequencing state
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for event and operation ordering — the rule
 ## Domain Events
 
 * OrderingCreatedEvent — Raised when a new ordering is created
-* OrderingUpdatedEvent — Raised when ordering metadata is updated
-* OrderingStateChangedEvent — Raised when ordering lifecycle state transitions
 
 ## Specifications
 
-* OrderingSpecification — Validates ordering structure and completeness
+* OrderingSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* OrderingService — Domain operations for ordering management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for event and operation ordering — the rule
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

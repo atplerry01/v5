@@ -30,10 +30,6 @@ This domain defines cancellation structure only and contains no refund or billin
   * Factory: `RequestCancellation(id, request)` — creates a new cancellation in Requested status
   * Transition: `Confirm()` — moves from Requested to Confirmed (terminal)
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * CancellationId — Validated unique identifier for a cancellation instance (Guid, non-empty)
@@ -48,10 +44,6 @@ This domain defines cancellation structure only and contains no refund or billin
 ## Specifications
 
 * CanConfirmSpecification — Validates that status is Requested before allowing confirmation
-
-## Domain Services
-
-* CancellationService — Placeholder for future cross-aggregate coordination
 
 ## Errors
 
@@ -77,6 +69,11 @@ This domain defines cancellation structure only and contains no refund or billin
 ## Lifecycle
 
 **TERMINAL**: Requested -> Confirmed
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

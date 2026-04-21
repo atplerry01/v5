@@ -1,7 +1,14 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.TypeDefinition;
 
-public sealed record TypeDefinitionDefinedEvent(TypeDefinitionId TypeDefinitionId, TypeDefinitionDescriptor Descriptor);
+public sealed record TypeDefinitionDefinedEvent(
+    [property: JsonPropertyName("AggregateId")] TypeDefinitionId TypeDefinitionId,
+    TypeDefinitionDescriptor Descriptor) : DomainEvent;
 
-public sealed record TypeDefinitionActivatedEvent(TypeDefinitionId TypeDefinitionId);
+public sealed record TypeDefinitionActivatedEvent(
+    [property: JsonPropertyName("AggregateId")] TypeDefinitionId TypeDefinitionId) : DomainEvent;
 
-public sealed record TypeDefinitionRetiredEvent(TypeDefinitionId TypeDefinitionId);
+public sealed record TypeDefinitionRetiredEvent(
+    [property: JsonPropertyName("AggregateId")] TypeDefinitionId TypeDefinitionId) : DomainEvent;

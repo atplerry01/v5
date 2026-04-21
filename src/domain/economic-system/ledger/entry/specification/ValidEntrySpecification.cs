@@ -9,10 +9,10 @@ public sealed class ValidEntrySpecification : Specification<LedgerEntryAggregate
         if (entity.Amount.Value <= 0)
             return false;
 
-        if (entity.JournalId == Guid.Empty)
+        if (entity.JournalId.Value == Guid.Empty)
             return false;
 
-        if (entity.AccountId == Guid.Empty)
+        if (entity.AccountId.Value == Guid.Empty)
             return false;
 
         return true;

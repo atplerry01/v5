@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Eligibility;
 
 public readonly record struct EligibilitySubjectRef
@@ -6,9 +8,7 @@ public readonly record struct EligibilitySubjectRef
 
     public EligibilitySubjectRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("EligibilitySubjectRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "EligibilitySubjectRef cannot be empty.");
         Value = value;
     }
 }

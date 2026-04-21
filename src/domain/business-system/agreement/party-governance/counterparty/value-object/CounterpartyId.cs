@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.PartyGovernance.Counterparty;
 
 public readonly record struct CounterpartyId
@@ -6,9 +8,7 @@ public readonly record struct CounterpartyId
 
     public CounterpartyId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CounterpartyId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CounterpartyId cannot be empty.");
         Value = value;
     }
 }

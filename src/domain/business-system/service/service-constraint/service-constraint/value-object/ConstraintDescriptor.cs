@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceConstraint;
 
 public readonly record struct ConstraintDescriptor
@@ -8,11 +10,8 @@ public readonly record struct ConstraintDescriptor
 
     public ConstraintDescriptor(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ConstraintDescriptor must not be empty.", nameof(value));
-
-        if (value.Length > MaxLength)
-            throw new ArgumentException($"ConstraintDescriptor exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "ConstraintDescriptor must not be empty.");
+        Guard.Against(value!.Length > MaxLength, $"ConstraintDescriptor exceeds {MaxLength} characters.");
 
         Value = value;
     }

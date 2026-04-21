@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandRouting;
 
 public sealed record CommandRoutingDefinedEvent(
-    CommandRoutingId RoutingId,
-    RoutingRule Rule);
+    [property: JsonPropertyName("AggregateId")] CommandRoutingId RoutingId,
+    RoutingRule Rule) : DomainEvent;

@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.ContactPoint;
 
-public sealed class ContactPointAggregate
+public sealed class ContactPointAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ContactPointId Id { get; private set; }
     public CustomerRef Customer { get; private set; }
     public ContactPointKind Kind { get; private set; }
     public ContactPointValue Value { get; private set; }
     public ContactPointStatus Status { get; private set; }
     public bool IsPreferred { get; private set; }
-    public int Version { get; private set; }
-
-    private ContactPointAggregate() { }
 
     public static ContactPointAggregate Create(
         ContactPointId id,
@@ -23,23 +19,17 @@ public sealed class ContactPointAggregate
         ContactPointValue value)
     {
         var aggregate = new ContactPointAggregate();
+        if (aggregate.Version >= 0)
+            throw ContactPointErrors.AlreadyInitialized();
 
-        var @event = new ContactPointCreatedEvent(id, customer, kind, value);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ContactPointCreatedEvent(id, customer, kind, value));
         return aggregate;
     }
 
     public void Update(ContactPointValue value)
     {
         EnsureMutable();
-
-        var @event = new ContactPointUpdatedEvent(Id, value);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContactPointUpdatedEvent(Id, value));
     }
 
     public void Activate()
@@ -48,10 +38,7 @@ public sealed class ContactPointAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ContactPointErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ContactPointActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContactPointActivatedEvent(Id));
     }
 
     public void SetPreferred(bool isPreferred)
@@ -60,10 +47,7 @@ public sealed class ContactPointAggregate
 
         if (IsPreferred == isPreferred) return;
 
-        var @event = new ContactPointPreferredSetEvent(Id, isPreferred);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContactPointPreferredSetEvent(Id, isPreferred));
     }
 
     public void Archive()
@@ -71,46 +55,35 @@ public sealed class ContactPointAggregate
         if (Status == ContactPointStatus.Archived)
             throw ContactPointErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ContactPointArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContactPointArchivedEvent(Id));
     }
 
-    private void Apply(ContactPointCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ContactPointId;
-        Customer = @event.Customer;
-        Kind = @event.Kind;
-        Value = @event.Value;
-        Status = ContactPointStatus.Draft;
-        IsPreferred = false;
-        Version++;
-    }
-
-    private void Apply(ContactPointUpdatedEvent @event)
-    {
-        Value = @event.Value;
-        Version++;
-    }
-
-    private void Apply(ContactPointActivatedEvent @event)
-    {
-        Status = ContactPointStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ContactPointPreferredSetEvent @event)
-    {
-        IsPreferred = @event.IsPreferred;
-        Version++;
-    }
-
-    private void Apply(ContactPointArchivedEvent @event)
-    {
-        Status = ContactPointStatus.Archived;
-        IsPreferred = false;
-        Version++;
+        switch (domainEvent)
+        {
+            case ContactPointCreatedEvent e:
+                Id = e.ContactPointId;
+                Customer = e.Customer;
+                Kind = e.Kind;
+                Value = e.Value;
+                Status = ContactPointStatus.Draft;
+                IsPreferred = false;
+                break;
+            case ContactPointUpdatedEvent e:
+                Value = e.Value;
+                break;
+            case ContactPointActivatedEvent:
+                Status = ContactPointStatus.Active;
+                break;
+            case ContactPointPreferredSetEvent e:
+                IsPreferred = e.IsPreferred;
+                break;
+            case ContactPointArchivedEvent:
+                Status = ContactPointStatus.Archived;
+                IsPreferred = false;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -120,11 +93,7 @@ public sealed class ContactPointAggregate
             throw ContactPointErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ContactPointErrors.MissingId();

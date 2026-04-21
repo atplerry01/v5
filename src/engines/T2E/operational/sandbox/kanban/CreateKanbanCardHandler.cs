@@ -1,6 +1,7 @@
+using Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
+using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Shared.Contracts.Operational.Sandbox.Kanban.Card;
 using Whycespace.Shared.Contracts.Engine;
-using Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
 namespace Whycespace.Engines.T2E.Operational.Sandbox.Kanban;
 
@@ -11,12 +12,15 @@ public sealed class CreateKanbanCardHandler : IEngine
         if (context.Command is not CreateKanbanCardCommand cmd)
             return;
 
+        if (!ContentId.TryParse(cmd.Description, out var descriptionContentId))
+            throw new InvalidOperationException(KanbanDomainErrors.InvalidCardDescriptionRef);
+
         var aggregate = (KanbanAggregate)await context.LoadAggregateAsync(typeof(KanbanAggregate));
         aggregate.CreateCard(
             new KanbanCardId(cmd.CardId),
             new KanbanListId(cmd.ListId),
-            cmd.Title,
-            cmd.Description,
+            new KanbanCardTitle(cmd.Title),
+            new DocumentRef(descriptionContentId),
             new KanbanPosition(cmd.Position));
         context.EmitEvents(aggregate.DomainEvents);
     }

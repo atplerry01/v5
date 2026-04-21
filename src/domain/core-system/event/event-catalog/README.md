@@ -24,10 +24,6 @@ Defines the catalog of all event types in the system. Provides the registry for 
 
   * Manages the lifecycle and integrity of the event catalog registry
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * EventCatalogId — Unique identifier for a event-catalog instance
@@ -42,9 +38,10 @@ Defines the catalog of all event types in the system. Provides the registry for 
 
 * EventCatalogSpecification — Validates event-catalog structure and completeness
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* EventCatalogService — Domain operations for event-catalog management
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

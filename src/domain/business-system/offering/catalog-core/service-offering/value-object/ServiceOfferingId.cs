@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.ServiceOffering;
 
 public readonly record struct ServiceOfferingId
@@ -6,9 +8,7 @@ public readonly record struct ServiceOfferingId
 
     public ServiceOfferingId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ServiceOfferingId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ServiceOfferingId cannot be empty.");
         Value = value;
     }
 }

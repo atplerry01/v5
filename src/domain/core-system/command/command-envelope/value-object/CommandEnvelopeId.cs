@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandEnvelope;
 
 public readonly record struct CommandEnvelopeId
@@ -6,9 +8,7 @@ public readonly record struct CommandEnvelopeId
 
     public CommandEnvelopeId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CommandEnvelopeId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CommandEnvelopeId cannot be empty.");
         Value = value;
     }
 }

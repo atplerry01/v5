@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Provider;
 
-public sealed record ProviderActivatedEvent(ProviderId ProviderId);
+public sealed record ProviderActivatedEvent(
+    [property: JsonPropertyName("AggregateId")] ProviderId ProviderId) : DomainEvent;

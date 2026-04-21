@@ -23,10 +23,6 @@ Defines the logical grouping and ordering of events within a stream. Provides th
 * EventStreamAggregate
   * Represents the root entity for an event stream, encapsulating its identity, descriptor, and lifecycle rules
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * EventStreamId — Unique identifier for an event stream instance
@@ -44,9 +40,10 @@ Defines the logical grouping and ordering of events within a stream. Provides th
 * CanSealSpecification — Guards transition from Open to Sealed
 * CanArchiveSpecification — Guards transition from Sealed to Archived
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* EventStreamService — Coordination placeholder for event stream domain operations
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateSnapshot;
 
 public readonly record struct StateSnapshotId
@@ -6,9 +8,7 @@ public readonly record struct StateSnapshotId
 
     public StateSnapshotId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw StateSnapshotErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "StateSnapshotId cannot be empty.");
         Value = value;
     }
 }

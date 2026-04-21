@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateSnapshot;
 
 public readonly record struct SnapshotDescriptor
@@ -8,14 +10,9 @@ public readonly record struct SnapshotDescriptor
 
     public SnapshotDescriptor(Guid aggregateId, string aggregateType, long sequenceNumber)
     {
-        if (aggregateId == Guid.Empty)
-            throw new InvalidOperationException("SnapshotDescriptor requires a non-empty AggregateId.");
-
-        if (string.IsNullOrWhiteSpace(aggregateType))
-            throw new InvalidOperationException("SnapshotDescriptor requires a non-blank AggregateType.");
-
-        if (sequenceNumber <= 0)
-            throw new InvalidOperationException("SnapshotDescriptor requires SequenceNumber > 0.");
+        Guard.Against(aggregateId == Guid.Empty, "SnapshotDescriptor requires a non-empty AggregateId.");
+        Guard.Against(string.IsNullOrWhiteSpace(aggregateType), "SnapshotDescriptor requires a non-blank AggregateType.");
+        Guard.Against(sequenceNumber <= 0, "SnapshotDescriptor requires SequenceNumber > 0.");
 
         AggregateId = aggregateId;
         AggregateType = aggregateType;

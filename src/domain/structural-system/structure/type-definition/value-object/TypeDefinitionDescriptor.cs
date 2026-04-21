@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.TypeDefinition;
 
 public readonly record struct TypeDefinitionDescriptor
@@ -7,11 +9,8 @@ public readonly record struct TypeDefinitionDescriptor
 
     public TypeDefinitionDescriptor(string typeName, string typeCategory)
     {
-        if (string.IsNullOrWhiteSpace(typeName))
-            throw TypeDefinitionErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(typeCategory))
-            throw TypeDefinitionErrors.MissingDescriptor();
+        Guard.Against(string.IsNullOrWhiteSpace(typeName), "TypeDefinitionDescriptor name must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(typeCategory), "TypeDefinitionDescriptor category must not be empty.");
 
         TypeName = typeName;
         TypeCategory = typeCategory;

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Markup;
 
 public readonly record struct MarkupName
@@ -8,12 +10,10 @@ public readonly record struct MarkupName
 
     public MarkupName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("MarkupName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "MarkupName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"MarkupName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"MarkupName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

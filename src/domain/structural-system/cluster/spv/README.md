@@ -58,9 +58,10 @@ Create() -> Created --Activate()--> Active --Suspend()--> Suspended --Close()-->
 * **MissingDescriptor** -- SpvDescriptor is required.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **SpvService** -- Reserved for cross-aggregate coordination within SPV context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

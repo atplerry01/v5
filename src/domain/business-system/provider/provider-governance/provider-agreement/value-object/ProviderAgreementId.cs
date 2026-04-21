@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderGovernance.ProviderAgreement;
 
 public readonly record struct ProviderAgreementId
@@ -6,9 +8,7 @@ public readonly record struct ProviderAgreementId
 
     public ProviderAgreementId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ProviderAgreementId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ProviderAgreementId cannot be empty.");
         Value = value;
     }
 }

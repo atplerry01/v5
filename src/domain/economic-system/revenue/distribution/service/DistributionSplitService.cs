@@ -8,6 +8,6 @@ public sealed class DistributionSplitService
         foreach (var share in distribution.Shares)
             sharesSum += share.Amount;
 
-        return sharesSum == distribution.TotalAmount;
+        return sharesSum == distribution.TotalAmount.Value;
     }
 }

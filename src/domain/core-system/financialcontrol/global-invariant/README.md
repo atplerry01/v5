@@ -24,10 +24,6 @@ Defines system-wide financial invariants that must hold across all operations. P
 
   * Manages the lifecycle and state of a global invariant instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * GlobalInvariantId — Unique identifier for a global-invariant instance
@@ -35,16 +31,10 @@ Defines system-wide financial invariants that must hold across all operations. P
 ## Domain Events
 
 * GlobalInvariantCreatedEvent — Raised when a new global-invariant is created
-* GlobalInvariantUpdatedEvent — Raised when global-invariant metadata is updated
-* GlobalInvariantStateChangedEvent — Raised when global-invariant lifecycle state transitions
 
 ## Specifications
 
 * GlobalInvariantSpecification — Validates global-invariant structure and completeness
-
-## Domain Services
-
-* GlobalInvariantService — Domain operations for global-invariant management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines system-wide financial invariants that must hold across all operations. P
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

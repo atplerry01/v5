@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Plan;
 
 public readonly record struct PlanId
@@ -6,9 +8,7 @@ public readonly record struct PlanId
 
     public PlanId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("PlanId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "PlanId cannot be empty.");
         Value = value;
     }
 }

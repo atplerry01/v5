@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.agreement.renewal.commands",
+    "whyce.business.agreement.renewal.events",
+    "whyce.business.agreement.renewal.retry",
+    "whyce.business.agreement.renewal.deadletter"
+  ]
+}

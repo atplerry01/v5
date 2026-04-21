@@ -96,6 +96,127 @@ public static class DomainSchemaCatalog
         => new ContentMediaTechnicalProcessingProcessingSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
+    /// Content-system vertical — streaming context BC schema bindings.
+    /// Full E1→EX delivery across 9 populated streaming BCs
+    /// (stream-core: stream/channel/manifest/availability; live-streaming:
+    /// broadcast/archive; playback-consumption: session; delivery-governance:
+    /// access/observability).
+    /// </summary>
+    public static void RegisterContentStreamingStreamCoreStream(EventSchemaRegistry registry)
+        => new ContentStreamingStreamCoreStreamSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingStreamCoreChannel(EventSchemaRegistry registry)
+        => new ContentStreamingStreamCoreChannelSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingStreamCoreManifest(EventSchemaRegistry registry)
+        => new ContentStreamingStreamCoreManifestSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingStreamCoreAvailability(EventSchemaRegistry registry)
+        => new ContentStreamingStreamCoreAvailabilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingLiveStreamingBroadcast(EventSchemaRegistry registry)
+        => new ContentStreamingLiveStreamingBroadcastSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingLiveStreamingArchive(EventSchemaRegistry registry)
+        => new ContentStreamingLiveStreamingArchiveSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingPlaybackConsumptionSession(EventSchemaRegistry registry)
+        => new ContentStreamingPlaybackConsumptionSessionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingDeliveryGovernanceAccess(EventSchemaRegistry registry)
+        => new ContentStreamingDeliveryGovernanceAccessSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingDeliveryGovernanceObservability(EventSchemaRegistry registry)
+        => new ContentStreamingDeliveryGovernanceObservabilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Structural-system vertical — structure context E1→Ex delivery (phase 1).
+    /// Future phases: cluster (phase 2), humancapital (phase 3).
+    /// </summary>
+    public static void RegisterStructuralStructureTypeDefinition(EventSchemaRegistry registry)
+        => new StructuralStructureTypeDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralStructureClassification(EventSchemaRegistry registry)
+        => new StructuralStructureClassificationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralStructureHierarchyDefinition(EventSchemaRegistry registry)
+        => new StructuralStructureHierarchyDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralStructureTopologyDefinition(EventSchemaRegistry registry)
+        => new StructuralStructureTopologyDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Structural-system vertical — cluster context E1→Ex delivery (phase 2).
+    /// 8 populated BCs: administration, authority, cluster, lifecycle,
+    /// provider, spv, subcluster, topology.
+    /// </summary>
+    public static void RegisterStructuralClusterAdministration(EventSchemaRegistry registry)
+        => new StructuralClusterAdministrationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterAuthority(EventSchemaRegistry registry)
+        => new StructuralClusterAuthoritySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterCluster(EventSchemaRegistry registry)
+        => new StructuralClusterClusterSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterLifecycle(EventSchemaRegistry registry)
+        => new StructuralClusterLifecycleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterProvider(EventSchemaRegistry registry)
+        => new StructuralClusterProviderSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterSpv(EventSchemaRegistry registry)
+        => new StructuralClusterSpvSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterSubcluster(EventSchemaRegistry registry)
+        => new StructuralClusterSubclusterSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralClusterTopology(EventSchemaRegistry registry)
+        => new StructuralClusterTopologySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Structural-system vertical — humancapital context E1→Ex delivery
+    /// (phase 3a, partial). Only BCs with callable event-raising paths:
+    /// participant (Register + Place) and assignment (Assign). The 10
+    /// remaining humancapital BCs remain at D0 pending domain promotion.
+    /// </summary>
+    public static void RegisterStructuralHumancapitalParticipant(EventSchemaRegistry registry)
+        => new StructuralHumancapitalParticipantSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalAssignment(EventSchemaRegistry registry)
+        => new StructuralHumancapitalAssignmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalEligibility(EventSchemaRegistry registry)
+        => new StructuralHumancapitalEligibilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalGovernance(EventSchemaRegistry registry)
+        => new StructuralHumancapitalGovernanceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalIncentive(EventSchemaRegistry registry)
+        => new StructuralHumancapitalIncentiveSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalOperator(EventSchemaRegistry registry)
+        => new StructuralHumancapitalOperatorSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalPerformance(EventSchemaRegistry registry)
+        => new StructuralHumancapitalPerformanceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalReputation(EventSchemaRegistry registry)
+        => new StructuralHumancapitalReputationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalSanction(EventSchemaRegistry registry)
+        => new StructuralHumancapitalSanctionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalSponsorship(EventSchemaRegistry registry)
+        => new StructuralHumancapitalSponsorshipSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalStewardship(EventSchemaRegistry registry)
+        => new StructuralHumancapitalStewardshipSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterStructuralHumancapitalWorkforce(EventSchemaRegistry registry)
+        => new StructuralHumancapitalWorkforceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
     /// Business-system vertical — agreement context E1→Ex delivery (10 BCs across 3 groups).
     /// </summary>
     public static void RegisterBusinessAgreementCommitmentContract(EventSchemaRegistry registry)
@@ -127,4 +248,130 @@ public static class DomainSchemaCatalog
 
     public static void RegisterBusinessAgreementPartyGovernanceSignature(EventSchemaRegistry registry)
         => new BusinessAgreementPartyGovernanceSignatureSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — customer context E1→Ex delivery (6 BCs across 2 groups).
+    /// </summary>
+    public static void RegisterBusinessCustomerIdentityAndProfileAccount(EventSchemaRegistry registry)
+        => new BusinessCustomerIdentityAndProfileAccountSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessCustomerIdentityAndProfileCustomer(EventSchemaRegistry registry)
+        => new BusinessCustomerIdentityAndProfileCustomerSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessCustomerIdentityAndProfileProfile(EventSchemaRegistry registry)
+        => new BusinessCustomerIdentityAndProfileProfileSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessCustomerSegmentationAndLifecycleContactPoint(EventSchemaRegistry registry)
+        => new BusinessCustomerSegmentationAndLifecycleContactPointSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessCustomerSegmentationAndLifecycleLifecycle(EventSchemaRegistry registry)
+        => new BusinessCustomerSegmentationAndLifecycleLifecycleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessCustomerSegmentationAndLifecycleSegment(EventSchemaRegistry registry)
+        => new BusinessCustomerSegmentationAndLifecycleSegmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — entitlement context E1→Ex delivery (6 BCs across 2 groups).
+    /// </summary>
+    public static void RegisterBusinessEntitlementEligibilityAndGrantAssignment(EventSchemaRegistry registry)
+        => new BusinessEntitlementEligibilityAndGrantAssignmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessEntitlementEligibilityAndGrantEligibility(EventSchemaRegistry registry)
+        => new BusinessEntitlementEligibilityAndGrantEligibilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessEntitlementEligibilityAndGrantGrant(EventSchemaRegistry registry)
+        => new BusinessEntitlementEligibilityAndGrantGrantSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessEntitlementUsageControlAllocation(EventSchemaRegistry registry)
+        => new BusinessEntitlementUsageControlAllocationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessEntitlementUsageControlLimit(EventSchemaRegistry registry)
+        => new BusinessEntitlementUsageControlLimitSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessEntitlementUsageControlUsageRight(EventSchemaRegistry registry)
+        => new BusinessEntitlementUsageControlUsageRightSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — order context E1→Ex delivery (6 BCs across 2 groups).
+    /// </summary>
+    public static void RegisterBusinessOrderOrderChangeAmendment(EventSchemaRegistry registry)
+        => new BusinessOrderOrderChangeAmendmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOrderOrderChangeCancellation(EventSchemaRegistry registry)
+        => new BusinessOrderOrderChangeCancellationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOrderOrderChangeFulfillmentInstruction(EventSchemaRegistry registry)
+        => new BusinessOrderOrderChangeFulfillmentInstructionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOrderOrderCoreLineItem(EventSchemaRegistry registry)
+        => new BusinessOrderOrderCoreLineItemSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOrderOrderCoreOrder(EventSchemaRegistry registry)
+        => new BusinessOrderOrderCoreOrderSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOrderOrderCoreReservation(EventSchemaRegistry registry)
+        => new BusinessOrderOrderCoreReservationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — service context E1→Ex delivery (6 BCs across 2 groups).
+    /// </summary>
+    public static void RegisterBusinessServiceServiceConstraintPolicyBinding(EventSchemaRegistry registry)
+        => new BusinessServiceServiceConstraintPolicyBindingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessServiceServiceConstraintServiceConstraint(EventSchemaRegistry registry)
+        => new BusinessServiceServiceConstraintServiceConstraintSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessServiceServiceConstraintServiceWindow(EventSchemaRegistry registry)
+        => new BusinessServiceServiceConstraintServiceWindowSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessServiceServiceCoreServiceDefinition(EventSchemaRegistry registry)
+        => new BusinessServiceServiceCoreServiceDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessServiceServiceCoreServiceLevel(EventSchemaRegistry registry)
+        => new BusinessServiceServiceCoreServiceLevelSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessServiceServiceCoreServiceOption(EventSchemaRegistry registry)
+        => new BusinessServiceServiceCoreServiceOptionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — provider context E1→Ex delivery (5 BCs across 3 groups).
+    /// </summary>
+    public static void RegisterBusinessProviderProviderCoreProviderCapability(EventSchemaRegistry registry)
+        => new BusinessProviderProviderCoreProviderCapabilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessProviderProviderCoreProviderTier(EventSchemaRegistry registry)
+        => new BusinessProviderProviderCoreProviderTierSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessProviderProviderGovernanceProviderAgreement(EventSchemaRegistry registry)
+        => new BusinessProviderProviderGovernanceProviderAgreementSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessProviderProviderScopeProviderAvailability(EventSchemaRegistry registry)
+        => new BusinessProviderProviderScopeProviderAvailabilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessProviderProviderScopeProviderCoverage(EventSchemaRegistry registry)
+        => new BusinessProviderProviderScopeProviderCoverageSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — offering context E1→Ex delivery (7 BCs across 2 groups).
+    /// </summary>
+    public static void RegisterBusinessOfferingCatalogCoreBundle(EventSchemaRegistry registry)
+        => new BusinessOfferingCatalogCoreBundleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCatalogCoreCatalog(EventSchemaRegistry registry)
+        => new BusinessOfferingCatalogCoreCatalogSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCatalogCoreProduct(EventSchemaRegistry registry)
+        => new BusinessOfferingCatalogCoreProductSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCatalogCoreServiceOffering(EventSchemaRegistry registry)
+        => new BusinessOfferingCatalogCoreServiceOfferingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCommercialShapeConfiguration(EventSchemaRegistry registry)
+        => new BusinessOfferingCommercialShapeConfigurationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCommercialShapePackage(EventSchemaRegistry registry)
+        => new BusinessOfferingCommercialShapePackageSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessOfferingCommercialShapePlan(EventSchemaRegistry registry)
+        => new BusinessOfferingCommercialShapePlanSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

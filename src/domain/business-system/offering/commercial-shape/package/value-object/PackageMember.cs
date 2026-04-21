@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Package;
 
 public enum PackageMemberKind
@@ -11,15 +13,12 @@ public enum PackageMemberKind
 public readonly record struct PackageMember
 {
     public PackageMemberKind Kind { get; }
-    public Guid MemberId { get; }
+    public PackageMemberId MemberId { get; }
 
-    public PackageMember(PackageMemberKind kind, Guid memberId)
+    public PackageMember(PackageMemberKind kind, PackageMemberId memberId)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("PackageMemberKind is invalid.", nameof(kind));
-
-        if (memberId == Guid.Empty)
-            throw new ArgumentException("PackageMember MemberId must not be empty.", nameof(memberId));
+        Guard.Against(!Enum.IsDefined(kind), "PackageMemberKind is invalid.");
+        Guard.Against(memberId == default, "PackageMember MemberId must not be empty.");
 
         Kind = kind;
         MemberId = memberId;

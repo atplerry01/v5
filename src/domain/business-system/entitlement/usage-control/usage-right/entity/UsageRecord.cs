@@ -1,17 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.UsageRight;
 
 public sealed class UsageRecord
 {
-    public Guid RecordId { get; }
+    public UsageRecordId RecordId { get; }
     public int UnitsUsed { get; }
 
-    public UsageRecord(Guid recordId, int unitsUsed)
+    public UsageRecord(UsageRecordId recordId, int unitsUsed)
     {
-        if (recordId == Guid.Empty)
-            throw new ArgumentException("RecordId must not be empty.", nameof(recordId));
-
-        if (unitsUsed <= 0)
-            throw new ArgumentException("UnitsUsed must be greater than zero.", nameof(unitsUsed));
+        Guard.Against(recordId == default, "RecordId must not be empty.");
+        Guard.Against(unitsUsed <= 0, "UnitsUsed must be greater than zero.");
 
         RecordId = recordId;
         UnitsUsed = unitsUsed;

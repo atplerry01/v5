@@ -1,85 +1,60 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.HierarchyDefinition;
 
-public sealed class HierarchyDefinitionAggregate
+public sealed class HierarchyDefinitionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public HierarchyDefinitionId Id { get; private set; }
     public HierarchyDefinitionDescriptor Descriptor { get; private set; }
     public HierarchyDefinitionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private HierarchyDefinitionAggregate() { }
 
     public static HierarchyDefinitionAggregate Define(HierarchyDefinitionId id, HierarchyDefinitionDescriptor descriptor)
     {
         var aggregate = new HierarchyDefinitionAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw HierarchyDefinitionErrors.AlreadyInitialized();
 
-        var @event = new HierarchyDefinitionDefinedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new HierarchyDefinitionDefinedEvent(id, descriptor));
         return aggregate;
     }
 
     public void Validate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanValidateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw HierarchyDefinitionErrors.InvalidStateTransition(Status, nameof(Validate));
 
-        var @event = new HierarchyDefinitionValidatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new HierarchyDefinitionValidatedEvent(Id));
     }
 
     public void Lock()
     {
-        ValidateBeforeChange();
-
         var specification = new CanLockSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw HierarchyDefinitionErrors.InvalidStateTransition(Status, nameof(Lock));
 
-        var @event = new HierarchyDefinitionLockedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new HierarchyDefinitionLockedEvent(Id));
     }
 
-    private void Apply(HierarchyDefinitionDefinedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.HierarchyDefinitionId;
-        Descriptor = @event.Descriptor;
-        Status = HierarchyDefinitionStatus.Defined;
-        Version++;
+        switch (domainEvent)
+        {
+            case HierarchyDefinitionDefinedEvent e:
+                Id = e.HierarchyDefinitionId;
+                Descriptor = e.Descriptor;
+                Status = HierarchyDefinitionStatus.Defined;
+                break;
+            case HierarchyDefinitionValidatedEvent:
+                Status = HierarchyDefinitionStatus.Validated;
+                break;
+            case HierarchyDefinitionLockedEvent:
+                Status = HierarchyDefinitionStatus.Locked;
+                break;
+        }
     }
 
-    private void Apply(HierarchyDefinitionValidatedEvent @event)
-    {
-        Status = HierarchyDefinitionStatus.Validated;
-        Version++;
-    }
-
-    private void Apply(HierarchyDefinitionLockedEvent @event)
-    {
-        Status = HierarchyDefinitionStatus.Locked;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw HierarchyDefinitionErrors.MissingId();
@@ -92,10 +67,5 @@ public sealed class HierarchyDefinitionAggregate
 
         if (Descriptor.ParentReference != Guid.Empty && Descriptor.ParentReference == Id.Value)
             throw HierarchyDefinitionErrors.InvalidParentChild();
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

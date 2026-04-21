@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.ContactPoint;
 
 public readonly record struct CustomerRef
@@ -6,9 +8,7 @@ public readonly record struct CustomerRef
 
     public CustomerRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CustomerRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CustomerRef cannot be empty.");
         Value = value;
     }
 }

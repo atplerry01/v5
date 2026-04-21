@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Subcluster;
 
 public readonly record struct SubclusterId
@@ -6,9 +8,7 @@ public readonly record struct SubclusterId
 
     public SubclusterId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw SubclusterErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "SubclusterId cannot be empty.");
         Value = value;
     }
 }

@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -8,7 +9,7 @@ public sealed class VaultAggregate : AggregateRoot
     private readonly List<VaultSlice> _slices = new();
 
     public VaultId VaultId { get; private set; }
-    public Guid OwnerId { get; private set; }
+    public OwnerId OwnerId { get; private set; }
     public Amount TotalStored { get; private set; }
     public Currency Currency { get; private set; }
     public IReadOnlyList<VaultSlice> Slices => _slices.AsReadOnly();
@@ -19,14 +20,22 @@ public sealed class VaultAggregate : AggregateRoot
 
     public static VaultAggregate Create(
         VaultId vaultId,
-        Guid ownerId,
+        OwnerId ownerId,
         Currency currency,
         Timestamp createdAt)
     {
         var aggregate = new VaultAggregate();
-        aggregate.RaiseDomainEvent(new VaultCreatedEvent(vaultId, ownerId, currency, createdAt));
+        aggregate.RaiseDomainEvent(new VaultCreatedEvent(vaultId, ownerId.Value, currency, createdAt));
         return aggregate;
     }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static VaultAggregate Create(
+        VaultId vaultId,
+        Guid ownerId,
+        Currency currency,
+        Timestamp createdAt)
+        => Create(vaultId, new OwnerId(ownerId), currency, createdAt);
 
     // ── Slice Management ─────────────────────────────────────────
 
@@ -137,7 +146,7 @@ public sealed class VaultAggregate : AggregateRoot
         {
             case VaultCreatedEvent e:
                 VaultId = e.VaultId;
-                OwnerId = e.OwnerId;
+                OwnerId = new OwnerId(e.OwnerId);
                 Currency = e.Currency;
                 TotalStored = new Amount(0m);
                 break;

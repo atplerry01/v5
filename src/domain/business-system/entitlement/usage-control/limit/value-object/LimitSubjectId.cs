@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.Limit;
 
 public readonly record struct LimitSubjectId
@@ -6,8 +8,7 @@ public readonly record struct LimitSubjectId
 
     public LimitSubjectId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("LimitSubjectId value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "LimitSubjectId cannot be empty.");
         Value = value;
     }
 }

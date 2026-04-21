@@ -66,9 +66,9 @@ Draft ──Activate()──> Active ──Suspend()──> Suspended ──Term
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 * **PartyRequired** — Contract must have at least one party before activation.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **ContractService** — Reserved for cross-aggregate coordination within contract context.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

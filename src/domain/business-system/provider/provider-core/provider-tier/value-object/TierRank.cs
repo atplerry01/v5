@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderTier;
 
 public readonly record struct TierRank
@@ -6,9 +8,7 @@ public readonly record struct TierRank
 
     public TierRank(int value)
     {
-        if (value < 0)
-            throw new ArgumentException("TierRank must be non-negative.", nameof(value));
-
+        Guard.Against(value < 0, "TierRank must be non-negative.");
         Value = value;
     }
 }

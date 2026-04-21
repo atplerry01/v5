@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.HierarchyDefinition;
 
 public readonly record struct HierarchyDefinitionId
@@ -6,9 +8,7 @@ public readonly record struct HierarchyDefinitionId
 
     public HierarchyDefinitionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw HierarchyDefinitionErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "HierarchyDefinitionId cannot be empty.");
         Value = value;
     }
 }

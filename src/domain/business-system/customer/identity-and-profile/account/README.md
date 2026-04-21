@@ -21,5 +21,10 @@ Business customer account (business meaning only — not identity/auth/ledger ac
 ## Status
 S4 — E1 domain model implemented (Batch 2). Aggregate + VOs + events + specs + errors.
 
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
+
 ## Routing
 Per DS-R8, `DomainRoute` remains the 3-tuple `(business-system, customer, account)`; the domain-group is a folder-level grouping and is not part of the route.

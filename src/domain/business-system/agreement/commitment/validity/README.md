@@ -57,9 +57,10 @@ Valid ──Expire()──> Expired (terminal)
 * **AlreadyExpired** — Cannot expire an already-expired validity.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **ValidityService** — Reserved for cross-aggregate coordination within validity context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

@@ -1,105 +1,137 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Spv;
 
-public sealed class SpvAggregate
+public sealed class SpvAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public SpvId Id { get; private set; }
     public SpvDescriptor Descriptor { get; private set; }
     public SpvStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private SpvAggregate() { }
+    public DateTimeOffset? AttachedAt { get; private set; }
+    public AttachedUnder? AttachedUnder { get; private set; }
 
     public static SpvAggregate Create(SpvId id, SpvDescriptor descriptor)
     {
         var aggregate = new SpvAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw SpvErrors.AlreadyInitialized();
 
-        var @event = new SpvCreatedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
+        aggregate.RaiseDomainEvent(new SpvCreatedEvent(id, descriptor));
+        return aggregate;
+    }
+
+    public static SpvAggregate Create(SpvId id, SpvDescriptor descriptor, DateTimeOffset effectiveAt)
+    {
+        var aggregate = Create(id, descriptor);
+        aggregate.RaiseDomainEvent(new SpvAttachedEvent(id, descriptor.ClusterReference, effectiveAt));
+        return aggregate;
+    }
+
+    public static SpvAggregate Create(
+        SpvId id,
+        SpvDescriptor descriptor,
+        DateTimeOffset effectiveAt,
+        IStructuralParentLookup parentLookup)
+    {
+        Guard.Against(parentLookup is null, "IStructuralParentLookup must not be null.");
+
+        var parent = descriptor.ClusterReference;
+
+        var parentSpec = new CanAttachUnderParentSpecification(parentLookup!);
+        if (!parentSpec.IsSatisfiedBy(parent))
+            throw SpvErrors.InvalidParent();
+
+        var aggregate = Create(id, descriptor, effectiveAt);
+
+        aggregate.RaiseDomainEvent(new SpvBindingValidatedEvent(
+            id,
+            parent,
+            parentLookup!.GetState(parent),
+            effectiveAt));
 
         return aggregate;
     }
 
     public void Activate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw SpvErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new SpvActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SpvActivatedEvent(Id));
     }
 
     public void Suspend()
     {
-        ValidateBeforeChange();
-
         var specification = new CanSuspendSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw SpvErrors.InvalidStateTransition(Status, nameof(Suspend));
 
-        var @event = new SpvSuspendedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SpvSuspendedEvent(Id));
     }
 
     public void Close()
     {
-        ValidateBeforeChange();
-
         var specification = new CanCloseSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw SpvErrors.InvalidStateTransition(Status, nameof(Close));
 
-        var @event = new SpvClosedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SpvClosedEvent(Id));
     }
 
-    private void Apply(SpvCreatedEvent @event)
+    public void Reactivate()
     {
-        Id = @event.SpvId;
-        Descriptor = @event.Descriptor;
-        Status = SpvStatus.Created;
-        Version++;
+        var specification = new CanReactivateSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw SpvErrors.InvalidStateTransition(Status, nameof(Reactivate));
+
+        RaiseDomainEvent(new SpvReactivatedEvent(Id));
     }
 
-    private void Apply(SpvActivatedEvent @event)
+    public void Retire()
     {
-        Status = SpvStatus.Active;
-        Version++;
+        var specification = new CanRetireSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw SpvErrors.InvalidStateTransition(Status, nameof(Retire));
+
+        RaiseDomainEvent(new SpvRetiredEvent(Id));
     }
 
-    private void Apply(SpvSuspendedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Status = SpvStatus.Suspended;
-        Version++;
+        switch (domainEvent)
+        {
+            case SpvCreatedEvent e:
+                Id = e.SpvId;
+                Descriptor = e.Descriptor;
+                Status = SpvStatus.Created;
+                break;
+            case SpvActivatedEvent:
+                Status = SpvStatus.Active;
+                break;
+            case SpvSuspendedEvent:
+                Status = SpvStatus.Suspended;
+                break;
+            case SpvClosedEvent:
+                Status = SpvStatus.Closed;
+                break;
+            case SpvReactivatedEvent:
+                Status = SpvStatus.Active;
+                break;
+            case SpvRetiredEvent:
+                Status = SpvStatus.Retired;
+                break;
+            case SpvAttachedEvent e:
+                AttachedAt = e.EffectiveAt;
+                break;
+            case SpvBindingValidatedEvent e:
+                AttachedUnder = new AttachedUnder(e.Parent, e.ParentState, e.EffectiveAt);
+                break;
+        }
     }
 
-    private void Apply(SpvClosedEvent @event)
-    {
-        Status = SpvStatus.Closed;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw SpvErrors.MissingId();
@@ -109,10 +141,5 @@ public sealed class SpvAggregate
 
         if (!Enum.IsDefined(Status))
             throw SpvErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

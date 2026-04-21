@@ -1,18 +1,14 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.Amendment;
 
-public sealed class AmendmentAggregate
+public sealed class AmendmentAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public AmendmentId Id { get; private set; }
     public OrderRef Order { get; private set; }
     public AmendmentReason Reason { get; private set; }
     public AmendmentStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private AmendmentAggregate() { }
 
     public static AmendmentAggregate Request(
         AmendmentId id,
@@ -21,12 +17,10 @@ public sealed class AmendmentAggregate
         DateTimeOffset requestedAt)
     {
         var aggregate = new AmendmentAggregate();
+        if (aggregate.Version >= 0)
+            throw AmendmentErrors.AlreadyInitialized();
 
-        var @event = new AmendmentRequestedEvent(id, order, reason, requestedAt);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new AmendmentRequestedEvent(id, order, reason, requestedAt));
         return aggregate;
     }
 
@@ -36,10 +30,7 @@ public sealed class AmendmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AmendmentErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new AmendmentAcceptedEvent(Id, acceptedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AmendmentAcceptedEvent(Id, acceptedAt));
     }
 
     public void MarkApplied(DateTimeOffset appliedAt)
@@ -48,10 +39,7 @@ public sealed class AmendmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AmendmentErrors.InvalidStateTransition(Status, nameof(MarkApplied));
 
-        var @event = new AmendmentAppliedEvent(Id, appliedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AmendmentAppliedEvent(Id, appliedAt));
     }
 
     public void Reject(DateTimeOffset rejectedAt)
@@ -60,10 +48,7 @@ public sealed class AmendmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AmendmentErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new AmendmentRejectedEvent(Id, rejectedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AmendmentRejectedEvent(Id, rejectedAt));
     }
 
     public void Cancel(DateTimeOffset cancelledAt)
@@ -72,50 +57,35 @@ public sealed class AmendmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AmendmentErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new AmendmentCancelledEvent(Id, cancelledAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AmendmentCancelledEvent(Id, cancelledAt));
     }
 
-    private void Apply(AmendmentRequestedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.AmendmentId;
-        Order = @event.Order;
-        Reason = @event.Reason;
-        Status = AmendmentStatus.Requested;
-        Version++;
+        switch (domainEvent)
+        {
+            case AmendmentRequestedEvent e:
+                Id = e.AmendmentId;
+                Order = e.Order;
+                Reason = e.Reason;
+                Status = AmendmentStatus.Requested;
+                break;
+            case AmendmentAcceptedEvent:
+                Status = AmendmentStatus.Accepted;
+                break;
+            case AmendmentAppliedEvent:
+                Status = AmendmentStatus.Applied;
+                break;
+            case AmendmentRejectedEvent:
+                Status = AmendmentStatus.Rejected;
+                break;
+            case AmendmentCancelledEvent:
+                Status = AmendmentStatus.Cancelled;
+                break;
+        }
     }
 
-    private void Apply(AmendmentAcceptedEvent @event)
-    {
-        Status = AmendmentStatus.Accepted;
-        Version++;
-    }
-
-    private void Apply(AmendmentAppliedEvent @event)
-    {
-        Status = AmendmentStatus.Applied;
-        Version++;
-    }
-
-    private void Apply(AmendmentRejectedEvent @event)
-    {
-        Status = AmendmentStatus.Rejected;
-        Version++;
-    }
-
-    private void Apply(AmendmentCancelledEvent @event)
-    {
-        Status = AmendmentStatus.Cancelled;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw AmendmentErrors.MissingId();

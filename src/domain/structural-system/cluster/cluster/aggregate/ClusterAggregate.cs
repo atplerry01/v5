@@ -1,22 +1,30 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Cluster;
 
-public sealed class ClusterAggregate
+public sealed class ClusterAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
+    private readonly HashSet<Guid> _activeAuthorityIds = new();
+    private readonly HashSet<Guid> _activeAdministrationIds = new();
 
     public ClusterId ClusterId { get; private set; }
     public ClusterDescriptor Descriptor { get; private set; }
     public ClusterStatus Status { get; private set; }
 
-    public IReadOnlyList<object> UncommittedEvents => _uncommittedEvents.AsReadOnly();
+    public IReadOnlyCollection<ClusterAuthorityRef> ActiveAuthorities =>
+        _activeAuthorityIds.Select(id => new ClusterAuthorityRef(id)).ToArray();
 
-    private ClusterAggregate() { }
+    public IReadOnlyCollection<ClusterAdministrationRef> ActiveAdministrations =>
+        _activeAdministrationIds.Select(id => new ClusterAdministrationRef(id)).ToArray();
 
     public static ClusterAggregate Define(ClusterId id, ClusterDescriptor descriptor)
     {
         var aggregate = new ClusterAggregate();
-        aggregate.Apply(new ClusterDefinedEvent(id, descriptor));
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw ClusterErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new ClusterDefinedEvent(id, descriptor));
         return aggregate;
     }
 
@@ -25,8 +33,7 @@ public sealed class ClusterAggregate
         if (!new CanActivateSpecification().IsSatisfiedBy(Status))
             throw ClusterErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        Apply(new ClusterActivatedEvent(ClusterId));
-        EnsureInvariants();
+        RaiseDomainEvent(new ClusterActivatedEvent(ClusterId));
     }
 
     public void Archive()
@@ -34,11 +41,38 @@ public sealed class ClusterAggregate
         if (!new CanArchiveSpecification().IsSatisfiedBy(Status))
             throw ClusterErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        Apply(new ClusterArchivedEvent(ClusterId));
-        EnsureInvariants();
+        RaiseDomainEvent(new ClusterArchivedEvent(ClusterId));
     }
 
-    private void Apply(object domainEvent)
+    public void RecordAuthorityAttached(ClusterAuthorityRef authority)
+    {
+        var spec = new UniqueActiveAuthoritySpecification();
+        if (!spec.IsSatisfiedBy(ActiveAuthorities, authority))
+            throw ClusterErrors.DuplicateAuthority();
+
+        RaiseDomainEvent(new ClusterAuthorityBoundEvent(ClusterId, authority));
+    }
+
+    public void RecordAuthorityReleased(ClusterAuthorityRef authority)
+    {
+        RaiseDomainEvent(new ClusterAuthorityReleasedEvent(ClusterId, authority));
+    }
+
+    public void RecordAdministrationAttached(ClusterAdministrationRef administration)
+    {
+        var spec = new UniqueAdministrationSpecification();
+        if (!spec.IsSatisfiedBy(ActiveAdministrations, administration))
+            throw ClusterErrors.DuplicateAdministration();
+
+        RaiseDomainEvent(new ClusterAdministrationBoundEvent(ClusterId, administration));
+    }
+
+    public void RecordAdministrationReleased(ClusterAdministrationRef administration)
+    {
+        RaiseDomainEvent(new ClusterAdministrationReleasedEvent(ClusterId, administration));
+    }
+
+    protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
         {
@@ -55,12 +89,26 @@ public sealed class ClusterAggregate
             case ClusterArchivedEvent:
                 Status = ClusterStatus.Archived;
                 break;
-        }
 
-        _uncommittedEvents.Add(domainEvent);
+            case ClusterAuthorityBoundEvent b:
+                _activeAuthorityIds.Add(b.Authority.Value);
+                break;
+
+            case ClusterAuthorityReleasedEvent r:
+                _activeAuthorityIds.Remove(r.Authority.Value);
+                break;
+
+            case ClusterAdministrationBoundEvent b:
+                _activeAdministrationIds.Add(b.Administration.Value);
+                break;
+
+            case ClusterAdministrationReleasedEvent r:
+                _activeAdministrationIds.Remove(r.Administration.Value);
+                break;
+        }
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (ClusterId.Value == Guid.Empty)
             throw ClusterErrors.MissingId();

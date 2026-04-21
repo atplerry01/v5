@@ -1,57 +1,42 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Catalog;
 
-public sealed class CatalogAggregate
+public sealed class CatalogAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly HashSet<CatalogMember> _members = new();
 
     public CatalogId Id { get; private set; }
     public CatalogStatus Status { get; private set; }
     public CatalogStructure Structure { get; private set; }
     public IReadOnlyCollection<CatalogMember> Members => _members;
-    public int Version { get; private set; }
-
-    private CatalogAggregate() { }
 
     public static CatalogAggregate Create(CatalogId id, CatalogStructure structure)
     {
         var aggregate = new CatalogAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw CatalogErrors.AlreadyInitialized();
 
-        var @event = new CatalogCreatedEvent(id, structure);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CatalogCreatedEvent(id, structure));
         return aggregate;
     }
 
     public void Publish()
     {
-        ValidateBeforeChange();
-
         var specification = new CanPublishSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw CatalogErrors.InvalidStateTransition(Status, nameof(Publish));
 
-        var @event = new CatalogPublishedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CatalogPublishedEvent(Id));
     }
 
     public void Archive()
     {
-        ValidateBeforeChange();
-
         var specification = new CanArchiveSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw CatalogErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new CatalogArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CatalogArchivedEvent(Id));
     }
 
     public void AddMember(CatalogMember member)
@@ -61,10 +46,7 @@ public sealed class CatalogAggregate
         if (_members.Contains(member))
             throw CatalogErrors.MemberAlreadyPresent(member);
 
-        var @event = new CatalogMemberAddedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CatalogMemberAddedEvent(Id, member));
     }
 
     public void RemoveMember(CatalogMember member)
@@ -74,10 +56,7 @@ public sealed class CatalogAggregate
         if (!_members.Contains(member))
             throw CatalogErrors.MemberNotPresent(member);
 
-        var @event = new CatalogMemberRemovedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CatalogMemberRemovedEvent(Id, member));
     }
 
     private void EnsureNotArchived()
@@ -86,46 +65,31 @@ public sealed class CatalogAggregate
             throw CatalogErrors.ArchivedImmutable(Id);
     }
 
-    private void Apply(CatalogCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.CatalogId;
-        Structure = @event.Structure;
-        Status = CatalogStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case CatalogCreatedEvent e:
+                Id = e.CatalogId;
+                Structure = e.Structure;
+                Status = CatalogStatus.Draft;
+                break;
+            case CatalogPublishedEvent:
+                Status = CatalogStatus.Published;
+                break;
+            case CatalogArchivedEvent:
+                Status = CatalogStatus.Archived;
+                break;
+            case CatalogMemberAddedEvent e:
+                _members.Add(e.Member);
+                break;
+            case CatalogMemberRemovedEvent e:
+                _members.Remove(e.Member);
+                break;
+        }
     }
 
-    private void Apply(CatalogPublishedEvent @event)
-    {
-        Status = CatalogStatus.Published;
-        Version++;
-    }
-
-    private void Apply(CatalogArchivedEvent @event)
-    {
-        Status = CatalogStatus.Archived;
-        Version++;
-    }
-
-    private void Apply(CatalogMemberAddedEvent @event)
-    {
-        _members.Add(@event.Member);
-        Version++;
-    }
-
-    private void Apply(CatalogMemberRemovedEvent @event)
-    {
-        _members.Remove(@event.Member);
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CatalogErrors.MissingId();
@@ -135,10 +99,5 @@ public sealed class CatalogAggregate
 
         if (!Enum.IsDefined(Status))
             throw CatalogErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

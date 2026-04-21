@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateTransition;
 
 public readonly record struct TransitionRule
@@ -8,14 +10,9 @@ public readonly record struct TransitionRule
 
     public TransitionRule(string fromState, string toState, string transitionName)
     {
-        if (string.IsNullOrWhiteSpace(fromState))
-            throw new ArgumentException("FromState must not be empty.", nameof(fromState));
-
-        if (string.IsNullOrWhiteSpace(toState))
-            throw new ArgumentException("ToState must not be empty.", nameof(toState));
-
-        if (string.IsNullOrWhiteSpace(transitionName))
-            throw new ArgumentException("TransitionName must not be empty.", nameof(transitionName));
+        Guard.Against(string.IsNullOrWhiteSpace(fromState), "FromState must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(toState), "ToState must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(transitionName), "TransitionName must not be empty.");
 
         FromState = fromState;
         ToState = toState;

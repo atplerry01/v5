@@ -54,9 +54,10 @@ Establish() -> Established --Activate()--> Active --Revoke()--> Revoked (termina
 * **MissingDescriptor** -- AuthorityDescriptor is required.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **AuthorityService** -- Reserved for cross-aggregate coordination within authority context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

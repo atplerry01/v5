@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.entitlement.limit.commands",
+    "whyce.business.entitlement.limit.events",
+    "whyce.business.entitlement.limit.retry",
+    "whyce.business.entitlement.limit.deadletter"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.order.fulfillment-instruction.commands",
+    "whyce.business.order.fulfillment-instruction.events",
+    "whyce.business.order.fulfillment-instruction.retry",
+    "whyce.business.order.fulfillment-instruction.deadletter"
+  ]
+}

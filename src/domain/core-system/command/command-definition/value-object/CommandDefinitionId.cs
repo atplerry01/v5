@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandDefinition;
 
 public readonly record struct CommandDefinitionId
@@ -6,9 +8,7 @@ public readonly record struct CommandDefinitionId
 
     public CommandDefinitionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CommandDefinitionId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CommandDefinitionId cannot be empty.");
         Value = value;
     }
 }

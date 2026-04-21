@@ -1,85 +1,60 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.Classification;
 
-public sealed class ClassificationAggregate
+public sealed class ClassificationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ClassificationId Id { get; private set; }
     public ClassificationDescriptor Descriptor { get; private set; }
     public ClassificationStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ClassificationAggregate() { }
 
     public static ClassificationAggregate Define(ClassificationId id, ClassificationDescriptor descriptor)
     {
         var aggregate = new ClassificationAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw ClassificationErrors.AlreadyInitialized();
 
-        var @event = new ClassificationDefinedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ClassificationDefinedEvent(id, descriptor));
         return aggregate;
     }
 
     public void Activate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ClassificationErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ClassificationActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ClassificationActivatedEvent(Id));
     }
 
     public void Deprecate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanDeprecateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ClassificationErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new ClassificationDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ClassificationDeprecatedEvent(Id));
     }
 
-    private void Apply(ClassificationDefinedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ClassificationId;
-        Descriptor = @event.Descriptor;
-        Status = ClassificationStatus.Defined;
-        Version++;
+        switch (domainEvent)
+        {
+            case ClassificationDefinedEvent e:
+                Id = e.ClassificationId;
+                Descriptor = e.Descriptor;
+                Status = ClassificationStatus.Defined;
+                break;
+            case ClassificationActivatedEvent:
+                Status = ClassificationStatus.Active;
+                break;
+            case ClassificationDeprecatedEvent:
+                Status = ClassificationStatus.Deprecated;
+                break;
+        }
     }
 
-    private void Apply(ClassificationActivatedEvent @event)
-    {
-        Status = ClassificationStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ClassificationDeprecatedEvent @event)
-    {
-        Status = ClassificationStatus.Deprecated;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ClassificationErrors.MissingId();
@@ -89,10 +64,5 @@ public sealed class ClassificationAggregate
 
         if (!Enum.IsDefined(Status))
             throw ClassificationErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.PolicyBinding;
 
-public sealed class PolicyBindingAggregate
+public sealed class PolicyBindingAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public PolicyBindingId Id { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public PolicyRef Policy { get; private set; }
     public PolicyBindingScope Scope { get; private set; }
     public PolicyBindingStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private PolicyBindingAggregate() { }
 
     public static PolicyBindingAggregate Create(
         PolicyBindingId id,
@@ -22,12 +18,10 @@ public sealed class PolicyBindingAggregate
         PolicyBindingScope scope)
     {
         var aggregate = new PolicyBindingAggregate();
+        if (aggregate.Version >= 0)
+            throw PolicyBindingErrors.AlreadyInitialized();
 
-        var @event = new PolicyBindingCreatedEvent(id, serviceDefinition, policy, scope);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new PolicyBindingCreatedEvent(id, serviceDefinition, policy, scope));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class PolicyBindingAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PolicyBindingErrors.InvalidStateTransition(Status, nameof(Bind));
 
-        var @event = new PolicyBindingBoundEvent(Id, boundAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PolicyBindingBoundEvent(Id, boundAt));
     }
 
     public void Unbind(DateTimeOffset unboundAt)
@@ -49,10 +40,7 @@ public sealed class PolicyBindingAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PolicyBindingErrors.InvalidStateTransition(Status, nameof(Unbind));
 
-        var @event = new PolicyBindingUnboundEvent(Id, unboundAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PolicyBindingUnboundEvent(Id, unboundAt));
     }
 
     public void Archive()
@@ -60,45 +48,33 @@ public sealed class PolicyBindingAggregate
         if (Status == PolicyBindingStatus.Archived)
             throw PolicyBindingErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new PolicyBindingArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PolicyBindingArchivedEvent(Id));
     }
 
-    private void Apply(PolicyBindingCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.PolicyBindingId;
-        ServiceDefinition = @event.ServiceDefinition;
-        Policy = @event.Policy;
-        Scope = @event.Scope;
-        Status = PolicyBindingStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case PolicyBindingCreatedEvent e:
+                Id = e.PolicyBindingId;
+                ServiceDefinition = e.ServiceDefinition;
+                Policy = e.Policy;
+                Scope = e.Scope;
+                Status = PolicyBindingStatus.Draft;
+                break;
+            case PolicyBindingBoundEvent:
+                Status = PolicyBindingStatus.Bound;
+                break;
+            case PolicyBindingUnboundEvent:
+                Status = PolicyBindingStatus.Unbound;
+                break;
+            case PolicyBindingArchivedEvent:
+                Status = PolicyBindingStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(PolicyBindingBoundEvent @event)
-    {
-        Status = PolicyBindingStatus.Bound;
-        Version++;
-    }
-
-    private void Apply(PolicyBindingUnboundEvent @event)
-    {
-        Status = PolicyBindingStatus.Unbound;
-        Version++;
-    }
-
-    private void Apply(PolicyBindingArchivedEvent @event)
-    {
-        Status = PolicyBindingStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw PolicyBindingErrors.MissingId();

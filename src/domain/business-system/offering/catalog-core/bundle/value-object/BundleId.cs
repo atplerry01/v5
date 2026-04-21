@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Bundle;
 
 public readonly record struct BundleId
@@ -6,9 +8,7 @@ public readonly record struct BundleId
 
     public BundleId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("BundleId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "BundleId cannot be empty.");
         Value = value;
     }
 }

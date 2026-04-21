@@ -856,7 +856,7 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 evt.RuleCategory.Value,
                 evt.Scope.ToString(),
                 evt.Severity.ToString(),
-                evt.Description,
+                evt.Description.Value.Value.ToString(),
                 evt.CreatedAt.Value);
         });
 
@@ -1289,7 +1289,7 @@ public sealed class EconomicSchemaModule : ISchemaModule
                 evt.SourceAggregateId.Value,
                 evt.SourceEventId.Value,
                 evt.AuditType.ToString(),
-                evt.EvidenceSummary.Value,
+                evt.EvidenceSummary.Value.Value.ToString(),
                 evt.RecordedAt.Value);
         });
 

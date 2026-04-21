@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandDefinition;
 
-public sealed class CommandDefinitionAggregate
+public sealed class CommandDefinitionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CommandDefinitionId Id { get; private set; }
     public CommandSchema Schema { get; private set; }
     public CommandDefinitionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private CommandDefinitionAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
 
@@ -18,12 +15,10 @@ public sealed class CommandDefinitionAggregate
         CommandSchema schema)
     {
         var aggregate = new CommandDefinitionAggregate();
+        if (aggregate.Version >= 0)
+            throw CommandDefinitionErrors.AlreadyInitialized();
 
-        var @event = new CommandDefinitionRegisteredEvent(id, schema);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CommandDefinitionRegisteredEvent(id, schema));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class CommandDefinitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandDefinitionErrors.InvalidStateTransition(Status, nameof(Publish));
 
-        var @event = new CommandDefinitionPublishedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandDefinitionPublishedEvent(Id));
     }
 
     // ── Deprecate ────────────────────────────────────────────────
@@ -49,38 +41,30 @@ public sealed class CommandDefinitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandDefinitionErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new CommandDefinitionDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandDefinitionDeprecatedEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(CommandDefinitionRegisteredEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.DefinitionId;
-        Schema = @event.Schema;
-        Status = CommandDefinitionStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case CommandDefinitionRegisteredEvent e:
+                Id = e.DefinitionId;
+                Schema = e.Schema;
+                Status = CommandDefinitionStatus.Draft;
+                break;
+            case CommandDefinitionPublishedEvent:
+                Status = CommandDefinitionStatus.Published;
+                break;
+            case CommandDefinitionDeprecatedEvent:
+                Status = CommandDefinitionStatus.Deprecated;
+                break;
+        }
     }
 
-    private void Apply(CommandDefinitionPublishedEvent @event)
-    {
-        Status = CommandDefinitionStatus.Published;
-        Version++;
-    }
-
-    private void Apply(CommandDefinitionDeprecatedEvent @event)
-    {
-        Status = CommandDefinitionStatus.Deprecated;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CommandDefinitionErrors.MissingId();

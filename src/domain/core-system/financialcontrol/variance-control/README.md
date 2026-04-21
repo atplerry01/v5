@@ -24,10 +24,6 @@ Defines the foundational structure for variance detection and tolerance boundari
 
   * Manages the lifecycle and state of a variance control instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * VarianceControlId — Unique identifier for a variance-control instance
@@ -35,16 +31,10 @@ Defines the foundational structure for variance detection and tolerance boundari
 ## Domain Events
 
 * VarianceControlCreatedEvent — Raised when a new variance-control is created
-* VarianceControlUpdatedEvent — Raised when variance-control metadata is updated
-* VarianceControlStateChangedEvent — Raised when variance-control lifecycle state transitions
 
 ## Specifications
 
 * VarianceControlSpecification — Validates variance-control structure and completeness
-
-## Domain Services
-
-* VarianceControlService — Domain operations for variance-control management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for variance detection and tolerance boundari
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

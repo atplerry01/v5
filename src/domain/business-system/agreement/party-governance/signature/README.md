@@ -58,9 +58,10 @@ Signed ──Revoke()──> Revoked (terminal)
 * **AlreadyRevoked** — Cannot transition an already-revoked signature.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **SignatureService** — Reserved for cross-aggregate coordination within signature context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

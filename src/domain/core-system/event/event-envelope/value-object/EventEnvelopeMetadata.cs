@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventEnvelope;
 
 public readonly record struct EventEnvelopeMetadata
@@ -8,14 +10,9 @@ public readonly record struct EventEnvelopeMetadata
 
     public EventEnvelopeMetadata(Guid correlationId, Guid causationId, string eventName)
     {
-        if (correlationId == Guid.Empty)
-            throw new ArgumentException("CorrelationId must not be empty.", nameof(correlationId));
-
-        if (causationId == Guid.Empty)
-            throw new ArgumentException("CausationId must not be empty.", nameof(causationId));
-
-        if (string.IsNullOrWhiteSpace(eventName))
-            throw new ArgumentException("EventName must not be empty.", nameof(eventName));
+        Guard.Against(correlationId == Guid.Empty, "CorrelationId must not be empty.");
+        Guard.Against(causationId == Guid.Empty, "CausationId must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(eventName), "EventName must not be empty.");
 
         CorrelationId = correlationId;
         CausationId = causationId;

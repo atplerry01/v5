@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.offering.configuration.commands",
+    "whyce.business.offering.configuration.events",
+    "whyce.business.offering.configuration.retry",
+    "whyce.business.offering.configuration.deadletter"
+  ]
+}

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.RateCard;
 
 public readonly record struct RateCardId
@@ -6,9 +8,7 @@ public readonly record struct RateCardId
 
     public RateCardId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("RateCardId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "RateCardId cannot be empty.");
         Value = value;
     }
 }

@@ -1,23 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Reconciliation.ReconciliationException;
 
-public sealed class ReconciliationExceptionAggregate
+public sealed class ReconciliationExceptionAggregate : AggregateRoot
 {
     public static ReconciliationExceptionAggregate Create()
     {
         var aggregate = new ReconciliationExceptionAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw ReconciliationExceptionErrors.AlreadyInitialized();
+
         // POLICY HOOK (to be enforced by runtime)
         return aggregate;
-    }
-
-    private void EnsureInvariants()
-    {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
     }
 }

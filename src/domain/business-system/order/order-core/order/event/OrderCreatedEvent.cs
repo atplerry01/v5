@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Order;
 
 public sealed record OrderCreatedEvent(
-    OrderId OrderId,
+    [property: JsonPropertyName("AggregateId")] OrderId OrderId,
     OrderSourceReference SourceReference,
-    string OrderDescription);
+    OrderDescription Description) : DomainEvent;

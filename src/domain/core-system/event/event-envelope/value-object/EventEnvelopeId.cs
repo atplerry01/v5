@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventEnvelope;
 
 public readonly record struct EventEnvelopeId
@@ -6,9 +8,7 @@ public readonly record struct EventEnvelopeId
 
     public EventEnvelopeId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("EventEnvelopeId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "EventEnvelopeId cannot be empty.");
         Value = value;
     }
 }

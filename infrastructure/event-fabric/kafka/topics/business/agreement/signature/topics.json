@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.agreement.signature.commands",
+    "whyce.business.agreement.signature.events",
+    "whyce.business.agreement.signature.retry",
+    "whyce.business.agreement.signature.deadletter"
+  ]
+}

@@ -29,10 +29,6 @@ Defines the transport envelope that wraps commands with routing, correlation, an
   * Private constructor, event-sourced state via Apply methods
   * Exposes uncommitted events via `GetUncommittedEvents()`
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * CommandEnvelopeId — Validated Guid identifier, rejects empty
@@ -56,9 +52,10 @@ Defines the transport envelope that wraps commands with routing, correlation, an
 * MissingMetadata — Command envelope must include valid metadata
 * InvalidStateTransition(status, action) — Cannot perform action in current status
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* CommandEnvelopeService — Reserved, currently empty
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

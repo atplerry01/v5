@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.LineItem;
 
 public enum LineItemSubjectKind
@@ -10,15 +12,12 @@ public enum LineItemSubjectKind
 public readonly record struct LineItemSubjectRef
 {
     public LineItemSubjectKind Kind { get; }
-    public Guid SubjectId { get; }
+    public LineItemSubjectId SubjectId { get; }
 
-    public LineItemSubjectRef(LineItemSubjectKind kind, Guid subjectId)
+    public LineItemSubjectRef(LineItemSubjectKind kind, LineItemSubjectId subjectId)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("LineItemSubjectKind is invalid.", nameof(kind));
-
-        if (subjectId == Guid.Empty)
-            throw new ArgumentException("LineItemSubject id must not be empty.", nameof(subjectId));
+        Guard.Against(!Enum.IsDefined(kind), "LineItemSubjectKind is invalid.");
+        Guard.Against(subjectId == default, "LineItemSubject id must not be empty.");
 
         Kind = kind;
         SubjectId = subjectId;

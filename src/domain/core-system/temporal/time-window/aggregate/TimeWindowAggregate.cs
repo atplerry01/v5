@@ -1,23 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Temporal.TimeWindow;
 
-public sealed class TimeWindowAggregate
+public sealed class TimeWindowAggregate : AggregateRoot
 {
     public static TimeWindowAggregate Create()
     {
         var aggregate = new TimeWindowAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw TimeWindowErrors.AlreadyInitialized();
+
         // POLICY HOOK (to be enforced by runtime)
         return aggregate;
-    }
-
-    private void EnsureInvariants()
-    {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
     }
 }

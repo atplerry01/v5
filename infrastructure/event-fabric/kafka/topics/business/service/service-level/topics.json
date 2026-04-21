@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.service.service-level.commands",
+    "whyce.business.service.service-level.events",
+    "whyce.business.service.service-level.retry",
+    "whyce.business.service.service-level.deadletter"
+  ]
+}

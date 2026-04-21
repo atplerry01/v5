@@ -24,10 +24,6 @@ Defines the foundational structure for individual reconciliation items — the d
 
   * Manages the lifecycle and state of a reconciliation item instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * ReconciliationItemId — Unique identifier for a reconciliation item instance
@@ -35,16 +31,10 @@ Defines the foundational structure for individual reconciliation items — the d
 ## Domain Events
 
 * ReconciliationItemCreatedEvent — Raised when a new reconciliation item is created
-* ReconciliationItemUpdatedEvent — Raised when reconciliation item metadata is updated
-* ReconciliationItemStateChangedEvent — Raised when reconciliation item lifecycle state transitions
 
 ## Specifications
 
 * ReconciliationItemSpecification — Validates reconciliation item structure and completeness
-
-## Domain Services
-
-* ReconciliationItemService — Domain operations for reconciliation item management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for individual reconciliation items — the d
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

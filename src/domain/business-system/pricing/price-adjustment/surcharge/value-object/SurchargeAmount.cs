@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Surcharge;
 
 public readonly record struct SurchargeAmount
@@ -6,9 +8,7 @@ public readonly record struct SurchargeAmount
 
     public SurchargeAmount(decimal value)
     {
-        if (value < 0m)
-            throw new ArgumentException("SurchargeAmount must be non-negative.", nameof(value));
-
+        Guard.Against(value < 0m, "SurchargeAmount must be non-negative.");
         Value = value;
     }
 }

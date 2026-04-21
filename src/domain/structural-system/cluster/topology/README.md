@@ -54,9 +54,10 @@ Define() -> Defined --Validate()--> Validated --Lock()--> Locked (terminal)
 * **MissingDescriptor** -- TopologyDescriptor is required.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **TopologyService** -- Reserved for cross-aggregate coordination within topology context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

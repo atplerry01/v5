@@ -22,11 +22,7 @@ Defines the foundational structure for temporal state — time-bound state that 
 
 * TemporalStateAggregate
 
-  * Represents a temporal state instance and its validity period tracking
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for temporal state — time-bound state that 
 ## Domain Events
 
 * TemporalStateCreatedEvent — Raised when a new temporal-state is created
-* TemporalStateUpdatedEvent — Raised when temporal-state metadata is updated
-* TemporalStateStateChangedEvent — Raised when temporal-state lifecycle state transitions
 
 ## Specifications
 
-* TemporalStateSpecification — Validates temporal-state structure and completeness
+* TemporalStateSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* TemporalStateService — Domain operations for temporal-state management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for temporal state — time-bound state that 
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

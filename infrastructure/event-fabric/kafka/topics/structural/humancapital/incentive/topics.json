@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.incentive.commands",
+    "whyce.structural.humancapital.incentive.events",
+    "whyce.structural.humancapital.incentive.retry",
+    "whyce.structural.humancapital.incentive.deadletter"
+  ]
+}

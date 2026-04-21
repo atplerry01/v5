@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Pricing;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Surcharge;
 
-public sealed class SurchargeAggregate
+public sealed class SurchargeAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public SurchargeId Id { get; private set; }
     public SurchargeCode Code { get; private set; }
     public SurchargeName Name { get; private set; }
     public AdjustmentBasis Basis { get; private set; }
     public SurchargeAmount Amount { get; private set; }
     public SurchargeStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private SurchargeAggregate() { }
 
     public static SurchargeAggregate Create(
         SurchargeId id,
@@ -26,12 +22,10 @@ public sealed class SurchargeAggregate
         ValidateBasisAmount(basis, amount);
 
         var aggregate = new SurchargeAggregate();
+        if (aggregate.Version >= 0)
+            throw SurchargeErrors.AlreadyInitialized();
 
-        var @event = new SurchargeCreatedEvent(id, code, name, basis, amount);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new SurchargeCreatedEvent(id, code, name, basis, amount));
         return aggregate;
     }
 
@@ -42,10 +36,7 @@ public sealed class SurchargeAggregate
 
         ValidateBasisAmount(basis, amount);
 
-        var @event = new SurchargeUpdatedEvent(Id, name, basis, amount);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SurchargeUpdatedEvent(Id, name, basis, amount));
     }
 
     public void Activate()
@@ -54,10 +45,7 @@ public sealed class SurchargeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw SurchargeErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new SurchargeActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SurchargeActivatedEvent(Id));
     }
 
     public void Deprecate()
@@ -66,10 +54,7 @@ public sealed class SurchargeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw SurchargeErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new SurchargeDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SurchargeDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -77,10 +62,7 @@ public sealed class SurchargeAggregate
         if (Status == SurchargeStatus.Archived)
             throw SurchargeErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new SurchargeArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SurchargeArchivedEvent(Id));
     }
 
     private static void ValidateBasisAmount(AdjustmentBasis basis, SurchargeAmount amount)
@@ -89,48 +71,36 @@ public sealed class SurchargeAggregate
             throw SurchargeErrors.PercentageOutOfRange(amount.Value);
     }
 
-    private void Apply(SurchargeCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.SurchargeId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Status = SurchargeStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case SurchargeCreatedEvent e:
+                Id = e.SurchargeId;
+                Code = e.Code;
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                Status = SurchargeStatus.Draft;
+                break;
+            case SurchargeUpdatedEvent e:
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                break;
+            case SurchargeActivatedEvent:
+                Status = SurchargeStatus.Active;
+                break;
+            case SurchargeDeprecatedEvent:
+                Status = SurchargeStatus.Deprecated;
+                break;
+            case SurchargeArchivedEvent:
+                Status = SurchargeStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(SurchargeUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Version++;
-    }
-
-    private void Apply(SurchargeActivatedEvent @event)
-    {
-        Status = SurchargeStatus.Active;
-        Version++;
-    }
-
-    private void Apply(SurchargeDeprecatedEvent @event)
-    {
-        Status = SurchargeStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(SurchargeArchivedEvent @event)
-    {
-        Status = SurchargeStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw SurchargeErrors.MissingId();

@@ -33,10 +33,6 @@ This domain defines catalog **structure only**. No pricing logic, financial tran
 * CanPublishSpecification — Validates catalog can transition from Draft to Published
 * CanArchiveSpecification — Validates catalog can transition from Published to Archived
 
-## Domain Services
-
-* CatalogService — Reserved for domain operations
-
 ## Errors
 
 * CatalogErrors.MissingId — CatalogId is required
@@ -71,6 +67,11 @@ Draft → Published → Archived
 * structural-system
 * economic-system (read-only relationship, no logic)
 * decision-system
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

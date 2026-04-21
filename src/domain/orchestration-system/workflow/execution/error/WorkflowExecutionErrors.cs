@@ -2,6 +2,7 @@ namespace Whycespace.Domain.OrchestrationSystem.Workflow.Execution;
 
 public static class WorkflowExecutionErrors
 {
+    public const string EmptyIdentity = "Workflow execution identity must be non-empty.";
     public const string NotRunning = "Workflow execution is not in Running state.";
     public const string WorkflowNameRequired = "Workflow name is required.";
     public const string CannotCompleteBeforeStarted = "Workflow execution cannot complete before it has started.";

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Renewal;
 
 public readonly record struct RenewalSourceId
@@ -6,9 +8,7 @@ public readonly record struct RenewalSourceId
 
     public RenewalSourceId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("RenewalSourceId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "RenewalSourceId cannot be empty.");
         Value = value;
     }
 }

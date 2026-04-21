@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Time;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.PriceBook;
 
-public sealed class PriceBookAggregate
+public sealed class PriceBookAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public PriceBookId Id { get; private set; }
     public PriceBookName Name { get; private set; }
     public PriceBookStatus Status { get; private set; }
     public PriceBookScopeRef? Scope { get; private set; }
     public TimeWindow? Effective { get; private set; }
-    public int Version { get; private set; }
-
-    private PriceBookAggregate() { }
 
     public static PriceBookAggregate Create(
         PriceBookId id,
@@ -22,12 +18,10 @@ public sealed class PriceBookAggregate
         TimeWindow? effective = null)
     {
         var aggregate = new PriceBookAggregate();
+        if (aggregate.Version >= 0)
+            throw PriceBookErrors.AlreadyInitialized();
 
-        var @event = new PriceBookCreatedEvent(id, name, scope, effective);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new PriceBookCreatedEvent(id, name, scope, effective));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class PriceBookAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PriceBookErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new PriceBookActivatedEvent(Id, effective);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PriceBookActivatedEvent(Id, effective));
     }
 
     public void Deprecate()
@@ -49,10 +40,7 @@ public sealed class PriceBookAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PriceBookErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new PriceBookDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PriceBookDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -61,46 +49,34 @@ public sealed class PriceBookAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PriceBookErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new PriceBookArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PriceBookArchivedEvent(Id));
     }
 
-    private void Apply(PriceBookCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.PriceBookId;
-        Name = @event.Name;
-        Scope = @event.Scope;
-        Effective = @event.Effective;
-        Status = PriceBookStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case PriceBookCreatedEvent e:
+                Id = e.PriceBookId;
+                Name = e.Name;
+                Scope = e.Scope;
+                Effective = e.Effective;
+                Status = PriceBookStatus.Draft;
+                break;
+            case PriceBookActivatedEvent e:
+                Effective = e.Effective;
+                Status = PriceBookStatus.Active;
+                break;
+            case PriceBookDeprecatedEvent:
+                Status = PriceBookStatus.Deprecated;
+                break;
+            case PriceBookArchivedEvent:
+                Status = PriceBookStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(PriceBookActivatedEvent @event)
-    {
-        Effective = @event.Effective;
-        Status = PriceBookStatus.Active;
-        Version++;
-    }
-
-    private void Apply(PriceBookDeprecatedEvent @event)
-    {
-        Status = PriceBookStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(PriceBookArchivedEvent @event)
-    {
-        Status = PriceBookStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw PriceBookErrors.MissingId();

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.cluster.spv.commands",
+    "whyce.structural.cluster.spv.events",
+    "whyce.structural.cluster.spv.retry",
+    "whyce.structural.cluster.spv.deadletter"
+  ]
+}

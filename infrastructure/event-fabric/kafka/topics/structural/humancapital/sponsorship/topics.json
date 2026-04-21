@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.sponsorship.commands",
+    "whyce.structural.humancapital.sponsorship.events",
+    "whyce.structural.humancapital.sponsorship.retry",
+    "whyce.structural.humancapital.sponsorship.deadletter"
+  ]
+}

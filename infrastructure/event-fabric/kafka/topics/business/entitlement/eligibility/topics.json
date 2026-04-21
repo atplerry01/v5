@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.entitlement.eligibility.commands",
+    "whyce.business.entitlement.eligibility.events",
+    "whyce.business.entitlement.eligibility.retry",
+    "whyce.business.entitlement.eligibility.deadletter"
+  ]
+}

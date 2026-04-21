@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandRouting;
 
-public sealed class CommandRoutingAggregate
+public sealed class CommandRoutingAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CommandRoutingId Id { get; private set; }
     public RoutingRule Rule { get; private set; }
     public CommandRoutingStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private CommandRoutingAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
 
@@ -18,12 +15,10 @@ public sealed class CommandRoutingAggregate
         RoutingRule rule)
     {
         var aggregate = new CommandRoutingAggregate();
+        if (aggregate.Version >= 0)
+            throw CommandRoutingErrors.AlreadyInitialized();
 
-        var @event = new CommandRoutingDefinedEvent(id, rule);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CommandRoutingDefinedEvent(id, rule));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class CommandRoutingAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandRoutingErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new CommandRoutingActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandRoutingActivatedEvent(Id));
     }
 
     // ── Disable ──────────────────────────────────────────────────
@@ -49,38 +41,30 @@ public sealed class CommandRoutingAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandRoutingErrors.InvalidStateTransition(Status, nameof(Disable));
 
-        var @event = new CommandRoutingDisabledEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandRoutingDisabledEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(CommandRoutingDefinedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.RoutingId;
-        Rule = @event.Rule;
-        Status = CommandRoutingStatus.Defined;
-        Version++;
+        switch (domainEvent)
+        {
+            case CommandRoutingDefinedEvent e:
+                Id = e.RoutingId;
+                Rule = e.Rule;
+                Status = CommandRoutingStatus.Defined;
+                break;
+            case CommandRoutingActivatedEvent:
+                Status = CommandRoutingStatus.Active;
+                break;
+            case CommandRoutingDisabledEvent:
+                Status = CommandRoutingStatus.Disabled;
+                break;
+        }
     }
 
-    private void Apply(CommandRoutingActivatedEvent @event)
-    {
-        Status = CommandRoutingStatus.Active;
-        Version++;
-    }
-
-    private void Apply(CommandRoutingDisabledEvent @event)
-    {
-        Status = CommandRoutingStatus.Disabled;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CommandRoutingErrors.MissingId();

@@ -199,6 +199,41 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 
 - [ ] **RUNBOOK-CONTROL-PLANE-COVERAGE-01** — route restriction/removal PR updates all referencing operator runbooks in the same patch
 
+### Section 22 — Rules Promoted from new-rules/ (2026-04-20) — Phase 2.5 Structural Central-Spine
+
+**Severity categorization (2026-04-20 scheme):** S0 = correctness-critical · S1 = structural integrity · S2 = advisory / audit.
+
+**S0 — Correctness-critical (compile / replay / data-integrity)**
+
+- [ ] **DG-STRUCT-CONTRACTS-IMPORT-01** — no non-structural system imports `StructuralSystem.Cluster.*` / `.Structure.*` / `.Humancapital.*`; only `Contracts.References`.
+  Static check: `grep -rE "using Whycespace\.Domain\.StructuralSystem\.(Cluster|Structure|Humancapital)" src/domain/{business,content,economic,operational,decision}-system/`.
+- [ ] **DG-STRUCT-ID-DEDUPE-01** — structural identity records (`Cluster*Id`, `AuthorityId`, `ProviderId`, `AdministrationId`, `Subcluster*Id`, `SpvId`) exist only in `structural-system/cluster/**`; non-structural duplicates forbidden unless qualified by prefix (`GovernanceAuthorityId`, `BusinessProviderId`, etc.).
+  Static check: `grep -rE "(readonly record struct|record|class) (Cluster[A-Za-z]*Id|AuthorityId|ProviderId|AdministrationId|Subcluster[A-Za-z]*Id|SpvId)\b" src/domain/` — fail on matches outside `structural-system/cluster/**` without qualifying prefix.
+
+**S1 — Structural integrity (must not drift)**
+
+- [ ] **DG-STRUCT-REF-CANONICAL-01** — six canonical refs (`ClusterRef`, `ClusterAuthorityRef`, `ClusterProviderRef`, `ClusterAdministrationRef`, `SubClusterRef`, `SpvRef`) live only in `structural-system/contracts/references/`; no duplicates.
+  Static check: `grep -rE "readonly record struct (ClusterRef|ClusterAuthorityRef|ClusterProviderRef|ClusterAdministrationRef|SubClusterRef|SpvRef)\b" src/` — fail outside the canonical folder.
+- [ ] **DG-STRUCT-CONTRACTS-PURITY-01** — `structural-system/contracts/**` holds only `readonly record struct`, `record`, `enum`, and interface declarations; no aggregates / events / services / error classes.
+  Static check: `grep -rE "(public\s+)?(sealed\s+)?(class|abstract class) " src/domain/structural-system/contracts/` excluding interface declarations — fail on matches.
+- [ ] **DG-STRUCT-ATTACH-EFFECTIVE-01** — every cluster-child factory has a `DateTimeOffset effectiveAt` overload; every `*AttachedEvent` uses a canonical ref (no raw `Guid` parent).
+  Static check: per aggregate in `structural-system/cluster/**`, `grep -E "public static .+Aggregate (Establish|Register|Create|Define)\(.*DateTimeOffset"`; `grep -rE "record .*AttachedEvent\([^)]*\bGuid\s+(Cluster|Authority|SubCluster|Spv|Administration)" src/domain/structural-system/cluster/` — fail on matches.
+- [ ] **DG-STRUCT-PARENT-LOOKUP-01** — `CanAttach*` / `CanRebind*` specs take `IStructuralParentLookup` via ctor; runtime wires at least one concrete lookup; humancapital placement factories take the lookup.
+  Static check: per spec file in `structural-system/cluster/**/specification/`, verify `CanAttach*` class signatures include `(IStructuralParentLookup lookup)`; verify `IStructuralParentLookup.cs` exists in contracts; verify composition root registers an implementation.
+- [ ] **DG-STRUCT-VOCAB-LOCATION-01** — `*Type` / `*Role` / `*Category` / `*Class` / `*Kind` enums (excluding `*Status`) live only in `structural-system/structure/reference-vocabularies/`. No duplicate enums with matching name+values outside. No `string` type-code fields where the canonical vocab enum exists.
+  Static check: `grep -rE "public enum [A-Za-z]+(Type|Role|Category|Class|Kind)$" src/domain/structural-system/cluster/**/value-object/` — fail on matches; repo-wide grep per vocab for duplicate declarations; `grep -rE "public string (SpvType|AuthorityRole|ProviderCategory)" src/domain/` — fail on matches.
+- [ ] **DG-STRUCT-DEFN-VS-INSTANCE-01** — definition-model aggregates in `structure/<topic>-definition/`, live instances in `cluster/<topic>/`. No new `.cs` files under `cluster/topology/**` after 2026-04-20 without documented replay/compat rationale.
+  Static check: `git log --diff-filter=A --since=2026-04-21 -- 'src/domain/structural-system/cluster/topology/**.cs'` — any new file = fail unless paired new-rules capture justifies.
+- [ ] **DG-HC-STRUCTURAL-BINDING-01** — humancapital placement fields use canonical refs only (no raw `Guid`/`string` parent fields); placement factories enforce (non-null lookup, active parent, bounded effective date).
+  Static check: `grep -rE "(Guid|string) (Cluster|Authority|Provider|Subcluster|Spv|Administration)(Id|Reference|Ref)\b" src/domain/structural-system/humancapital/` — fail on matches; per-factory inspection of `ParticipantAggregate.Place` / `AssignmentAggregate.Assign` for the three invariant checks.
+
+**S2 — Advisory / audit**
+
+- [ ] **DG-STRUCT-LIFECYCLE-CANONICAL-01** — cluster-child status enums include `Suspended` + `Retired`; `*ReactivatedEvent` present. New `*ArchivedEvent`/`*RevokedEvent`/`*ClosedEvent` after 2026-04-20 = advisory drift.
+  Static check: `grep -E "Suspended|Retired" src/domain/structural-system/cluster/**/value-object/*Status.cs` — warn on enums missing either; `git log --since=2026-04-21` for new `(Archived|Revoked|Closed)Event` declarations = advisory flag.
+- [ ] **DG-ECON-SPV-REF-ACCESS-01** — economic surfaces carrying string SPV IDs expose `[JsonIgnore] SpvRef?` typed accessor; new factory overloads accept `SpvRef`.
+  Static check: per `.cs` in `economic-system/**` with `public string SpvId`/`TargetId`: verify sibling `[JsonIgnore] public SpvRef?` property exists. Missing = advisory flag.
+
 ---
 
 ## Check Procedure
@@ -221,13 +256,14 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 AUDIT:           domain
 GUARD:           claude/guards/domain.guard.md
 EXECUTED:        <ISO-8601>
-RULES_CHECKED:   ~160
-SECTIONS:        21
+RULES_CHECKED:   ~171
+SECTIONS:        22
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>
 S0_FAILURES:     <list>
 S1_FAILURES:     <list>
+S2_FAILURES:     <list>
 EVIDENCE:        <path>
 VERDICT:         PASS | FAIL | CONDITIONAL
 ```

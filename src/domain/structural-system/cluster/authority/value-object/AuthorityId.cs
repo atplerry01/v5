@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Authority;
 
 public readonly record struct AuthorityId
@@ -6,9 +8,7 @@ public readonly record struct AuthorityId
 
     public AuthorityId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw AuthorityErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "AuthorityId cannot be empty.");
         Value = value;
     }
 }

@@ -1,33 +1,24 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateTransition;
 
-public sealed class StateTransitionAggregate
+public sealed class StateTransitionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public StateTransitionId Id { get; private set; }
     public TransitionRule Rule { get; private set; }
     public TransitionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private StateTransitionAggregate() { }
-
-    // ── Factory ──────────────────────────────────────────────────
 
     public static StateTransitionAggregate Define(
         StateTransitionId id,
         TransitionRule rule)
     {
         var aggregate = new StateTransitionAggregate();
+        if (aggregate.Version >= 0)
+            throw StateTransitionErrors.AlreadyInitialized();
 
-        var @event = new StateTransitionDefinedEvent(id, rule);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new StateTransitionDefinedEvent(id, rule));
         return aggregate;
     }
-
-    // ── Activate ─────────────────────────────────────────────────
 
     public void Activate()
     {
@@ -35,13 +26,8 @@ public sealed class StateTransitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw StateTransitionErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new StateTransitionActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new StateTransitionActivatedEvent(Id));
     }
-
-    // ── Retire ───────────────────────────────────────────────────
 
     public void Retire()
     {
@@ -49,38 +35,28 @@ public sealed class StateTransitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw StateTransitionErrors.InvalidStateTransition(Status, nameof(Retire));
 
-        var @event = new StateTransitionRetiredEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new StateTransitionRetiredEvent(Id));
     }
 
-    // ── Apply ────────────────────────────────────────────────────
-
-    private void Apply(StateTransitionDefinedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.TransitionId;
-        Rule = @event.Rule;
-        Status = TransitionStatus.Defined;
-        Version++;
+        switch (domainEvent)
+        {
+            case StateTransitionDefinedEvent e:
+                Id = e.TransitionId;
+                Rule = e.Rule;
+                Status = TransitionStatus.Defined;
+                break;
+            case StateTransitionActivatedEvent:
+                Status = TransitionStatus.Active;
+                break;
+            case StateTransitionRetiredEvent:
+                Status = TransitionStatus.Retired;
+                break;
+        }
     }
 
-    private void Apply(StateTransitionActivatedEvent @event)
-    {
-        Status = TransitionStatus.Active;
-        Version++;
-    }
-
-    private void Apply(StateTransitionRetiredEvent @event)
-    {
-        Status = TransitionStatus.Retired;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw StateTransitionErrors.MissingId();

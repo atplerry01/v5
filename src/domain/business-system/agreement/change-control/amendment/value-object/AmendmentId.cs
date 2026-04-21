@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Amendment;
 
 public readonly record struct AmendmentId
@@ -6,9 +8,7 @@ public readonly record struct AmendmentId
 
     public AmendmentId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("AmendmentId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "AmendmentId cannot be empty.");
         Value = value;
     }
 }

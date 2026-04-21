@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.operator.commands",
+    "whyce.structural.humancapital.operator.events",
+    "whyce.structural.humancapital.operator.retry",
+    "whyce.structural.humancapital.operator.deadletter"
+  ]
+}

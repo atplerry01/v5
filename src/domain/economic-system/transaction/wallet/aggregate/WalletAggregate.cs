@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,8 +7,8 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Wallet;
 public sealed class WalletAggregate : AggregateRoot
 {
     public WalletId WalletId { get; private set; }
-    public Guid OwnerId { get; private set; }
-    public Guid AccountId { get; private set; }
+    public OwnerId OwnerId { get; private set; }
+    public AccountId AccountId { get; private set; }
     public WalletStatus Status { get; private set; }
     public Timestamp CreatedAt { get; private set; }
 
@@ -23,16 +24,25 @@ public sealed class WalletAggregate : AggregateRoot
 
     public static WalletAggregate Create(
         WalletId walletId,
+        OwnerId ownerId,
+        AccountId accountId,
+        Timestamp createdAt)
+    {
+        var aggregate = new WalletAggregate();
+        aggregate.RaiseDomainEvent(new WalletCreatedEvent(walletId, ownerId.Value, accountId.Value, createdAt));
+        return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed refs.
+    public static WalletAggregate Create(
+        WalletId walletId,
         Guid ownerId,
         Guid accountId,
         Timestamp createdAt)
     {
         if (ownerId == Guid.Empty) throw WalletErrors.InvalidOwnerId();
         if (accountId == Guid.Empty) throw WalletErrors.InvalidAccountId();
-
-        var aggregate = new WalletAggregate();
-        aggregate.RaiseDomainEvent(new WalletCreatedEvent(walletId, ownerId, accountId, createdAt));
-        return aggregate;
+        return Create(walletId, new OwnerId(ownerId), new AccountId(accountId), createdAt);
     }
 
     // ── Behavior ─────────────────────────────────────────────────
@@ -46,7 +56,7 @@ public sealed class WalletAggregate : AggregateRoot
     {
         if (requestId == Guid.Empty) throw WalletErrors.InvalidRequestId();
         if (Status != WalletStatus.Active) throw WalletErrors.WalletNotActive();
-        if (AccountId == Guid.Empty) throw WalletErrors.NoAccountMapped();
+        if (AccountId.Value == Guid.Empty) throw WalletErrors.NoAccountMapped();
         if (destinationAccountId == Guid.Empty) throw WalletErrors.InvalidDestination();
         if (amount.Value <= 0m) throw WalletErrors.InvalidAmount();
 
@@ -57,7 +67,7 @@ public sealed class WalletAggregate : AggregateRoot
             return;
 
         RaiseDomainEvent(new TransactionRequestedEvent(
-            WalletId, requestId, AccountId, destinationAccountId, amount, currency, requestedAt));
+            WalletId, requestId, AccountId.Value, destinationAccountId, amount, currency, requestedAt));
     }
 
     // ── Apply ────────────────────────────────────────────────────
@@ -68,8 +78,8 @@ public sealed class WalletAggregate : AggregateRoot
         {
             case WalletCreatedEvent e:
                 WalletId = e.WalletId;
-                OwnerId = e.OwnerId;
-                AccountId = e.AccountId;
+                OwnerId = new OwnerId(e.OwnerId);
+                AccountId = new AccountId(e.AccountId);
                 Status = WalletStatus.Active;
                 CreatedAt = e.CreatedAt;
                 break;
@@ -87,7 +97,7 @@ public sealed class WalletAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        if (Status == WalletStatus.Active && AccountId == Guid.Empty)
+        if (Status == WalletStatus.Active && AccountId.Value == Guid.Empty)
             throw WalletErrors.WalletMustHaveAccount();
     }
 }

@@ -5,5 +5,6 @@ public enum SpvStatus
     Created,
     Active,
     Suspended,
-    Closed
+    Closed,
+    Retired
 }

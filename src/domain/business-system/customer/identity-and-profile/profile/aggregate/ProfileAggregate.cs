@@ -1,10 +1,10 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Profile;
 
-public sealed class ProfileAggregate
+public sealed class ProfileAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly Dictionary<string, ProfileDescriptor> _descriptors = new();
 
     public ProfileId Id { get; private set; }
@@ -12,9 +12,6 @@ public sealed class ProfileAggregate
     public ProfileDisplayName DisplayName { get; private set; }
     public ProfileStatus Status { get; private set; }
     public IReadOnlyDictionary<string, ProfileDescriptor> Descriptors => _descriptors;
-    public int Version { get; private set; }
-
-    private ProfileAggregate() { }
 
     public static ProfileAggregate Create(
         ProfileId id,
@@ -22,33 +19,23 @@ public sealed class ProfileAggregate
         ProfileDisplayName displayName)
     {
         var aggregate = new ProfileAggregate();
+        if (aggregate.Version >= 0)
+            throw ProfileErrors.AlreadyInitialized();
 
-        var @event = new ProfileCreatedEvent(id, customer, displayName);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ProfileCreatedEvent(id, customer, displayName));
         return aggregate;
     }
 
     public void Rename(ProfileDisplayName displayName)
     {
         EnsureMutable();
-
-        var @event = new ProfileRenamedEvent(Id, displayName);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProfileRenamedEvent(Id, displayName));
     }
 
     public void SetDescriptor(ProfileDescriptor descriptor)
     {
         EnsureMutable();
-
-        var @event = new ProfileDescriptorSetEvent(Id, descriptor);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProfileDescriptorSetEvent(Id, descriptor));
     }
 
     public void RemoveDescriptor(string key)
@@ -58,10 +45,7 @@ public sealed class ProfileAggregate
         if (!_descriptors.ContainsKey(key))
             throw ProfileErrors.DescriptorNotPresent(key);
 
-        var @event = new ProfileDescriptorRemovedEvent(Id, key);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProfileDescriptorRemovedEvent(Id, key));
     }
 
     public void Activate()
@@ -70,10 +54,7 @@ public sealed class ProfileAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ProfileErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProfileActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProfileActivatedEvent(Id));
     }
 
     public void Archive()
@@ -81,49 +62,35 @@ public sealed class ProfileAggregate
         if (Status == ProfileStatus.Archived)
             throw ProfileErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ProfileArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProfileArchivedEvent(Id));
     }
 
-    private void Apply(ProfileCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ProfileId;
-        Customer = @event.Customer;
-        DisplayName = @event.DisplayName;
-        Status = ProfileStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ProfileRenamedEvent @event)
-    {
-        DisplayName = @event.DisplayName;
-        Version++;
-    }
-
-    private void Apply(ProfileDescriptorSetEvent @event)
-    {
-        _descriptors[@event.Descriptor.Key] = @event.Descriptor;
-        Version++;
-    }
-
-    private void Apply(ProfileDescriptorRemovedEvent @event)
-    {
-        _descriptors.Remove(@event.Key);
-        Version++;
-    }
-
-    private void Apply(ProfileActivatedEvent @event)
-    {
-        Status = ProfileStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ProfileArchivedEvent @event)
-    {
-        Status = ProfileStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProfileCreatedEvent e:
+                Id = e.ProfileId;
+                Customer = e.Customer;
+                DisplayName = e.DisplayName;
+                Status = ProfileStatus.Draft;
+                break;
+            case ProfileRenamedEvent e:
+                DisplayName = e.DisplayName;
+                break;
+            case ProfileDescriptorSetEvent e:
+                _descriptors[e.Descriptor.Key] = e.Descriptor;
+                break;
+            case ProfileDescriptorRemovedEvent e:
+                _descriptors.Remove(e.Key);
+                break;
+            case ProfileActivatedEvent:
+                Status = ProfileStatus.Active;
+                break;
+            case ProfileArchivedEvent:
+                Status = ProfileStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -133,11 +100,7 @@ public sealed class ProfileAggregate
             throw ProfileErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProfileErrors.MissingId();

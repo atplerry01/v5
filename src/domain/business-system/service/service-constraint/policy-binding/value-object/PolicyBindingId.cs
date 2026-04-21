@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.PolicyBinding;
 
 public readonly record struct PolicyBindingId
@@ -6,9 +8,7 @@ public readonly record struct PolicyBindingId
 
     public PolicyBindingId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("PolicyBindingId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "PolicyBindingId cannot be empty.");
         Value = value;
     }
 }

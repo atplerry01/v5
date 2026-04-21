@@ -24,7 +24,7 @@ public sealed class DistributionTests
             distributionId, spvId, totalAmount, allocations);
 
         Assert.Equal(DistributionStatus.Created, aggregate.Status);
-        Assert.Equal(totalAmount, aggregate.TotalAmount);
+        Assert.Equal(totalAmount, aggregate.TotalAmount.Value);
         Assert.Equal(2, aggregate.Shares.Count);
 
         var a = aggregate.Shares.Single(s => s.ParticipantId == "participant-a");

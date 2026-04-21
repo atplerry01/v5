@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,7 +7,7 @@ namespace Whycespace.Domain.EconomicSystem.Capital.Reserve;
 public sealed class ReserveAggregate : AggregateRoot
 {
     public ReserveId ReserveId { get; private set; }
-    public Guid AccountId { get; private set; }
+    public AccountId AccountId { get; private set; }
     public Amount Amount { get; private set; }
     public Currency Currency { get; private set; }
     public ReserveStatus Status { get; private set; }
@@ -19,7 +20,7 @@ public sealed class ReserveAggregate : AggregateRoot
 
     public static ReserveAggregate Create(
         ReserveId reserveId,
-        Guid accountId,
+        AccountId accountId,
         Amount amount,
         Currency currency,
         Timestamp reservedAt,
@@ -35,7 +36,7 @@ public sealed class ReserveAggregate : AggregateRoot
 
         aggregate.RaiseDomainEvent(new ReserveCreatedEvent(
             reserveId,
-            accountId,
+            accountId.Value,
             amount,
             currency,
             reservedAt,
@@ -43,6 +44,16 @@ public sealed class ReserveAggregate : AggregateRoot
 
         return aggregate;
     }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static ReserveAggregate Create(
+        ReserveId reserveId,
+        Guid accountId,
+        Amount amount,
+        Currency currency,
+        Timestamp reservedAt,
+        Timestamp expiresAt)
+        => Create(reserveId, new AccountId(accountId), amount, currency, reservedAt, expiresAt);
 
     // ── Behavior ─────────────────────────────────────────────────
 
@@ -59,7 +70,7 @@ public sealed class ReserveAggregate : AggregateRoot
 
         RaiseDomainEvent(new ReserveReleasedEvent(
             ReserveId,
-            AccountId,
+            AccountId.Value,
             Amount,
             releasedAt));
     }
@@ -77,7 +88,7 @@ public sealed class ReserveAggregate : AggregateRoot
 
         RaiseDomainEvent(new ReserveExpiredEvent(
             ReserveId,
-            AccountId,
+            AccountId.Value,
             Amount,
             expiredAt));
     }
@@ -90,7 +101,7 @@ public sealed class ReserveAggregate : AggregateRoot
         {
             case ReserveCreatedEvent e:
                 ReserveId = e.ReserveId;
-                AccountId = e.AccountId;
+                AccountId = new AccountId(e.AccountId);
                 Amount = e.ReservedAmount;
                 Currency = e.Currency;
                 Status = ReserveStatus.Active;

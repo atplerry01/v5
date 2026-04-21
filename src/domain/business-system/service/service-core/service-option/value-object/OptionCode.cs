@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceOption;
 
 public readonly record struct OptionCode
@@ -8,12 +10,10 @@ public readonly record struct OptionCode
 
     public OptionCode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("OptionCode must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "OptionCode must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"OptionCode exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"OptionCode exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

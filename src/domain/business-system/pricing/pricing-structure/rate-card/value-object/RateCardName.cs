@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.RateCard;
 
 public readonly record struct RateCardName
@@ -8,12 +10,10 @@ public readonly record struct RateCardName
 
     public RateCardName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("RateCardName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "RateCardName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"RateCardName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"RateCardName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

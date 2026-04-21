@@ -30,10 +30,6 @@ Defines the structure of subscription plans — the defined tiers and configurat
   * Factory: Draft(id, descriptor)
   * Transitions: Activate(), Deprecate()
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * PlanId — Validated Guid identifier for a plan instance
@@ -50,10 +46,6 @@ Defines the structure of subscription plans — the defined tiers and configurat
 
 * CanActivateSpecification — Satisfied when status is Draft
 * CanDeprecateSpecification — Satisfied when status is Active
-
-## Domain Services
-
-* PlanService — Domain operations for plan management
 
 ## Errors
 
@@ -81,6 +73,11 @@ Defines the structure of subscription plans — the defined tiers and configurat
 ## Lifecycle
 
 TERMINAL: Draft -> Active -> Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

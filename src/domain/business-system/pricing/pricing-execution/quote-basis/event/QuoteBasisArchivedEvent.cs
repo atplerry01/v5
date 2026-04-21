@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.QuoteBasis;
 
-public sealed record QuoteBasisArchivedEvent(QuoteBasisId QuoteBasisId);
+public sealed record QuoteBasisArchivedEvent(
+    [property: JsonPropertyName("AggregateId")] QuoteBasisId QuoteBasisId) : DomainEvent;

@@ -16,9 +16,6 @@ Defines the structure and schema of individual commands — the canonical shape 
   * Event-sourced: all state derived from applied events.
   * Enforces invariants after every state change.
 
-## Entities
-* None
-
 ## State Model
 ```
 Draft ──Publish()──> Published ──Deprecate()──> Deprecated (terminal)
@@ -50,8 +47,10 @@ Draft ──Publish()──> Published ──Deprecate()──> Deprecated (term
 * **MissingSchema** — Must define a valid schema.
 * **InvalidStateTransition** — Guard for illegal status transitions.
 
-## Domain Services
-* **CommandDefinitionService** — Reserved for cross-aggregate coordination.
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Lifecycle Pattern
 TERMINAL — Once deprecated, a command definition cannot be reactivated.

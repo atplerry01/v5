@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderScope.ProviderCoverage;
 
 public enum CoverageScopeKind
@@ -17,15 +19,11 @@ public readonly record struct CoverageScope
 
     public CoverageScope(CoverageScopeKind kind, string descriptor)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("CoverageScopeKind is invalid.", nameof(kind));
-
-        if (string.IsNullOrWhiteSpace(descriptor))
-            throw new ArgumentException("CoverageScope descriptor must not be empty.", nameof(descriptor));
+        Guard.Against(!Enum.IsDefined(kind), "CoverageScopeKind is invalid.");
+        Guard.Against(string.IsNullOrWhiteSpace(descriptor), "CoverageScope descriptor must not be empty.");
 
         var trimmed = descriptor.Trim();
-        if (trimmed.Length > MaxDescriptorLength)
-            throw new ArgumentException($"CoverageScope descriptor exceeds {MaxDescriptorLength} characters.", nameof(descriptor));
+        Guard.Against(trimmed.Length > MaxDescriptorLength, $"CoverageScope descriptor exceeds {MaxDescriptorLength} characters.");
 
         Kind = kind;
         Descriptor = trimmed;

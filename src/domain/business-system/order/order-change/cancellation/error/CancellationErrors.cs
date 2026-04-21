@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.Cancellation;
 
 public static class CancellationErrors
 {
-    public static CancellationDomainException MissingId()
-        => new("CancellationId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("CancellationId is required and must not be empty.");
 
-    public static CancellationDomainException MissingOrderRef()
-        => new("Cancellation must reference an order.");
+    public static DomainException MissingOrderRef()
+        => new DomainInvariantViolationException("Cancellation must reference an order.");
 
-    public static CancellationDomainException InvalidStateTransition(CancellationStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(CancellationStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static CancellationDomainException AlreadyTerminal(CancellationId id, CancellationStatus status)
-        => new($"Cancellation '{id.Value}' is already terminal ({status}).");
-}
+    public static DomainException AlreadyTerminal(CancellationId id, CancellationStatus status)
+        => new DomainInvariantViolationException($"Cancellation '{id.Value}' is already terminal ({status}).");
 
-public sealed class CancellationDomainException : Exception
-{
-    public CancellationDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Cancellation has already been initialized.");
 }

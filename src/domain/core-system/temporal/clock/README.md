@@ -22,11 +22,7 @@ Defines the foundational clock abstraction — the system's canonical time sourc
 
 * ClockAggregate
 
-  * Represents the canonical clock instance and its configuration state
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational clock abstraction — the system's canonical time sourc
 ## Domain Events
 
 * ClockCreatedEvent — Raised when a new clock is created
-* ClockUpdatedEvent — Raised when clock metadata is updated
-* ClockStateChangedEvent — Raised when clock lifecycle state transitions
 
 ## Specifications
 
-* ClockSpecification — Validates clock structure and completeness
+* ClockSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* ClockService — Domain operations for clock management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational clock abstraction — the system's canonical time sourc
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

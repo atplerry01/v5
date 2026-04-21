@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Eligibility;
 
 public readonly record struct IneligibilityReason
@@ -8,12 +10,10 @@ public readonly record struct IneligibilityReason
 
     public IneligibilityReason(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("IneligibilityReason must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "IneligibilityReason must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"IneligibilityReason exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"IneligibilityReason exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

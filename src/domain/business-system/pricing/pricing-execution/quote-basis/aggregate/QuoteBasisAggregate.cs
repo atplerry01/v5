@@ -1,18 +1,14 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.QuoteBasis;
 
-public sealed class QuoteBasisAggregate
+public sealed class QuoteBasisAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public QuoteBasisId Id { get; private set; }
     public PriceBookRef PriceBook { get; private set; }
     public QuoteBasisContext Context { get; private set; }
     public QuoteBasisStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private QuoteBasisAggregate() { }
 
     public static QuoteBasisAggregate Create(
         QuoteBasisId id,
@@ -20,12 +16,10 @@ public sealed class QuoteBasisAggregate
         QuoteBasisContext context)
     {
         var aggregate = new QuoteBasisAggregate();
+        if (aggregate.Version >= 0)
+            throw QuoteBasisErrors.AlreadyInitialized();
 
-        var @event = new QuoteBasisCreatedEvent(id, priceBook, context);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new QuoteBasisCreatedEvent(id, priceBook, context));
         return aggregate;
     }
 
@@ -35,10 +29,7 @@ public sealed class QuoteBasisAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw QuoteBasisErrors.FinalizedImmutable(Id);
 
-        var @event = new QuoteBasisContextRevisedEvent(Id, context);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteBasisContextRevisedEvent(Id, context));
     }
 
     public void MarkFinalized()
@@ -47,10 +38,7 @@ public sealed class QuoteBasisAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw QuoteBasisErrors.InvalidStateTransition(Status, nameof(MarkFinalized));
 
-        var @event = new QuoteBasisFinalizedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteBasisFinalizedEvent(Id));
     }
 
     public void Archive()
@@ -59,44 +47,32 @@ public sealed class QuoteBasisAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw QuoteBasisErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new QuoteBasisArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteBasisArchivedEvent(Id));
     }
 
-    private void Apply(QuoteBasisCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.QuoteBasisId;
-        PriceBook = @event.PriceBook;
-        Context = @event.Context;
-        Status = QuoteBasisStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case QuoteBasisCreatedEvent e:
+                Id = e.QuoteBasisId;
+                PriceBook = e.PriceBook;
+                Context = e.Context;
+                Status = QuoteBasisStatus.Draft;
+                break;
+            case QuoteBasisContextRevisedEvent e:
+                Context = e.Context;
+                break;
+            case QuoteBasisFinalizedEvent:
+                Status = QuoteBasisStatus.Finalized;
+                break;
+            case QuoteBasisArchivedEvent:
+                Status = QuoteBasisStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(QuoteBasisContextRevisedEvent @event)
-    {
-        Context = @event.Context;
-        Version++;
-    }
-
-    private void Apply(QuoteBasisFinalizedEvent @event)
-    {
-        Status = QuoteBasisStatus.Finalized;
-        Version++;
-    }
-
-    private void Apply(QuoteBasisArchivedEvent @event)
-    {
-        Status = QuoteBasisStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw QuoteBasisErrors.MissingId();

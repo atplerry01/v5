@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.FulfillmentInstruction;
 
 public readonly record struct OrderRef
@@ -6,9 +8,7 @@ public readonly record struct OrderRef
 
     public OrderRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("OrderRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "OrderRef cannot be empty.");
         Value = value;
     }
 }

@@ -24,10 +24,6 @@ Defines the foundational structure for budget boundaries and control limits. Pro
 
   * Manages the lifecycle and state of a budget control instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * BudgetControlId — Unique identifier for a budget-control instance
@@ -35,16 +31,10 @@ Defines the foundational structure for budget boundaries and control limits. Pro
 ## Domain Events
 
 * BudgetControlCreatedEvent — Raised when a new budget-control is created
-* BudgetControlUpdatedEvent — Raised when budget-control metadata is updated
-* BudgetControlStateChangedEvent — Raised when budget-control lifecycle state transitions
 
 ## Specifications
 
 * BudgetControlSpecification — Validates budget-control structure and completeness
-
-## Domain Services
-
-* BudgetControlService — Domain operations for budget-control management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for budget boundaries and control limits. Pro
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

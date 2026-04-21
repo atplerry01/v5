@@ -1,21 +1,20 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+using Whycespace.Domain.StructuralSystem.Structure.ReferenceVocabularies;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Spv;
 
 public readonly record struct SpvDescriptor
 {
-    public Guid ClusterReference { get; }
+    public ClusterRef ClusterReference { get; }
     public string SpvName { get; }
     public SpvType SpvType { get; }
 
-    public SpvDescriptor(Guid clusterReference, string spvName, SpvType spvType)
+    public SpvDescriptor(ClusterRef clusterReference, string spvName, SpvType spvType)
     {
-        if (clusterReference == Guid.Empty)
-            throw SpvErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(spvName))
-            throw SpvErrors.MissingDescriptor();
-
-        if (!Enum.IsDefined(spvType))
-            throw SpvErrors.MissingDescriptor();
+        Guard.Against(clusterReference == default, "SpvDescriptor cluster reference cannot be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(spvName), "SpvDescriptor name must not be null or whitespace.");
+        Guard.Against(!Enum.IsDefined(spvType), "SpvDescriptor SpvType must be a defined enum value.");
 
         ClusterReference = clusterReference;
         SpvName = spvName;

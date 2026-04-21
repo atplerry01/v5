@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.Commitment.Validity;
 
 public readonly record struct ValidityId
@@ -6,9 +8,7 @@ public readonly record struct ValidityId
 
     public ValidityId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ValidityId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ValidityId cannot be empty.");
         Value = value;
     }
 }

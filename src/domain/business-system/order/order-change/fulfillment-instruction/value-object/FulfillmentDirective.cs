@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.FulfillmentInstruction;
 
 public readonly record struct FulfillmentDirective
@@ -8,11 +10,8 @@ public readonly record struct FulfillmentDirective
 
     public FulfillmentDirective(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("FulfillmentDirective must not be empty.", nameof(value));
-
-        if (value.Length > MaxLength)
-            throw new ArgumentException($"FulfillmentDirective exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "FulfillmentDirective must not be empty.");
+        Guard.Against(value!.Length > MaxLength, $"FulfillmentDirective exceeds {MaxLength} characters.");
 
         Value = value;
     }

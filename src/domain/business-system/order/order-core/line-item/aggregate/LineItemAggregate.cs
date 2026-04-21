@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.LineItem;
 
-public sealed class LineItemAggregate
+public sealed class LineItemAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public LineItemId Id { get; private set; }
     public OrderRef Order { get; private set; }
     public LineItemSubjectRef Subject { get; private set; }
     public LineQuantity Quantity { get; private set; }
     public LineItemStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private LineItemAggregate() { }
 
     public static LineItemAggregate Create(
         LineItemId id,
@@ -22,12 +18,10 @@ public sealed class LineItemAggregate
         LineQuantity quantity)
     {
         var aggregate = new LineItemAggregate();
+        if (aggregate.Version >= 0)
+            throw LineItemErrors.AlreadyInitialized();
 
-        var @event = new LineItemCreatedEvent(id, order, subject, quantity);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new LineItemCreatedEvent(id, order, subject, quantity));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class LineItemAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw LineItemErrors.CancelledImmutable(Id);
 
-        var @event = new LineItemUpdatedEvent(Id, quantity);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new LineItemUpdatedEvent(Id, quantity));
     }
 
     public void Cancel()
@@ -49,45 +40,42 @@ public sealed class LineItemAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw LineItemErrors.InvalidStateTransition(Status, nameof(Cancel));
 
-        var @event = new LineItemCancelledEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new LineItemCancelledEvent(Id));
     }
 
-    private void Apply(LineItemCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.LineItemId;
-        Order = @event.Order;
-        Subject = @event.Subject;
-        Quantity = @event.Quantity;
-        Status = LineItemStatus.Requested;
-        Version++;
+        switch (domainEvent)
+        {
+            case LineItemCreatedEvent e:
+                Id = e.LineItemId;
+                Order = e.Order;
+                Subject = e.Subject;
+                Quantity = e.Quantity;
+                Status = LineItemStatus.Requested;
+                break;
+            case LineItemUpdatedEvent e:
+                Quantity = e.Quantity;
+                break;
+            case LineItemCancelledEvent:
+                Status = LineItemStatus.Cancelled;
+                break;
+        }
     }
 
-    private void Apply(LineItemUpdatedEvent @event)
-    {
-        Quantity = @event.Quantity;
-        Version++;
-    }
-
-    private void Apply(LineItemCancelledEvent @event)
-    {
-        Status = LineItemStatus.Cancelled;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw LineItemErrors.MissingId();
 
         if (Order == default)
             throw LineItemErrors.MissingOrderRef();
+
+        if (Subject == default)
+            throw LineItemErrors.MissingSubject();
+
+        if (Quantity == default)
+            throw LineItemErrors.MissingQuantity();
 
         if (!Enum.IsDefined(Status))
             throw LineItemErrors.InvalidStateTransition(Status, "validate");

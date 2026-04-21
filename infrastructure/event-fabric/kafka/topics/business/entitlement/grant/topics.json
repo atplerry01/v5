@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.entitlement.grant.commands",
+    "whyce.business.entitlement.grant.events",
+    "whyce.business.entitlement.grant.retry",
+    "whyce.business.entitlement.grant.deadletter"
+  ]
+}

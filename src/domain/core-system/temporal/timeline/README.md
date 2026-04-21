@@ -22,11 +22,7 @@ Defines the foundational structure for timelines — ordered sequences of tempor
 
 * TimelineAggregate
 
-  * Represents a timeline instance and its ordered sequence of temporal entries
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for timelines — ordered sequences of tempor
 ## Domain Events
 
 * TimelineCreatedEvent — Raised when a new timeline is created
-* TimelineUpdatedEvent — Raised when timeline metadata is updated
-* TimelineStateChangedEvent — Raised when timeline lifecycle state transitions
 
 ## Specifications
 
-* TimelineSpecification — Validates timeline structure and completeness
+* TimelineSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* TimelineService — Domain operations for timeline management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for timelines — ordered sequences of tempor
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

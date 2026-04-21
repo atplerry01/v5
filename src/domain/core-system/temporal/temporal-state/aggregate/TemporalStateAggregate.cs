@@ -1,23 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Temporal.TemporalState;
 
-public sealed class TemporalStateAggregate
+public sealed class TemporalStateAggregate : AggregateRoot
 {
     public static TemporalStateAggregate Create()
     {
         var aggregate = new TemporalStateAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw TemporalStateErrors.AlreadyInitialized();
+
         // POLICY HOOK (to be enforced by runtime)
         return aggregate;
-    }
-
-    private void EnsureInvariants()
-    {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
     }
 }

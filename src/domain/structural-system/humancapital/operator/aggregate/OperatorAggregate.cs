@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Operator;
 
-public sealed class OperatorAggregate
+public sealed class OperatorAggregate : AggregateRoot
 {
-    public static OperatorAggregate Create()
+    public OperatorId Id { get; private set; }
+    public OperatorDescriptor Descriptor { get; private set; }
+
+    public static OperatorAggregate Create(OperatorId id, OperatorDescriptor descriptor)
     {
         var aggregate = new OperatorAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw OperatorErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new OperatorCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case OperatorCreatedEvent e:
+                Id = e.OperatorId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw OperatorErrors.MissingId();
+
+        if (Descriptor == default)
+            throw OperatorErrors.MissingDescriptor();
     }
 }

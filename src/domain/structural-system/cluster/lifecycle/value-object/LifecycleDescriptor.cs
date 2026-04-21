@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Lifecycle;
 
 public readonly record struct LifecycleDescriptor
@@ -7,11 +9,8 @@ public readonly record struct LifecycleDescriptor
 
     public LifecycleDescriptor(Guid clusterReference, string lifecycleName)
     {
-        if (clusterReference == Guid.Empty)
-            throw LifecycleErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(lifecycleName))
-            throw LifecycleErrors.MissingDescriptor();
+        Guard.Against(clusterReference == Guid.Empty, "LifecycleDescriptor cluster reference cannot be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(lifecycleName), "LifecycleDescriptor name must not be null or whitespace.");
 
         ClusterReference = clusterReference;
         LifecycleName = lifecycleName;

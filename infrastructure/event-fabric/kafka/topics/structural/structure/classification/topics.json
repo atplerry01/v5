@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.structure.classification.commands",
+    "whyce.structural.structure.classification.events",
+    "whyce.structural.structure.classification.retry",
+    "whyce.structural.structure.classification.deadletter"
+  ]
+}

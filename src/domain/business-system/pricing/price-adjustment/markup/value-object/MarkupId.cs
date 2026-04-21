@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Markup;
 
 public readonly record struct MarkupId
@@ -6,9 +8,7 @@ public readonly record struct MarkupId
 
     public MarkupId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("MarkupId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "MarkupId cannot be empty.");
         Value = value;
     }
 }

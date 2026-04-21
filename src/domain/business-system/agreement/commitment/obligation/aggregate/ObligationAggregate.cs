@@ -1,93 +1,63 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.Commitment.Obligation;
 
-public sealed class ObligationAggregate
+public sealed class ObligationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ObligationId Id { get; private set; }
     public ObligationStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ObligationAggregate() { }
 
     public static ObligationAggregate Create(ObligationId id)
     {
         var aggregate = new ObligationAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw ObligationErrors.AlreadyInitialized();
 
-        var @event = new ObligationCreatedEvent(id);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ObligationCreatedEvent(id));
         return aggregate;
     }
 
     public void Fulfill()
     {
-        ValidateBeforeChange();
-
         var specification = new CanFulfillSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ObligationErrors.InvalidStateTransition(Status, nameof(Fulfill));
 
-        var @event = new ObligationFulfilledEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ObligationFulfilledEvent(Id));
     }
 
     public void Breach()
     {
-        ValidateBeforeChange();
-
         var specification = new CanBreachSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ObligationErrors.InvalidStateTransition(Status, nameof(Breach));
 
-        var @event = new ObligationBreachedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ObligationBreachedEvent(Id));
     }
 
-    private void Apply(ObligationCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ObligationId;
-        Status = ObligationStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case ObligationCreatedEvent e:
+                Id = e.ObligationId;
+                Status = ObligationStatus.Pending;
+                break;
+            case ObligationFulfilledEvent:
+                Status = ObligationStatus.Fulfilled;
+                break;
+            case ObligationBreachedEvent:
+                Status = ObligationStatus.Breached;
+                break;
+        }
     }
 
-    private void Apply(ObligationFulfilledEvent @event)
-    {
-        Status = ObligationStatus.Fulfilled;
-        Version++;
-    }
-
-    private void Apply(ObligationBreachedEvent @event)
-    {
-        Status = ObligationStatus.Breached;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ObligationErrors.MissingId();
 
         if (!Enum.IsDefined(Status))
             throw ObligationErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

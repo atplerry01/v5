@@ -22,5 +22,10 @@ Commercially-offered service unit (distinct from service/service-definition).
 S4 — E1 domain model implemented. Aggregate + VOs + events + specs + errors.
 (superseded below)
 
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
+
 ## Routing
 Per DS-R8, `DomainRoute` remains the 3-tuple `(business-system, offering, service-offering)`; the domain-group is a folder-level grouping and is not part of the route.

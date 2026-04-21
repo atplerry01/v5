@@ -1,18 +1,14 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.Cancellation;
 
-public sealed class CancellationAggregate
+public sealed class CancellationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CancellationId Id { get; private set; }
     public OrderRef Order { get; private set; }
     public CancellationReason Reason { get; private set; }
     public CancellationStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private CancellationAggregate() { }
 
     public static CancellationAggregate Request(
         CancellationId id,
@@ -21,12 +17,10 @@ public sealed class CancellationAggregate
         DateTimeOffset requestedAt)
     {
         var aggregate = new CancellationAggregate();
+        if (aggregate.Version >= 0)
+            throw CancellationErrors.AlreadyInitialized();
 
-        var @event = new CancellationRequestedEvent(id, order, reason, requestedAt);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CancellationRequestedEvent(id, order, reason, requestedAt));
         return aggregate;
     }
 
@@ -36,10 +30,7 @@ public sealed class CancellationAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CancellationErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new CancellationConfirmedEvent(Id, confirmedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CancellationConfirmedEvent(Id, confirmedAt));
     }
 
     public void Reject(DateTimeOffset rejectedAt)
@@ -48,38 +39,29 @@ public sealed class CancellationAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CancellationErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new CancellationRejectedEvent(Id, rejectedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CancellationRejectedEvent(Id, rejectedAt));
     }
 
-    private void Apply(CancellationRequestedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.CancellationId;
-        Order = @event.Order;
-        Reason = @event.Reason;
-        Status = CancellationStatus.Requested;
-        Version++;
+        switch (domainEvent)
+        {
+            case CancellationRequestedEvent e:
+                Id = e.CancellationId;
+                Order = e.Order;
+                Reason = e.Reason;
+                Status = CancellationStatus.Requested;
+                break;
+            case CancellationConfirmedEvent:
+                Status = CancellationStatus.Confirmed;
+                break;
+            case CancellationRejectedEvent:
+                Status = CancellationStatus.Rejected;
+                break;
+        }
     }
 
-    private void Apply(CancellationConfirmedEvent @event)
-    {
-        Status = CancellationStatus.Confirmed;
-        Version++;
-    }
-
-    private void Apply(CancellationRejectedEvent @event)
-    {
-        Status = CancellationStatus.Rejected;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CancellationErrors.MissingId();

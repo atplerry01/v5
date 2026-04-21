@@ -1,12 +1,11 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
-
 using Whycespace.Domain.BusinessSystem.Shared.Time;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.RateCard;
 
-public sealed class RateCardAggregate
+public sealed class RateCardAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly Dictionary<string, RateEntry> _entries = new();
 
     public RateCardId Id { get; private set; }
@@ -15,9 +14,6 @@ public sealed class RateCardAggregate
     public RateCardStatus Status { get; private set; }
     public TimeWindow? Effective { get; private set; }
     public IReadOnlyDictionary<string, RateEntry> Entries => _entries;
-    public int Version { get; private set; }
-
-    private RateCardAggregate() { }
 
     public static RateCardAggregate Create(
         RateCardId id,
@@ -25,12 +21,10 @@ public sealed class RateCardAggregate
         RateCardName name)
     {
         var aggregate = new RateCardAggregate();
+        if (aggregate.Version >= 0)
+            throw RateCardErrors.AlreadyInitialized();
 
-        var @event = new RateCardCreatedEvent(id, priceBook, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new RateCardCreatedEvent(id, priceBook, name));
         return aggregate;
     }
 
@@ -41,10 +35,7 @@ public sealed class RateCardAggregate
         if (_entries.ContainsKey(entry.Code))
             throw RateCardErrors.RateEntryAlreadyPresent(entry.Code);
 
-        var @event = new RateEntryAddedEvent(Id, entry);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RateEntryAddedEvent(Id, entry));
     }
 
     public void RemoveEntry(string code)
@@ -54,10 +45,7 @@ public sealed class RateCardAggregate
         if (!_entries.ContainsKey(code))
             throw RateCardErrors.RateEntryNotPresent(code);
 
-        var @event = new RateEntryRemovedEvent(Id, code);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RateEntryRemovedEvent(Id, code));
     }
 
     public void Activate(TimeWindow effective)
@@ -71,10 +59,7 @@ public sealed class RateCardAggregate
             throw RateCardErrors.ActivationRequiresEntries();
         }
 
-        var @event = new RateCardActivatedEvent(Id, effective);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RateCardActivatedEvent(Id, effective));
     }
 
     public void Deprecate()
@@ -83,10 +68,7 @@ public sealed class RateCardAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw RateCardErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new RateCardDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RateCardDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -94,50 +76,36 @@ public sealed class RateCardAggregate
         if (Status == RateCardStatus.Archived)
             throw RateCardErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new RateCardArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RateCardArchivedEvent(Id));
     }
 
-    private void Apply(RateCardCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.RateCardId;
-        PriceBook = @event.PriceBook;
-        Name = @event.Name;
-        Status = RateCardStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(RateEntryAddedEvent @event)
-    {
-        _entries[@event.Entry.Code] = @event.Entry;
-        Version++;
-    }
-
-    private void Apply(RateEntryRemovedEvent @event)
-    {
-        _entries.Remove(@event.Code);
-        Version++;
-    }
-
-    private void Apply(RateCardActivatedEvent @event)
-    {
-        Effective = @event.Effective;
-        Status = RateCardStatus.Active;
-        Version++;
-    }
-
-    private void Apply(RateCardDeprecatedEvent @event)
-    {
-        Status = RateCardStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(RateCardArchivedEvent @event)
-    {
-        Status = RateCardStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case RateCardCreatedEvent e:
+                Id = e.RateCardId;
+                PriceBook = e.PriceBook;
+                Name = e.Name;
+                Status = RateCardStatus.Draft;
+                break;
+            case RateEntryAddedEvent e:
+                _entries[e.Entry.Code] = e.Entry;
+                break;
+            case RateEntryRemovedEvent e:
+                _entries.Remove(e.Code);
+                break;
+            case RateCardActivatedEvent e:
+                Effective = e.Effective;
+                Status = RateCardStatus.Active;
+                break;
+            case RateCardDeprecatedEvent:
+                Status = RateCardStatus.Deprecated;
+                break;
+            case RateCardArchivedEvent:
+                Status = RateCardStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureDraft()
@@ -151,11 +119,7 @@ public sealed class RateCardAggregate
         }
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw RateCardErrors.MissingId();

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.Segment;
 
 public readonly record struct SegmentId
@@ -6,9 +8,7 @@ public readonly record struct SegmentId
 
     public SegmentId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("SegmentId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "SegmentId cannot be empty.");
         Value = value;
     }
 }

@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Account;
 
 public static class AccountErrors
 {
-    public static AccountDomainException MissingId()
-        => new("AccountId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("AccountId is required and must not be empty.");
 
-    public static AccountDomainException MissingCustomerRef()
-        => new("Account must reference a customer.");
+    public static DomainException MissingCustomerRef()
+        => new DomainInvariantViolationException("Account must reference a customer.");
 
-    public static AccountDomainException InvalidStateTransition(AccountStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(AccountStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static AccountDomainException ClosedImmutable(AccountId id)
-        => new($"Account '{id.Value}' is closed and cannot be mutated.");
-}
+    public static DomainException ClosedImmutable(AccountId id)
+        => new DomainInvariantViolationException($"Account '{id.Value}' is closed and cannot be mutated.");
 
-public sealed class AccountDomainException : Exception
-{
-    public AccountDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Account has already been initialized.");
 }

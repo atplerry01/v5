@@ -59,9 +59,9 @@ Draft ──ApplyAmendment()──> Applied ──RevertAmendment()──> Rever
 * **AlreadyReverted** — Cannot revert an already-reverted amendment.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **AmendmentService** — Reserved for cross-aggregate coordination within amendment context.
+- no `entity/` — aggregate has no child entities.
 
 ## Status
 

@@ -1,17 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.FareRule;
 
-public sealed class FareRuleAggregate
+public sealed class FareRuleAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public FareRuleId Id { get; private set; }
     public TariffRef Tariff { get; private set; }
     public FareRuleCode Code { get; private set; }
     public FareRuleCondition Condition { get; private set; }
     public FareRuleStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private FareRuleAggregate() { }
 
     public static FareRuleAggregate Create(
         FareRuleId id,
@@ -20,12 +17,10 @@ public sealed class FareRuleAggregate
         FareRuleCondition condition)
     {
         var aggregate = new FareRuleAggregate();
+        if (aggregate.Version >= 0)
+            throw FareRuleErrors.AlreadyInitialized();
 
-        var @event = new FareRuleCreatedEvent(id, tariff, code, condition);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new FareRuleCreatedEvent(id, tariff, code, condition));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class FareRuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw FareRuleErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new FareRuleActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FareRuleActivatedEvent(Id));
     }
 
     public void Deprecate()
@@ -47,10 +39,7 @@ public sealed class FareRuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw FareRuleErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new FareRuleDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FareRuleDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -58,45 +47,33 @@ public sealed class FareRuleAggregate
         if (Status == FareRuleStatus.Archived)
             throw FareRuleErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new FareRuleArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FareRuleArchivedEvent(Id));
     }
 
-    private void Apply(FareRuleCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.FareRuleId;
-        Tariff = @event.Tariff;
-        Code = @event.Code;
-        Condition = @event.Condition;
-        Status = FareRuleStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case FareRuleCreatedEvent e:
+                Id = e.FareRuleId;
+                Tariff = e.Tariff;
+                Code = e.Code;
+                Condition = e.Condition;
+                Status = FareRuleStatus.Draft;
+                break;
+            case FareRuleActivatedEvent:
+                Status = FareRuleStatus.Active;
+                break;
+            case FareRuleDeprecatedEvent:
+                Status = FareRuleStatus.Deprecated;
+                break;
+            case FareRuleArchivedEvent:
+                Status = FareRuleStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(FareRuleActivatedEvent @event)
-    {
-        Status = FareRuleStatus.Active;
-        Version++;
-    }
-
-    private void Apply(FareRuleDeprecatedEvent @event)
-    {
-        Status = FareRuleStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(FareRuleArchivedEvent @event)
-    {
-        Status = FareRuleStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw FareRuleErrors.MissingId();

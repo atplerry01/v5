@@ -5,8 +5,8 @@ namespace Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 public sealed class KanbanCard : Entity
 {
     public KanbanCardId Id { get; private set; }
-    public string Title { get; private set; } = string.Empty;
-    public string Description { get; private set; } = string.Empty;
+    public KanbanCardTitle Title { get; private set; }
+    public DocumentRef Description { get; private set; }
     public KanbanListId ListId { get; private set; }
     public KanbanPosition Position { get; private set; }
     public bool IsCompleted { get; private set; }
@@ -17,8 +17,8 @@ public sealed class KanbanCard : Entity
     internal static KanbanCard Create(
         KanbanCardId id,
         KanbanListId listId,
-        string title,
-        string description,
+        KanbanCardTitle title,
+        DocumentRef description,
         KanbanPosition position,
         KanbanPriority? priority)
     {
@@ -50,7 +50,7 @@ public sealed class KanbanCard : Entity
         IsCompleted = true;
     }
 
-    internal void Update(string title, string description)
+    internal void Update(KanbanCardTitle title, DocumentRef description)
     {
         Title = title;
         Description = description;

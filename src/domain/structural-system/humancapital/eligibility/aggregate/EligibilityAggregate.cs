@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Eligibility;
 
-public sealed class EligibilityAggregate
+public sealed class EligibilityAggregate : AggregateRoot
 {
-    public static EligibilityAggregate Create()
+    public EligibilityId Id { get; private set; }
+    public EligibilityDescriptor Descriptor { get; private set; }
+
+    public static EligibilityAggregate Create(EligibilityId id, EligibilityDescriptor descriptor)
     {
         var aggregate = new EligibilityAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw EligibilityErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new EligibilityCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case EligibilityCreatedEvent e:
+                Id = e.EligibilityId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw EligibilityErrors.MissingId();
+
+        if (Descriptor == default)
+            throw EligibilityErrors.MissingDescriptor();
     }
 }

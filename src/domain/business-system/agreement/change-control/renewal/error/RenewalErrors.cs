@@ -1,24 +1,24 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Renewal;
 
 public static class RenewalErrors
 {
-    public static RenewalDomainException MissingId()
-        => new("RenewalId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("RenewalId is required and must not be empty.");
 
-    public static RenewalDomainException MissingSourceId()
-        => new("RenewalSourceId is required and must not be empty.");
+    public static DomainException MissingSourceId()
+        => new DomainInvariantViolationException("RenewalSourceId is required and must not be empty.");
 
-    public static RenewalDomainException AlreadyRenewed(RenewalId id)
-        => new($"Renewal '{id.Value}' has already been renewed.");
+    public static DomainException AlreadyRenewed(RenewalId id)
+        => new DomainInvariantViolationException($"Renewal '{id.Value}' has already been renewed.");
 
-    public static RenewalDomainException AlreadyExpired(RenewalId id)
-        => new($"Renewal '{id.Value}' has already expired. Cannot renew an expired entity.");
+    public static DomainException AlreadyExpired(RenewalId id)
+        => new DomainInvariantViolationException($"Renewal '{id.Value}' has already expired. Cannot renew an expired entity.");
 
-    public static RenewalDomainException InvalidStateTransition(RenewalStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
-}
+    public static DomainException InvalidStateTransition(RenewalStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-public sealed class RenewalDomainException : Exception
-{
-    public RenewalDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Renewal has already been initialized.");
 }

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.PartyGovernance.Signature;
 
 public readonly record struct SignatureId
@@ -6,9 +8,7 @@ public readonly record struct SignatureId
 
     public SignatureId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("SignatureId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "SignatureId cannot be empty.");
         Value = value;
     }
 }

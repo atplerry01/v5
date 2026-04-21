@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Assignment;
 
 public readonly record struct AssignmentSubjectRef
@@ -6,9 +8,7 @@ public readonly record struct AssignmentSubjectRef
 
     public AssignmentSubjectRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("AssignmentSubjectRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "AssignmentSubjectRef cannot be empty.");
         Value = value;
     }
 }

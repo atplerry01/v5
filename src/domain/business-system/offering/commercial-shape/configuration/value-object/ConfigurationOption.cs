@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Configuration;
 
 public readonly record struct ConfigurationOption
@@ -10,17 +12,10 @@ public readonly record struct ConfigurationOption
 
     public ConfigurationOption(string key, string value)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("ConfigurationOption key must not be empty.", nameof(key));
-
-        if (key.Trim().Length > KeyMaxLength)
-            throw new ArgumentException($"ConfigurationOption key exceeds {KeyMaxLength} characters.", nameof(key));
-
-        if (value is null)
-            throw new ArgumentNullException(nameof(value));
-
-        if (value.Length > ValueMaxLength)
-            throw new ArgumentException($"ConfigurationOption value exceeds {ValueMaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(key), "ConfigurationOption key must not be empty.");
+        Guard.Against(key!.Trim().Length > KeyMaxLength, $"ConfigurationOption key exceeds {KeyMaxLength} characters.");
+        Guard.Against(value is null, "ConfigurationOption value must not be null.");
+        Guard.Against(value!.Length > ValueMaxLength, $"ConfigurationOption value exceeds {ValueMaxLength} characters.");
 
         Key = key.Trim();
         Value = value;

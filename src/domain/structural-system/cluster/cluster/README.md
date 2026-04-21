@@ -19,13 +19,15 @@ Defines the fundamental organizational unit within the structural system. A clus
 
 ## Aggregate(s)
 - **ClusterAggregate**
-  - Sealed, private constructor, self-contained event tracking via `_uncommittedEvents`
+  - Sealed, inherits `AggregateRoot`; event tracking handled by the shared kernel
   - Factory method `Define(ClusterId, ClusterDescriptor)` for creation
   - Transition methods `Activate()` and `Archive()` with specification-guarded state transitions
   - Invariants: ClusterId must not be empty; ClusterDescriptor must have non-empty ClusterName and ClusterType
 
-## Entities
-None
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Value Objects
 - **ClusterId** — Validated Guid wrapper; rejects empty Guid
@@ -46,9 +48,6 @@ None
 - **CanActivateSpecification** — Status must be Defined
 - **CanArchiveSpecification** — Status must be Active
 
-## Domain Services
-- **ClusterService** — Placeholder; no domain service logic required for root cluster definition
-
 ## Lifecycle (TERMINAL)
 ```
 Define() -> Defined
@@ -58,5 +57,5 @@ Archive() -> Archived (terminal, no further transitions)
 
 ## Notes
 - Events are sealed records with no base class
-- Aggregate does not extend a shared AggregateRoot; manages its own uncommitted event list
-- All errors use InvalidOperationException via the static ClusterErrors class
+- Aggregate inherits the shared `AggregateRoot`; uncommitted events tracked by the base class
+- All errors return `DomainException` (via `DomainInvariantViolationException`) through the static `ClusterErrors` factory class

@@ -54,9 +54,10 @@ Define() -> Defined --Transition()--> Transitioned --Complete()--> Completed (te
 * **MissingDescriptor** -- LifecycleDescriptor is required.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **LifecycleService** -- Reserved for cross-aggregate coordination within lifecycle context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

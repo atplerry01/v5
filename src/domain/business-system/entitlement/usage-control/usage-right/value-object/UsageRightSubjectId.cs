@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.UsageRight;
 
 public readonly record struct UsageRightSubjectId
@@ -6,8 +8,7 @@ public readonly record struct UsageRightSubjectId
 
     public UsageRightSubjectId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("UsageRightSubjectId value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "UsageRightSubjectId cannot be empty.");
         Value = value;
     }
 }

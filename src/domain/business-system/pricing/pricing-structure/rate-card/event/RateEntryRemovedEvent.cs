@@ -1,3 +1,8 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.RateCard;
 
-public sealed record RateEntryRemovedEvent(RateCardId RateCardId, string Code);
+public sealed record RateEntryRemovedEvent(
+    [property: JsonPropertyName("AggregateId")] RateCardId RateCardId,
+    string Code) : DomainEvent;

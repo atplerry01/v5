@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.PriceBook;
 
 public readonly record struct PriceBookId
@@ -6,9 +8,7 @@ public readonly record struct PriceBookId
 
     public PriceBookId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("PriceBookId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "PriceBookId cannot be empty.");
         Value = value;
     }
 }

@@ -10,7 +10,7 @@ public sealed class ExpenseService
         foreach (var expense in expenses)
         {
             if (expense.Status == ExpenseStatus.Cancelled) continue;
-            total += expense.Amount;
+            total += expense.Amount.Value;
         }
         return total;
     }

@@ -1,8 +1,9 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Package;
 
-public sealed class PackageAggregate
+public sealed class PackageAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly HashSet<PackageMember> _members = new();
 
     public PackageId Id { get; private set; }
@@ -10,19 +11,14 @@ public sealed class PackageAggregate
     public PackageName Name { get; private set; }
     public PackageStatus Status { get; private set; }
     public IReadOnlyCollection<PackageMember> Members => _members;
-    public int Version { get; private set; }
-
-    private PackageAggregate() { }
 
     public static PackageAggregate Create(PackageId id, PackageCode code, PackageName name)
     {
         var aggregate = new PackageAggregate();
+        if (aggregate.Version >= 0)
+            throw PackageErrors.AlreadyInitialized();
 
-        var @event = new PackageCreatedEvent(id, code, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new PackageCreatedEvent(id, code, name));
         return aggregate;
     }
 
@@ -33,10 +29,7 @@ public sealed class PackageAggregate
         if (_members.Contains(member))
             throw PackageErrors.MemberAlreadyPresent(member);
 
-        var @event = new PackageMemberAddedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PackageMemberAddedEvent(Id, member));
     }
 
     public void RemoveMember(PackageMember member)
@@ -46,10 +39,7 @@ public sealed class PackageAggregate
         if (!_members.Contains(member))
             throw PackageErrors.MemberNotPresent(member);
 
-        var @event = new PackageMemberRemovedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PackageMemberRemovedEvent(Id, member));
     }
 
     public void Activate()
@@ -62,10 +52,7 @@ public sealed class PackageAggregate
             throw PackageErrors.ActivationRequiresMembers();
         }
 
-        var @event = new PackageActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PackageActivatedEvent(Id));
     }
 
     public void Archive()
@@ -73,43 +60,32 @@ public sealed class PackageAggregate
         if (Status == PackageStatus.Archived)
             throw PackageErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new PackageArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PackageArchivedEvent(Id));
     }
 
-    private void Apply(PackageCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.PackageId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Status = PackageStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(PackageMemberAddedEvent @event)
-    {
-        _members.Add(@event.Member);
-        Version++;
-    }
-
-    private void Apply(PackageMemberRemovedEvent @event)
-    {
-        _members.Remove(@event.Member);
-        Version++;
-    }
-
-    private void Apply(PackageActivatedEvent @event)
-    {
-        Status = PackageStatus.Active;
-        Version++;
-    }
-
-    private void Apply(PackageArchivedEvent @event)
-    {
-        Status = PackageStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case PackageCreatedEvent e:
+                Id = e.PackageId;
+                Code = e.Code;
+                Name = e.Name;
+                Status = PackageStatus.Draft;
+                break;
+            case PackageMemberAddedEvent e:
+                _members.Add(e.Member);
+                break;
+            case PackageMemberRemovedEvent e:
+                _members.Remove(e.Member);
+                break;
+            case PackageActivatedEvent:
+                Status = PackageStatus.Active;
+                break;
+            case PackageArchivedEvent:
+                Status = PackageStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -119,14 +95,16 @@ public sealed class PackageAggregate
             throw PackageErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw PackageErrors.MissingId();
+
+        if (Code == default)
+            throw PackageErrors.MissingCode();
+
+        if (Name == default)
+            throw PackageErrors.MissingName();
 
         if (!Enum.IsDefined(Status))
             throw PackageErrors.InvalidStateTransition(Status, "validate");

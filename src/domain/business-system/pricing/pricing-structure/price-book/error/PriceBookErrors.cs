@@ -1,18 +1,18 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.PriceBook;
 
 public static class PriceBookErrors
 {
-    public static PriceBookDomainException MissingId()
-        => new("PriceBookId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("PriceBookId is required and must not be empty.");
 
-    public static PriceBookDomainException InvalidStateTransition(PriceBookStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(PriceBookStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static PriceBookDomainException EffectiveWindowRequiredForActivation()
-        => new("PriceBook requires an effective window before activation.");
-}
+    public static DomainException EffectiveWindowRequiredForActivation()
+        => new DomainInvariantViolationException("PriceBook requires an effective window before activation.");
 
-public sealed class PriceBookDomainException : Exception
-{
-    public PriceBookDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("PriceBook has already been initialized.");
 }

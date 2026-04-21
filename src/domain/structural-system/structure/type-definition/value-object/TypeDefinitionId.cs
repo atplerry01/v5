@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.TypeDefinition;
 
 public readonly record struct TypeDefinitionId
@@ -6,9 +8,7 @@ public readonly record struct TypeDefinitionId
 
     public TypeDefinitionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw TypeDefinitionErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "TypeDefinitionId cannot be empty.");
         Value = value;
     }
 }

@@ -1,8 +1,9 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.UsageRight;
 
-public sealed class UsageRightAggregate
+public sealed class UsageRightAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly List<UsageRecord> _usageRecords = new();
 
     public UsageRightId Id { get; private set; }
@@ -13,50 +14,35 @@ public sealed class UsageRightAggregate
     public int TotalUsed { get; private set; }
     public IReadOnlyList<UsageRecord> UsageRecords => _usageRecords.AsReadOnly();
     public int Remaining => TotalUnits - TotalUsed;
-    public int Version { get; private set; }
-
-    private UsageRightAggregate() { }
 
     public static UsageRightAggregate Create(UsageRightId id, UsageRightSubjectId subjectId, UsageRightReferenceId referenceId, int totalUnits)
     {
-        if (totalUnits <= 0)
-            throw new ArgumentException("Total units must be greater than zero.", nameof(totalUnits));
+        Guard.Against(totalUnits <= 0, "Total units must be greater than zero.");
 
         var aggregate = new UsageRightAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw UsageRightErrors.AlreadyInitialized();
 
-        var @event = new UsageRightCreatedEvent(id, subjectId, referenceId, totalUnits);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new UsageRightCreatedEvent(id, subjectId, referenceId, totalUnits));
         return aggregate;
     }
 
     public void Use(UsageRecord record)
     {
-        ValidateBeforeChange();
-
-        if (record is null)
-            throw new ArgumentNullException(nameof(record));
+        Guard.Against(record is null, "UsageRecord must not be null.");
 
         var specification = new CanUseSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw UsageRightErrors.InvalidStateTransition(Status, nameof(Use));
 
-        if (record.UnitsUsed > Remaining)
+        if (record!.UnitsUsed > Remaining)
             throw UsageRightErrors.UsageExceedsAvailable(record.UnitsUsed, Remaining);
 
-        var @event = new UsageRightUsedEvent(Id, record.RecordId, record.UnitsUsed);
-        Apply(@event, record);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new UsageRightUsedEvent(Id, record.RecordId, record.UnitsUsed));
     }
 
     public void Consume()
     {
-        ValidateBeforeChange();
-
         var specification = new CanConsumeSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw UsageRightErrors.InvalidStateTransition(Status, nameof(Consume));
@@ -64,45 +50,33 @@ public sealed class UsageRightAggregate
         if (Remaining > 0)
             throw UsageRightErrors.UsageRemaining(Remaining);
 
-        var @event = new UsageRightConsumedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new UsageRightConsumedEvent(Id));
     }
 
-    private void Apply(UsageRightCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.UsageRightId;
-        SubjectId = @event.SubjectId;
-        ReferenceId = @event.ReferenceId;
-        TotalUnits = @event.TotalUnits;
-        TotalUsed = 0;
-        Status = UsageRightStatus.Available;
-        Version++;
+        switch (domainEvent)
+        {
+            case UsageRightCreatedEvent e:
+                Id = e.UsageRightId;
+                SubjectId = e.SubjectId;
+                ReferenceId = e.ReferenceId;
+                TotalUnits = e.TotalUnits;
+                TotalUsed = 0;
+                Status = UsageRightStatus.Available;
+                break;
+            case UsageRightUsedEvent e:
+                _usageRecords.Add(new UsageRecord(e.RecordId, e.UnitsUsed));
+                TotalUsed += e.UnitsUsed;
+                Status = UsageRightStatus.InUse;
+                break;
+            case UsageRightConsumedEvent:
+                Status = UsageRightStatus.Consumed;
+                break;
+        }
     }
 
-    private void Apply(UsageRightUsedEvent @event, UsageRecord record)
-    {
-        _usageRecords.Add(record);
-        TotalUsed += @event.UnitsUsed;
-        Status = UsageRightStatus.InUse;
-        Version++;
-    }
-
-    private void Apply(UsageRightConsumedEvent @event)
-    {
-        Status = UsageRightStatus.Consumed;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw UsageRightErrors.MissingId();
@@ -118,10 +92,5 @@ public sealed class UsageRightAggregate
 
         if (!Enum.IsDefined(Status))
             throw UsageRightErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

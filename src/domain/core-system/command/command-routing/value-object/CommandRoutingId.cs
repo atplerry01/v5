@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandRouting;
 
 public readonly record struct CommandRoutingId
@@ -6,9 +8,7 @@ public readonly record struct CommandRoutingId
 
     public CommandRoutingId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CommandRoutingId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CommandRoutingId cannot be empty.");
         Value = value;
     }
 }

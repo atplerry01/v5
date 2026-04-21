@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.participant.commands",
+    "whyce.structural.humancapital.participant.events",
+    "whyce.structural.humancapital.participant.retry",
+    "whyce.structural.humancapital.participant.deadletter"
+  ]
+}

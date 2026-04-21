@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Approval;
 
-public sealed record ApprovalRejectedEvent(ApprovalId ApprovalId);
+public sealed record ApprovalRejectedEvent(
+    [property: JsonPropertyName("AggregateId")] ApprovalId ApprovalId) : DomainEvent;

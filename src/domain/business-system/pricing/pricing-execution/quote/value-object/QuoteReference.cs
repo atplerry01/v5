@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.Quote;
 
 public readonly record struct QuoteReference
@@ -8,12 +10,10 @@ public readonly record struct QuoteReference
 
     public QuoteReference(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("QuoteReference must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "QuoteReference must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"QuoteReference exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"QuoteReference exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

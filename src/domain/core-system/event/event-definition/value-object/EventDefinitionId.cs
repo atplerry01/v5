@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventDefinition;
 
 public readonly record struct EventDefinitionId
@@ -6,9 +8,7 @@ public readonly record struct EventDefinitionId
 
     public EventDefinitionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("EventDefinitionId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "EventDefinitionId cannot be empty.");
         Value = value;
     }
 }

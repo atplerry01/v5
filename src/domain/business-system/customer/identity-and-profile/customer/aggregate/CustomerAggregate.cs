@@ -1,17 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Customer;
 
-public sealed class CustomerAggregate
+public sealed class CustomerAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CustomerId Id { get; private set; }
     public CustomerName Name { get; private set; }
     public CustomerType Type { get; private set; }
     public CustomerStatus Status { get; private set; }
     public CustomerReferenceCode? ReferenceCode { get; private set; }
-    public int Version { get; private set; }
-
-    private CustomerAggregate() { }
 
     public static CustomerAggregate Create(
         CustomerId id,
@@ -20,33 +17,23 @@ public sealed class CustomerAggregate
         CustomerReferenceCode? referenceCode = null)
     {
         var aggregate = new CustomerAggregate();
+        if (aggregate.Version >= 0)
+            throw CustomerErrors.AlreadyInitialized();
 
-        var @event = new CustomerCreatedEvent(id, name, type, referenceCode);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CustomerCreatedEvent(id, name, type, referenceCode));
         return aggregate;
     }
 
     public void Rename(CustomerName name)
     {
         EnsureMutable(nameof(Rename));
-
-        var @event = new CustomerRenamedEvent(Id, name);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CustomerRenamedEvent(Id, name));
     }
 
     public void Reclassify(CustomerType type)
     {
         EnsureMutable(nameof(Reclassify));
-
-        var @event = new CustomerReclassifiedEvent(Id, type);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CustomerReclassifiedEvent(Id, type));
     }
 
     public void Activate()
@@ -55,10 +42,7 @@ public sealed class CustomerAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CustomerErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new CustomerActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CustomerActivatedEvent(Id));
     }
 
     public void Archive()
@@ -66,44 +50,33 @@ public sealed class CustomerAggregate
         if (Status == CustomerStatus.Archived)
             throw CustomerErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new CustomerArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CustomerArchivedEvent(Id));
     }
 
-    private void Apply(CustomerCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.CustomerId;
-        Name = @event.Name;
-        Type = @event.Type;
-        ReferenceCode = @event.ReferenceCode;
-        Status = CustomerStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(CustomerRenamedEvent @event)
-    {
-        Name = @event.Name;
-        Version++;
-    }
-
-    private void Apply(CustomerReclassifiedEvent @event)
-    {
-        Type = @event.Type;
-        Version++;
-    }
-
-    private void Apply(CustomerActivatedEvent @event)
-    {
-        Status = CustomerStatus.Active;
-        Version++;
-    }
-
-    private void Apply(CustomerArchivedEvent @event)
-    {
-        Status = CustomerStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case CustomerCreatedEvent e:
+                Id = e.CustomerId;
+                Name = e.Name;
+                Type = e.Type;
+                ReferenceCode = e.ReferenceCode;
+                Status = CustomerStatus.Draft;
+                break;
+            case CustomerRenamedEvent e:
+                Name = e.Name;
+                break;
+            case CustomerReclassifiedEvent e:
+                Type = e.Type;
+                break;
+            case CustomerActivatedEvent:
+                Status = CustomerStatus.Active;
+                break;
+            case CustomerArchivedEvent:
+                Status = CustomerStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable(string attemptedAction)
@@ -113,11 +86,7 @@ public sealed class CustomerAggregate
             throw CustomerErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CustomerErrors.MissingId();

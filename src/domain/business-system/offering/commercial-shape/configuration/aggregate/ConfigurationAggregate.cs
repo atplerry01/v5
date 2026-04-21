@@ -1,27 +1,23 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Configuration;
 
-public sealed class ConfigurationAggregate
+public sealed class ConfigurationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly Dictionary<string, ConfigurationOption> _options = new();
 
     public ConfigurationId Id { get; private set; }
     public ConfigurationName Name { get; private set; }
     public ConfigurationStatus Status { get; private set; }
     public IReadOnlyDictionary<string, ConfigurationOption> Options => _options;
-    public int Version { get; private set; }
-
-    private ConfigurationAggregate() { }
 
     public static ConfigurationAggregate Create(ConfigurationId id, ConfigurationName name)
     {
         var aggregate = new ConfigurationAggregate();
+        if (aggregate.Version >= 0)
+            throw ConfigurationErrors.AlreadyInitialized();
 
-        var @event = new ConfigurationCreatedEvent(id, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ConfigurationCreatedEvent(id, name));
         return aggregate;
     }
 
@@ -29,10 +25,7 @@ public sealed class ConfigurationAggregate
     {
         EnsureMutable();
 
-        var @event = new ConfigurationOptionSetEvent(Id, option);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ConfigurationOptionSetEvent(Id, option));
     }
 
     public void RemoveOption(string key)
@@ -42,10 +35,7 @@ public sealed class ConfigurationAggregate
         if (!_options.ContainsKey(key))
             throw ConfigurationErrors.OptionNotPresent(key);
 
-        var @event = new ConfigurationOptionRemovedEvent(Id, key);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ConfigurationOptionRemovedEvent(Id, key));
     }
 
     public void Activate()
@@ -54,10 +44,7 @@ public sealed class ConfigurationAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ConfigurationErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ConfigurationActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ConfigurationActivatedEvent(Id));
     }
 
     public void Archive()
@@ -65,42 +52,31 @@ public sealed class ConfigurationAggregate
         if (Status == ConfigurationStatus.Archived)
             throw ConfigurationErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ConfigurationArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ConfigurationArchivedEvent(Id));
     }
 
-    private void Apply(ConfigurationCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ConfigurationId;
-        Name = @event.Name;
-        Status = ConfigurationStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ConfigurationOptionSetEvent @event)
-    {
-        _options[@event.Option.Key] = @event.Option;
-        Version++;
-    }
-
-    private void Apply(ConfigurationOptionRemovedEvent @event)
-    {
-        _options.Remove(@event.Key);
-        Version++;
-    }
-
-    private void Apply(ConfigurationActivatedEvent @event)
-    {
-        Status = ConfigurationStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ConfigurationArchivedEvent @event)
-    {
-        Status = ConfigurationStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ConfigurationCreatedEvent e:
+                Id = e.ConfigurationId;
+                Name = e.Name;
+                Status = ConfigurationStatus.Draft;
+                break;
+            case ConfigurationOptionSetEvent e:
+                _options[e.Option.Key] = e.Option;
+                break;
+            case ConfigurationOptionRemovedEvent e:
+                _options.Remove(e.Key);
+                break;
+            case ConfigurationActivatedEvent:
+                Status = ConfigurationStatus.Active;
+                break;
+            case ConfigurationArchivedEvent:
+                Status = ConfigurationStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -110,11 +86,7 @@ public sealed class ConfigurationAggregate
             throw ConfigurationErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ConfigurationErrors.MissingId();

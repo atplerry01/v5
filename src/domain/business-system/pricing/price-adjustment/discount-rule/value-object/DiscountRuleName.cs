@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.DiscountRule;
 
 public readonly record struct DiscountRuleName
@@ -8,12 +10,10 @@ public readonly record struct DiscountRuleName
 
     public DiscountRuleName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("DiscountRuleName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "DiscountRuleName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"DiscountRuleName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"DiscountRuleName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

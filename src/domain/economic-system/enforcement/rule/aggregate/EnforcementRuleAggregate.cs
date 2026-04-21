@@ -6,12 +6,12 @@ public sealed class EnforcementRuleAggregate : AggregateRoot
 {
     public RuleId RuleId { get; private set; }
     public RuleCode RuleCode { get; private set; }
-    public string RuleName { get; private set; } = string.Empty;
+    public RuleName RuleName { get; private set; }
     public RuleCategory RuleCategory { get; private set; }
     public RuleScope Scope { get; private set; }
     public RuleSeverity Severity { get; private set; }
     public RuleStatus Status { get; private set; }
-    public string Description { get; private set; } = string.Empty;
+    public DocumentRef Description { get; private set; }
     public Timestamp CreatedAt { get; private set; }
 
     private EnforcementRuleAggregate() { }
@@ -21,19 +21,16 @@ public sealed class EnforcementRuleAggregate : AggregateRoot
     public static EnforcementRuleAggregate Define(
         RuleId ruleId,
         RuleCode ruleCode,
-        string ruleName,
+        RuleName ruleName,
         RuleCategory ruleCategory,
         RuleScope scope,
         RuleSeverity severity,
-        string description,
+        DocumentRef description,
         Timestamp createdAt)
     {
-        if (string.IsNullOrWhiteSpace(ruleName))
-            throw new ArgumentException("Rule name cannot be empty.", nameof(ruleName));
-
         var aggregate = new EnforcementRuleAggregate();
         aggregate.RaiseDomainEvent(new EnforcementRuleDefinedEvent(
-            ruleId, ruleCode, ruleName, ruleCategory, scope, severity, description, createdAt));
+            ruleId, ruleCode, ruleName.Value, ruleCategory, scope, severity, description, createdAt));
         return aggregate;
     }
 
@@ -72,7 +69,7 @@ public sealed class EnforcementRuleAggregate : AggregateRoot
             case EnforcementRuleDefinedEvent e:
                 RuleId = e.RuleId;
                 RuleCode = e.RuleCode;
-                RuleName = e.RuleName;
+                RuleName = new RuleName(e.RuleName);
                 RuleCategory = e.RuleCategory;
                 Scope = e.Scope;
                 Severity = e.Severity;
@@ -99,7 +96,10 @@ public sealed class EnforcementRuleAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        if (string.IsNullOrWhiteSpace(RuleName))
+        if (string.IsNullOrWhiteSpace(RuleName.Value))
             throw new DomainInvariantViolationException("Invariant violated: rule must have a name.");
+
+        if (Description == default)
+            throw new DomainInvariantViolationException("Invariant violated: rule must reference a description content aggregate.");
     }
 }

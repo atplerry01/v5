@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Eligibility;
 
 public readonly record struct EligibilityScope
@@ -8,12 +10,10 @@ public readonly record struct EligibilityScope
 
     public EligibilityScope(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("EligibilityScope must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "EligibilityScope must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"EligibilityScope exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"EligibilityScope exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

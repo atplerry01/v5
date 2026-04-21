@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.DiscountRule;
 
 public readonly record struct DiscountAmount
@@ -6,9 +8,7 @@ public readonly record struct DiscountAmount
 
     public DiscountAmount(decimal value)
     {
-        if (value < 0m)
-            throw new ArgumentException("DiscountAmount must be non-negative.", nameof(value));
-
+        Guard.Against(value < 0m, "DiscountAmount must be non-negative.");
         Value = value;
     }
 }

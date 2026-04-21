@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.FulfillmentInstruction;
 
-public sealed class FulfillmentInstructionAggregate
+public sealed class FulfillmentInstructionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public FulfillmentInstructionId Id { get; private set; }
     public OrderRef Order { get; private set; }
     public LineItemRef? LineItem { get; private set; }
     public FulfillmentDirective Directive { get; private set; }
     public FulfillmentInstructionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private FulfillmentInstructionAggregate() { }
 
     public static FulfillmentInstructionAggregate Create(
         FulfillmentInstructionId id,
@@ -22,12 +18,10 @@ public sealed class FulfillmentInstructionAggregate
         LineItemRef? lineItem = null)
     {
         var aggregate = new FulfillmentInstructionAggregate();
+        if (aggregate.Version >= 0)
+            throw FulfillmentInstructionErrors.AlreadyInitialized();
 
-        var @event = new FulfillmentInstructionCreatedEvent(id, order, lineItem, directive);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new FulfillmentInstructionCreatedEvent(id, order, lineItem, directive));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class FulfillmentInstructionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw FulfillmentInstructionErrors.InvalidStateTransition(Status, nameof(Issue));
 
-        var @event = new FulfillmentInstructionIssuedEvent(Id, issuedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FulfillmentInstructionIssuedEvent(Id, issuedAt));
     }
 
     public void Complete(DateTimeOffset completedAt)
@@ -49,10 +40,7 @@ public sealed class FulfillmentInstructionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw FulfillmentInstructionErrors.InvalidStateTransition(Status, nameof(Complete));
 
-        var @event = new FulfillmentInstructionCompletedEvent(Id, completedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FulfillmentInstructionCompletedEvent(Id, completedAt));
     }
 
     public void Revoke(DateTimeOffset revokedAt)
@@ -61,45 +49,33 @@ public sealed class FulfillmentInstructionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw FulfillmentInstructionErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new FulfillmentInstructionRevokedEvent(Id, revokedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new FulfillmentInstructionRevokedEvent(Id, revokedAt));
     }
 
-    private void Apply(FulfillmentInstructionCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.FulfillmentInstructionId;
-        Order = @event.Order;
-        LineItem = @event.LineItem;
-        Directive = @event.Directive;
-        Status = FulfillmentInstructionStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case FulfillmentInstructionCreatedEvent e:
+                Id = e.FulfillmentInstructionId;
+                Order = e.Order;
+                LineItem = e.LineItem;
+                Directive = e.Directive;
+                Status = FulfillmentInstructionStatus.Draft;
+                break;
+            case FulfillmentInstructionIssuedEvent:
+                Status = FulfillmentInstructionStatus.Issued;
+                break;
+            case FulfillmentInstructionCompletedEvent:
+                Status = FulfillmentInstructionStatus.Completed;
+                break;
+            case FulfillmentInstructionRevokedEvent:
+                Status = FulfillmentInstructionStatus.Revoked;
+                break;
+        }
     }
 
-    private void Apply(FulfillmentInstructionIssuedEvent @event)
-    {
-        Status = FulfillmentInstructionStatus.Issued;
-        Version++;
-    }
-
-    private void Apply(FulfillmentInstructionCompletedEvent @event)
-    {
-        Status = FulfillmentInstructionStatus.Completed;
-        Version++;
-    }
-
-    private void Apply(FulfillmentInstructionRevokedEvent @event)
-    {
-        Status = FulfillmentInstructionStatus.Revoked;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw FulfillmentInstructionErrors.MissingId();

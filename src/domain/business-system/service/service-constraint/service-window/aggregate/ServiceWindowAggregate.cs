@@ -1,20 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
-
 using Whycespace.Domain.BusinessSystem.Shared.Time;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceWindow;
 
-public sealed class ServiceWindowAggregate
+public sealed class ServiceWindowAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceWindowId Id { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public TimeWindow Range { get; private set; }
     public ServiceWindowStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceWindowAggregate() { }
 
     public static ServiceWindowAggregate Create(
         ServiceWindowId id,
@@ -22,12 +17,10 @@ public sealed class ServiceWindowAggregate
         TimeWindow range)
     {
         var aggregate = new ServiceWindowAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceWindowErrors.AlreadyInitialized();
 
-        var @event = new ServiceWindowCreatedEvent(id, serviceDefinition, range);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceWindowCreatedEvent(id, serviceDefinition, range));
         return aggregate;
     }
 
@@ -35,10 +28,7 @@ public sealed class ServiceWindowAggregate
     {
         EnsureMutable();
 
-        var @event = new ServiceWindowUpdatedEvent(Id, range);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceWindowUpdatedEvent(Id, range));
     }
 
     public void Activate()
@@ -47,10 +37,7 @@ public sealed class ServiceWindowAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceWindowErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceWindowActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceWindowActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,37 +45,7 @@ public sealed class ServiceWindowAggregate
         if (Status == ServiceWindowStatus.Archived)
             throw ServiceWindowErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceWindowArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
-    }
-
-    private void Apply(ServiceWindowCreatedEvent @event)
-    {
-        Id = @event.ServiceWindowId;
-        ServiceDefinition = @event.ServiceDefinition;
-        Range = @event.Range;
-        Status = ServiceWindowStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceWindowUpdatedEvent @event)
-    {
-        Range = @event.Range;
-        Version++;
-    }
-
-    private void Apply(ServiceWindowActivatedEvent @event)
-    {
-        Status = ServiceWindowStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceWindowArchivedEvent @event)
-    {
-        Status = ServiceWindowStatus.Archived;
-        Version++;
+        RaiseDomainEvent(new ServiceWindowArchivedEvent(Id));
     }
 
     private void EnsureMutable()
@@ -98,11 +55,29 @@ public sealed class ServiceWindowAggregate
             throw ServiceWindowErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceWindowCreatedEvent e:
+                Id = e.ServiceWindowId;
+                ServiceDefinition = e.ServiceDefinition;
+                Range = e.Range;
+                Status = ServiceWindowStatus.Draft;
+                break;
+            case ServiceWindowUpdatedEvent e:
+                Range = e.Range;
+                break;
+            case ServiceWindowActivatedEvent:
+                Status = ServiceWindowStatus.Active;
+                break;
+            case ServiceWindowArchivedEvent:
+                Status = ServiceWindowStatus.Archived;
+                break;
+        }
+    }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceWindowErrors.MissingId();

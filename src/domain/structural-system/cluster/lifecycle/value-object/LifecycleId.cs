@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Lifecycle;
 
 public readonly record struct LifecycleId
@@ -6,9 +8,7 @@ public readonly record struct LifecycleId
 
     public LifecycleId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw LifecycleErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "LifecycleId cannot be empty.");
         Value = value;
     }
 }

@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Capital.Binding;
@@ -5,8 +6,8 @@ namespace Whycespace.Domain.EconomicSystem.Capital.Binding;
 public sealed class BindingAggregate : AggregateRoot
 {
     public BindingId BindingId { get; private set; }
-    public Guid AccountId { get; private set; }
-    public Guid OwnerId { get; private set; }
+    public AccountId AccountId { get; private set; }
+    public OwnerId OwnerId { get; private set; }
     public OwnershipType OwnershipType { get; private set; }
     public BindingStatus Status { get; private set; }
     public Timestamp BoundAt { get; private set; }
@@ -17,6 +18,26 @@ public sealed class BindingAggregate : AggregateRoot
 
     public static BindingAggregate Bind(
         BindingId bindingId,
+        AccountId accountId,
+        OwnerId ownerId,
+        OwnershipType ownershipType,
+        Timestamp boundAt)
+    {
+        var aggregate = new BindingAggregate();
+
+        aggregate.RaiseDomainEvent(new CapitalBoundEvent(
+            bindingId,
+            accountId.Value,
+            ownerId.Value,
+            ownershipType,
+            boundAt));
+
+        return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed refs.
+    public static BindingAggregate Bind(
+        BindingId bindingId,
         Guid accountId,
         Guid ownerId,
         OwnershipType ownershipType,
@@ -24,22 +45,12 @@ public sealed class BindingAggregate : AggregateRoot
     {
         Guard.Against(accountId == Guid.Empty, "Account ID cannot be empty.");
         Guard.Against(ownerId == Guid.Empty, "Owner ID cannot be empty.");
-
-        var aggregate = new BindingAggregate();
-
-        aggregate.RaiseDomainEvent(new CapitalBoundEvent(
-            bindingId,
-            accountId,
-            ownerId,
-            ownershipType,
-            boundAt));
-
-        return aggregate;
+        return Bind(bindingId, new AccountId(accountId), new OwnerId(ownerId), ownershipType, boundAt);
     }
 
     // ── Behavior ─────────────────────────────────────────────────
 
-    public void TransferOwnership(Guid newOwnerId, OwnershipType newType, Timestamp transferredAt)
+    public void TransferOwnership(OwnerId newOwnerId, OwnershipType newType, Timestamp transferredAt)
     {
         if (Status == BindingStatus.Released)
             throw BindingErrors.CannotTransferReleasedBinding();
@@ -50,15 +61,21 @@ public sealed class BindingAggregate : AggregateRoot
         if (Status != BindingStatus.Active)
             throw BindingErrors.BindingNotActive();
 
-        Guard.Against(newOwnerId == Guid.Empty, "New owner ID cannot be empty.");
-        Guard.Against(newOwnerId == OwnerId, "New owner must differ from current owner.");
+        Guard.Against(newOwnerId.Value == OwnerId.Value, "New owner must differ from current owner.");
 
         RaiseDomainEvent(new OwnershipTransferredEvent(
             BindingId,
-            OwnerId,
-            newOwnerId,
+            OwnerId.Value,
+            newOwnerId.Value,
             newType,
             transferredAt));
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public void TransferOwnership(Guid newOwnerId, OwnershipType newType, Timestamp transferredAt)
+    {
+        Guard.Against(newOwnerId == Guid.Empty, "New owner ID cannot be empty.");
+        TransferOwnership(new OwnerId(newOwnerId), newType, transferredAt);
     }
 
     public void Release(Timestamp releasedAt)
@@ -74,7 +91,7 @@ public sealed class BindingAggregate : AggregateRoot
 
         RaiseDomainEvent(new BindingReleasedEvent(
             BindingId,
-            AccountId,
+            AccountId.Value,
             releasedAt));
     }
 
@@ -86,15 +103,15 @@ public sealed class BindingAggregate : AggregateRoot
         {
             case CapitalBoundEvent e:
                 BindingId = e.BindingId;
-                AccountId = e.AccountId;
-                OwnerId = e.OwnerId;
+                AccountId = new AccountId(e.AccountId);
+                OwnerId = new OwnerId(e.OwnerId);
                 OwnershipType = e.OwnershipType;
                 Status = BindingStatus.Active;
                 BoundAt = e.BoundAt;
                 break;
 
             case OwnershipTransferredEvent e:
-                OwnerId = e.NewOwnerId;
+                OwnerId = new OwnerId(e.NewOwnerId);
                 OwnershipType = e.NewOwnershipType;
                 Status = BindingStatus.Transferred;
                 break;
@@ -111,8 +128,8 @@ public sealed class BindingAggregate : AggregateRoot
     {
         if (Status == BindingStatus.Active)
         {
-            Guard.Against(AccountId == Guid.Empty, "AccountId must not be empty for an active binding.");
-            Guard.Against(OwnerId == Guid.Empty, "OwnerId must not be empty for an active binding.");
+            Guard.Against(AccountId.Value == Guid.Empty, "AccountId must not be empty for an active binding.");
+            Guard.Against(OwnerId.Value == Guid.Empty, "OwnerId must not be empty for an active binding.");
         }
     }
 }

@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.Tariff;
 
 public static class TariffErrors
 {
-    public static TariffDomainException MissingId()
-        => new("TariffId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("TariffId is required and must not be empty.");
 
-    public static TariffDomainException MissingPriceBookRef()
-        => new("Tariff must reference a price-book.");
+    public static DomainException MissingPriceBookRef()
+        => new DomainInvariantViolationException("Tariff must reference a price-book.");
 
-    public static TariffDomainException InvalidStateTransition(TariffStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(TariffStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static TariffDomainException ActivationRequiresEffectiveWindow()
-        => new("Tariff requires an effective window before activation.");
-}
+    public static DomainException ActivationRequiresEffectiveWindow()
+        => new DomainInvariantViolationException("Tariff requires an effective window before activation.");
 
-public sealed class TariffDomainException : Exception
-{
-    public TariffDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Tariff has already been initialized.");
 }

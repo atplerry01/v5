@@ -131,5 +131,10 @@ public sealed class WorkflowExecutionAggregate : AggregateRoot
         }
     }
 
-    protected override void EnsureInvariants() { }
+    protected override void EnsureInvariants()
+    {
+        Guard.Against(Id.Value == Guid.Empty, WorkflowExecutionErrors.EmptyIdentity);
+        if (_status != WorkflowExecutionStatus.NotStarted)
+            Guard.Against(string.IsNullOrWhiteSpace(_workflowName), WorkflowExecutionErrors.WorkflowNameRequired);
+    }
 }

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.QuoteBasis;
 
 public readonly record struct QuoteBasisContext
@@ -8,11 +10,8 @@ public readonly record struct QuoteBasisContext
 
     public QuoteBasisContext(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("QuoteBasisContext must not be empty.", nameof(value));
-
-        if (value.Length > MaxLength)
-            throw new ArgumentException($"QuoteBasisContext exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "QuoteBasisContext must not be empty.");
+        Guard.Against(value!.Length > MaxLength, $"QuoteBasisContext exceeds {MaxLength} characters.");
 
         Value = value;
     }

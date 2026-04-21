@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Catalog;
 
 public readonly record struct CatalogStructure
@@ -7,13 +9,10 @@ public readonly record struct CatalogStructure
 
     public CatalogStructure(string name, string category)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Catalog name must not be empty.", nameof(name));
+        Guard.Against(string.IsNullOrWhiteSpace(name), "Catalog name must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(category), "Catalog category must not be empty.");
 
-        if (string.IsNullOrWhiteSpace(category))
-            throw new ArgumentException("Catalog category must not be empty.", nameof(category));
-
-        Name = name;
-        Category = category;
+        Name = name!;
+        Category = category!;
     }
 }

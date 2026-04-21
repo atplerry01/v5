@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.service.policy-binding.commands",
+    "whyce.business.service.policy-binding.events",
+    "whyce.business.service.policy-binding.retry",
+    "whyce.business.service.policy-binding.deadletter"
+  ]
+}

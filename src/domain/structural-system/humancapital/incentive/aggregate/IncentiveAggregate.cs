@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Incentive;
 
-public sealed class IncentiveAggregate
+public sealed class IncentiveAggregate : AggregateRoot
 {
-    public static IncentiveAggregate Create()
+    public IncentiveId Id { get; private set; }
+    public IncentiveDescriptor Descriptor { get; private set; }
+
+    public static IncentiveAggregate Create(IncentiveId id, IncentiveDescriptor descriptor)
     {
         var aggregate = new IncentiveAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw IncentiveErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new IncentiveCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case IncentiveCreatedEvent e:
+                Id = e.IncentiveId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw IncentiveErrors.MissingId();
+
+        if (Descriptor == default)
+            throw IncentiveErrors.MissingDescriptor();
     }
 }

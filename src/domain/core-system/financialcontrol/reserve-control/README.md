@@ -24,10 +24,6 @@ Defines the foundational structure for reserve tracking and control boundaries. 
 
   * Manages the lifecycle and state of a reserve control instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * ReserveControlId — Unique identifier for a reserve-control instance
@@ -35,16 +31,10 @@ Defines the foundational structure for reserve tracking and control boundaries. 
 ## Domain Events
 
 * ReserveControlCreatedEvent — Raised when a new reserve-control is created
-* ReserveControlUpdatedEvent — Raised when reserve-control metadata is updated
-* ReserveControlStateChangedEvent — Raised when reserve-control lifecycle state transitions
 
 ## Specifications
 
 * ReserveControlSpecification — Validates reserve-control structure and completeness
-
-## Domain Services
-
-* ReserveControlService — Domain operations for reserve-control management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for reserve tracking and control boundaries. 
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

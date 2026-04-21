@@ -10,7 +10,7 @@ public sealed class AuditRecordAggregate : AggregateRoot
     public SourceEventId SourceEventId { get; private set; }
     public AuditType AuditType { get; private set; }
     public AuditRecordStatus Status { get; private set; }
-    public EvidenceSummary EvidenceSummary { get; private set; }
+    public DocumentRef EvidenceSummary { get; private set; }
     public Timestamp RecordedAt { get; private set; }
     public Timestamp FinalizedAt { get; private set; }
 
@@ -22,7 +22,7 @@ public sealed class AuditRecordAggregate : AggregateRoot
         SourceAggregateId sourceAggregateId,
         SourceEventId sourceEventId,
         AuditType auditType,
-        EvidenceSummary evidenceSummary,
+        DocumentRef evidenceSummary,
         Timestamp recordedAt)
     {
         var aggregate = new AuditRecordAggregate();
@@ -67,6 +67,6 @@ public sealed class AuditRecordAggregate : AggregateRoot
         Guard.Against(SourceAggregateId.Value == Guid.Empty, AuditErrors.MissingSourceReference);
         Guard.Against(SourceEventId.Value == Guid.Empty, AuditErrors.MissingSourceReference);
         Guard.Against(string.IsNullOrWhiteSpace(SourceDomain.Value), AuditErrors.MissingSourceReference);
-        Guard.Against(string.IsNullOrWhiteSpace(EvidenceSummary.Value), AuditErrors.MissingEvidenceSummary);
+        Guard.Against(EvidenceSummary.Value.Value == Guid.Empty, AuditErrors.MissingEvidenceSummary);
     }
 }

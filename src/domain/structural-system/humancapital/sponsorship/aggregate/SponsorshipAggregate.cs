@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Sponsorship;
 
-public sealed class SponsorshipAggregate
+public sealed class SponsorshipAggregate : AggregateRoot
 {
-    public static SponsorshipAggregate Create()
+    public SponsorshipId Id { get; private set; }
+    public SponsorshipDescriptor Descriptor { get; private set; }
+
+    public static SponsorshipAggregate Create(SponsorshipId id, SponsorshipDescriptor descriptor)
     {
         var aggregate = new SponsorshipAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw SponsorshipErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new SponsorshipCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case SponsorshipCreatedEvent e:
+                Id = e.SponsorshipId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw SponsorshipErrors.MissingId();
+
+        if (Descriptor == default)
+            throw SponsorshipErrors.MissingDescriptor();
     }
 }

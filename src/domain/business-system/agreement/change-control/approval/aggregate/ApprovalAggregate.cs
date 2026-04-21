@@ -1,93 +1,63 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Approval;
 
-public sealed class ApprovalAggregate
+public sealed class ApprovalAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ApprovalId Id { get; private set; }
     public ApprovalStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ApprovalAggregate() { }
 
     public static ApprovalAggregate Create(ApprovalId id)
     {
         var aggregate = new ApprovalAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw ApprovalErrors.AlreadyInitialized();
 
-        var @event = new ApprovalCreatedEvent(id);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ApprovalCreatedEvent(id));
         return aggregate;
     }
 
     public void Approve()
     {
-        ValidateBeforeChange();
-
         var specification = new CanApproveSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ApprovalErrors.InvalidStateTransition(Status, nameof(Approve));
 
-        var @event = new ApprovalApprovedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ApprovalApprovedEvent(Id));
     }
 
     public void Reject()
     {
-        ValidateBeforeChange();
-
         var specification = new CanRejectSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ApprovalErrors.InvalidStateTransition(Status, nameof(Reject));
 
-        var @event = new ApprovalRejectedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ApprovalRejectedEvent(Id));
     }
 
-    private void Apply(ApprovalCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ApprovalId;
-        Status = ApprovalStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case ApprovalCreatedEvent e:
+                Id = e.ApprovalId;
+                Status = ApprovalStatus.Pending;
+                break;
+            case ApprovalApprovedEvent:
+                Status = ApprovalStatus.Approved;
+                break;
+            case ApprovalRejectedEvent:
+                Status = ApprovalStatus.Rejected;
+                break;
+        }
     }
 
-    private void Apply(ApprovalApprovedEvent @event)
-    {
-        Status = ApprovalStatus.Approved;
-        Version++;
-    }
-
-    private void Apply(ApprovalRejectedEvent @event)
-    {
-        Status = ApprovalStatus.Rejected;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ApprovalErrors.MissingId();
 
         if (!Enum.IsDefined(Status))
             throw ApprovalErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

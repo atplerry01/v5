@@ -1,85 +1,125 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Provider;
 
-public sealed class ProviderAggregate
+public sealed class ProviderAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ProviderId Id { get; private set; }
     public ProviderProfile Profile { get; private set; }
     public ProviderStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ProviderAggregate() { }
+    public DateTimeOffset? AttachedAt { get; private set; }
+    public AttachedUnder? AttachedUnder { get; private set; }
 
     public static ProviderAggregate Register(ProviderId id, ProviderProfile profile)
     {
         var aggregate = new ProviderAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw ProviderErrors.AlreadyInitialized();
 
-        var @event = new ProviderRegisteredEvent(id, profile);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
+        aggregate.RaiseDomainEvent(new ProviderRegisteredEvent(id, profile));
+        return aggregate;
+    }
+
+    public static ProviderAggregate Register(ProviderId id, ProviderProfile profile, DateTimeOffset effectiveAt)
+    {
+        var aggregate = Register(id, profile);
+        aggregate.RaiseDomainEvent(new ProviderAttachedEvent(id, profile.ClusterReference, effectiveAt));
+        return aggregate;
+    }
+
+    public static ProviderAggregate Register(
+        ProviderId id,
+        ProviderProfile profile,
+        DateTimeOffset effectiveAt,
+        IStructuralParentLookup parentLookup)
+    {
+        Guard.Against(parentLookup is null, "IStructuralParentLookup must not be null.");
+
+        var parent = profile.ClusterReference;
+
+        var parentSpec = new CanAttachUnderParentSpecification(parentLookup!);
+        if (!parentSpec.IsSatisfiedBy(parent))
+            throw ProviderErrors.InvalidParent();
+
+        var aggregate = Register(id, profile, effectiveAt);
+
+        aggregate.RaiseDomainEvent(new ProviderBindingValidatedEvent(
+            id,
+            parent,
+            parentLookup!.GetState(parent),
+            effectiveAt));
 
         return aggregate;
     }
 
     public void Activate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ProviderErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProviderActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderActivatedEvent(Id));
     }
 
     public void Suspend()
     {
-        ValidateBeforeChange();
-
         var specification = new CanSuspendSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ProviderErrors.InvalidStateTransition(Status, nameof(Suspend));
 
-        var @event = new ProviderSuspendedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderSuspendedEvent(Id));
     }
 
-    private void Apply(ProviderRegisteredEvent @event)
+    public void Reactivate()
     {
-        Id = @event.ProviderId;
-        Profile = @event.Profile;
-        Status = ProviderStatus.Registered;
-        Version++;
+        var specification = new CanReactivateSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw ProviderErrors.InvalidStateTransition(Status, nameof(Reactivate));
+
+        RaiseDomainEvent(new ProviderReactivatedEvent(Id));
     }
 
-    private void Apply(ProviderActivatedEvent @event)
+    public void Retire()
     {
-        Status = ProviderStatus.Active;
-        Version++;
+        var specification = new CanRetireSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw ProviderErrors.InvalidStateTransition(Status, nameof(Retire));
+
+        RaiseDomainEvent(new ProviderRetiredEvent(Id));
     }
 
-    private void Apply(ProviderSuspendedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Status = ProviderStatus.Suspended;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProviderRegisteredEvent e:
+                Id = e.ProviderId;
+                Profile = e.Profile;
+                Status = ProviderStatus.Registered;
+                break;
+            case ProviderActivatedEvent:
+                Status = ProviderStatus.Active;
+                break;
+            case ProviderSuspendedEvent:
+                Status = ProviderStatus.Suspended;
+                break;
+            case ProviderReactivatedEvent:
+                Status = ProviderStatus.Active;
+                break;
+            case ProviderRetiredEvent:
+                Status = ProviderStatus.Retired;
+                break;
+            case ProviderAttachedEvent e:
+                AttachedAt = e.EffectiveAt;
+                break;
+            case ProviderBindingValidatedEvent e:
+                AttachedUnder = new AttachedUnder(e.Parent, e.ParentState, e.EffectiveAt);
+                break;
+        }
     }
 
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProviderErrors.MissingId();
@@ -89,11 +129,5 @@ public sealed class ProviderAggregate
 
         if (!Enum.IsDefined(Status))
             throw ProviderErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
-        // Currently no additional pre-conditions beyond specification checks.
     }
 }

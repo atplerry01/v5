@@ -1,4 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
 
 namespace Whycespace.Domain.EconomicSystem.Revenue.Distribution;
 
@@ -19,11 +22,36 @@ public sealed class DistributionAggregate : AggregateRoot
 
     public DistributionId DistributionId { get; private set; }
     public string SpvId { get; private set; } = string.Empty;
-    public decimal TotalAmount { get; private set; }
+    public Amount TotalAmount { get; private set; }
     public DistributionStatus Status { get; private set; }
     public IReadOnlyList<ParticipantShare> Shares => _shares.AsReadOnly();
 
+    /// Typed accessor over <see cref="SpvId"/>. Internal / in-memory only —
+    /// never serialized to the wire. Null when the persisted SpvId is not a
+    /// valid non-empty Guid (legacy data tolerated for replay).
+    [JsonIgnore]
+    public SpvRef? Spv =>
+        Guid.TryParse(SpvId, out var g) && g != Guid.Empty
+            ? new SpvRef(g)
+            : null;
+
     private DistributionAggregate() { }
+
+    // D-VO-TYPING-01 typed entry point. Delegates to the decimal overload; the
+    // event payload carries decimal for wire compatibility (no schema change).
+    public static DistributionAggregate CreateDistribution(
+        DistributionId distributionId,
+        SpvRef spv,
+        Amount totalAmount,
+        IReadOnlyList<(string ParticipantId, decimal OwnershipPercentage)> allocations)
+        => CreateDistribution(distributionId, spv.Value.ToString(), totalAmount.Value, allocations);
+
+    public static DistributionAggregate CreateDistribution(
+        DistributionId distributionId,
+        SpvRef spv,
+        decimal totalAmount,
+        IReadOnlyList<(string ParticipantId, decimal OwnershipPercentage)> allocations)
+        => CreateDistribution(distributionId, spv.Value.ToString(), totalAmount, allocations);
 
     public static DistributionAggregate CreateDistribution(
         DistributionId distributionId,
@@ -150,7 +178,7 @@ public sealed class DistributionAggregate : AggregateRoot
             case DistributionCreatedEvent e:
                 DistributionId = DistributionId.From(Guid.Parse(e.DistributionId));
                 SpvId = e.SpvId;
-                TotalAmount = e.TotalAmount;
+                TotalAmount = new Amount(e.TotalAmount);
                 Status = DistributionStatus.Created;
                 break;
             case DistributionConfirmedEvent:

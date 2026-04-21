@@ -1,4 +1,5 @@
 using Whycespace.Domain.EconomicSystem.Compliance.Audit;
+using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Engines.T2E.Economic.Compliance.Audit;
 using Whycespace.Shared.Contracts.Economic.Compliance.Audit;
@@ -23,7 +24,7 @@ public sealed class AuditRecordHandlerTests
             IdGen.Generate("AuditRecordHandlerTests:Create:source-aggregate"),
             IdGen.Generate("AuditRecordHandlerTests:Create:source-event"),
             "Financial",
-            "Quarterly ledger reconciliation evidence.",
+            IdGen.Generate("AuditRecordHandlerTests:Create:evidence-doc").ToString(),
             RecordedAt);
         var ctx = new FakeEngineContext(command, auditRecordId);
 
@@ -46,7 +47,7 @@ public sealed class AuditRecordHandlerTests
             new SourceAggregateId(IdGen.Generate("AuditRecordHandlerTests:Finalize:source-aggregate")),
             new SourceEventId(IdGen.Generate("AuditRecordHandlerTests:Finalize:source-event")),
             AuditType.Settlement,
-            new EvidenceSummary("Settlement closure evidence."),
+            new DocumentRef(new ContentId(IdGen.Generate("AuditRecordHandlerTests:Finalize:evidence-doc"))),
             new Timestamp(RecordedAt));
         draft.ClearDomainEvents();
 

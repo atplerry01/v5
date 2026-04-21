@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Assignment;
 
 public readonly record struct AssignmentScope
@@ -8,12 +10,10 @@ public readonly record struct AssignmentScope
 
     public AssignmentScope(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("AssignmentScope must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "AssignmentScope must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"AssignmentScope exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"AssignmentScope exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

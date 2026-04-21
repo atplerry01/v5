@@ -24,10 +24,6 @@ Defines the catalog of all available commands in the system. Provides the regist
 
   * Manages the lifecycle and state of a command catalog entry
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * CommandCatalogId — Unique identifier for a command-catalog instance
@@ -42,9 +38,10 @@ Defines the catalog of all available commands in the system. Provides the regist
 
 * CommandCatalogSpecification — Validates command-catalog structure and completeness
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* CommandCatalogService — Domain operations for command-catalog management
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

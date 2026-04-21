@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.Tariff;
 
 public readonly record struct TariffCode
@@ -8,12 +10,10 @@ public readonly record struct TariffCode
 
     public TariffCode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("TariffCode must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "TariffCode must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"TariffCode exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"TariffCode exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

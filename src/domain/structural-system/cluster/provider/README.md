@@ -30,9 +30,10 @@ Defines the structure of service providers linked to a cluster -- the entities t
   * Factory: Register(id, profile)
   * Transitions: Activate(), Suspend()
 
-## Entities
+## WHEN-NEEDED folders
 
-* None
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Value Objects
 
@@ -50,10 +51,6 @@ Defines the structure of service providers linked to a cluster -- the entities t
 
 * CanActivateSpecification -- status == Registered
 * CanSuspendSpecification -- status == Active
-
-## Domain Services
-
-* ProviderService -- Empty (reserved for future domain operations)
 
 ## Errors
 

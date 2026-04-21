@@ -1,44 +1,34 @@
-using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
 
 using Whycespace.Domain.BusinessSystem.Shared.Time;
 
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderScope.ProviderAvailability;
 
-public sealed class ProviderAvailabilityAggregate
+public sealed class ProviderAvailabilityAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ProviderAvailabilityId Id { get; private set; }
-    public ProviderRef Provider { get; private set; }
+    public ClusterProviderRef Provider { get; private set; }
     public TimeWindow Window { get; private set; }
     public ProviderAvailabilityStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ProviderAvailabilityAggregate() { }
 
     public static ProviderAvailabilityAggregate Create(
         ProviderAvailabilityId id,
-        ProviderRef provider,
+        ClusterProviderRef provider,
         TimeWindow window)
     {
         var aggregate = new ProviderAvailabilityAggregate();
+        if (aggregate.Version >= 0)
+            throw ProviderAvailabilityErrors.AlreadyInitialized();
 
-        var @event = new ProviderAvailabilityCreatedEvent(id, provider, window);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ProviderAvailabilityCreatedEvent(id, provider, window));
         return aggregate;
     }
 
     public void UpdateWindow(TimeWindow window)
     {
         EnsureMutable();
-
-        var @event = new ProviderAvailabilityUpdatedEvent(Id, window);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderAvailabilityUpdatedEvent(Id, window));
     }
 
     public void Activate()
@@ -47,10 +37,7 @@ public sealed class ProviderAvailabilityAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ProviderAvailabilityErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProviderAvailabilityActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderAvailabilityActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,37 +45,29 @@ public sealed class ProviderAvailabilityAggregate
         if (Status == ProviderAvailabilityStatus.Archived)
             throw ProviderAvailabilityErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ProviderAvailabilityArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderAvailabilityArchivedEvent(Id));
     }
 
-    private void Apply(ProviderAvailabilityCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ProviderAvailabilityId;
-        Provider = @event.Provider;
-        Window = @event.Window;
-        Status = ProviderAvailabilityStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ProviderAvailabilityUpdatedEvent @event)
-    {
-        Window = @event.Window;
-        Version++;
-    }
-
-    private void Apply(ProviderAvailabilityActivatedEvent @event)
-    {
-        Status = ProviderAvailabilityStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ProviderAvailabilityArchivedEvent @event)
-    {
-        Status = ProviderAvailabilityStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProviderAvailabilityCreatedEvent e:
+                Id = e.ProviderAvailabilityId;
+                Provider = e.Provider;
+                Window = e.Window;
+                Status = ProviderAvailabilityStatus.Draft;
+                break;
+            case ProviderAvailabilityUpdatedEvent e:
+                Window = e.Window;
+                break;
+            case ProviderAvailabilityActivatedEvent:
+                Status = ProviderAvailabilityStatus.Active;
+                break;
+            case ProviderAvailabilityArchivedEvent:
+                Status = ProviderAvailabilityStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -98,11 +77,7 @@ public sealed class ProviderAvailabilityAggregate
             throw ProviderAvailabilityErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProviderAvailabilityErrors.MissingId();

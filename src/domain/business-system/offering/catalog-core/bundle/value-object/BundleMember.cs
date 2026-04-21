@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Bundle;
 
 public enum BundleMemberKind
@@ -9,15 +11,12 @@ public enum BundleMemberKind
 public readonly record struct BundleMember
 {
     public BundleMemberKind Kind { get; }
-    public Guid MemberId { get; }
+    public BundleMemberId MemberId { get; }
 
-    public BundleMember(BundleMemberKind kind, Guid memberId)
+    public BundleMember(BundleMemberKind kind, BundleMemberId memberId)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("BundleMemberKind is invalid.", nameof(kind));
-
-        if (memberId == Guid.Empty)
-            throw new ArgumentException("BundleMember MemberId must not be empty.", nameof(memberId));
+        Guard.Against(!Enum.IsDefined(kind), "BundleMemberKind is invalid.");
+        Guard.Against(memberId == default, "BundleMember MemberId must not be empty.");
 
         Kind = kind;
         MemberId = memberId;

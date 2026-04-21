@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateTransition;
 
 public readonly record struct StateTransitionId
@@ -6,9 +8,7 @@ public readonly record struct StateTransitionId
 
     public StateTransitionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("StateTransitionId cannot be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "StateTransitionId cannot be empty.");
         Value = value;
     }
 }

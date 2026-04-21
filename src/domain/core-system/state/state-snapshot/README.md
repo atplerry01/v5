@@ -25,12 +25,11 @@ This domain defines state snapshot structure only and contains no state persiste
 
 * StateSnapshotAggregate
 
-  * Factory: Capture(id, descriptor)
-  * Transitions: Verify(), Expire()
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; created via `Capture(StateSnapshotId, SnapshotDescriptor)` factory.
+  * Transitions: `Verify()`, `Expire()`.
+  * Event-sourced: all state derived from applied events.
+  * Enforces invariants after every state change.
+  * Supports optimistic concurrency via inherited `Version` property.
 
 ## Value Objects
 
@@ -49,15 +48,12 @@ This domain defines state snapshot structure only and contains no state persiste
 * CanVerifySpecification — status == Captured
 * CanExpireSpecification — status == Verified
 
-## Domain Services
-
-* StateSnapshotService — Empty (no domain-level orchestration required)
-
 ## Errors
 
-* MissingId — StateSnapshotId requires a non-empty Guid
-* MissingDescriptor — StateSnapshot requires a valid SnapshotDescriptor
-* InvalidStateTransition(status, action) — Returns InvalidOperationException
+* MissingId — StateSnapshotId requires a non-empty Guid.
+* MissingDescriptor — StateSnapshot requires a valid SnapshotDescriptor.
+* InvalidStateTransition — Guard for illegal status transitions.
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -76,6 +72,11 @@ This domain defines state snapshot structure only and contains no state persiste
 ## Integration Points
 
 * All systems (shared usage layer)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

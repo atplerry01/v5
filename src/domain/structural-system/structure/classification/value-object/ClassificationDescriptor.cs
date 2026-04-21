@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Structure.Classification;
 
 public readonly record struct ClassificationDescriptor
@@ -7,11 +9,8 @@ public readonly record struct ClassificationDescriptor
 
     public ClassificationDescriptor(string classificationName, string classificationCategory)
     {
-        if (string.IsNullOrWhiteSpace(classificationName))
-            throw ClassificationErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(classificationCategory))
-            throw ClassificationErrors.MissingDescriptor();
+        Guard.Against(string.IsNullOrWhiteSpace(classificationName), "ClassificationDescriptor name must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(classificationCategory), "ClassificationDescriptor category must not be empty.");
 
         ClassificationName = classificationName;
         ClassificationCategory = classificationCategory;

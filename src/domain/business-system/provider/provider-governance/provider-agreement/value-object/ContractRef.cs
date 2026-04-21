@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderGovernance.ProviderAgreement;
 
 public readonly record struct ContractRef
@@ -6,9 +8,7 @@ public readonly record struct ContractRef
 
     public ContractRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ContractRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ContractRef cannot be empty.");
         Value = value;
     }
 }

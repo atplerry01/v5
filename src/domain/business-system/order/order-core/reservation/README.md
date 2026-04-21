@@ -21,5 +21,10 @@ Reservation held against an order line/offer.
 ## Status
 S0 — scaffold only. Canonical artifacts to be materialised in a subsequent modelling pass.
 
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
+
 ## Routing
 Per DS-R8, `DomainRoute` remains the 3-tuple `(business-system, order, reservation)`; the domain-group is a folder-level grouping and is not part of the route.

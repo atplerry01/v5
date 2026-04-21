@@ -4,5 +4,7 @@ public enum SubclusterStatus
 {
     Defined,
     Active,
-    Archived
+    Archived,
+    Suspended,
+    Retired
 }

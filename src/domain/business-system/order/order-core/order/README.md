@@ -50,10 +50,6 @@ Defines a marketplace order — a commitment to transact, based on an offer or l
 * CanCompleteOrderSpecification — Only Confirmed orders can be completed
 * IsConfirmedOrderSpecification — Checks if order is currently confirmed
 
-## Domain Services
-
-* OrderService — Domain operations for order management
-
 ## Errors
 
 * MissingId — OrderId is required
@@ -79,6 +75,11 @@ Defines a marketplace order — a commitment to transact, based on an offer or l
 * offer (orders are based on accepted offers)
 * listing (orders may reference listings)
 * match (orders may produce matches)
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

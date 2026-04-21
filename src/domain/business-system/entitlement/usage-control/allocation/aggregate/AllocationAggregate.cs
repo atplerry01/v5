@@ -1,90 +1,64 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.Allocation;
 
-public sealed class AllocationAggregate
+public sealed class AllocationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public AllocationId Id { get; private set; }
     public ResourceId ResourceId { get; private set; }
     public AllocationStatus Status { get; private set; }
     public int RequestedCapacity { get; private set; }
-    public int Version { get; private set; }
-
-    private AllocationAggregate() { }
 
     public static AllocationAggregate Create(AllocationId id, ResourceId resourceId, int requestedCapacity)
     {
-        if (requestedCapacity <= 0)
-            throw new ArgumentException("Requested capacity must be greater than zero.", nameof(requestedCapacity));
+        Guard.Against(requestedCapacity <= 0, "Requested capacity must be greater than zero.");
 
         var aggregate = new AllocationAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw AllocationErrors.AlreadyInitialized();
 
-        var @event = new AllocationCreatedEvent(id, resourceId, requestedCapacity);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new AllocationCreatedEvent(id, resourceId, requestedCapacity));
         return aggregate;
     }
 
     public void Allocate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanAllocateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw AllocationErrors.InvalidStateTransition(Status, nameof(Allocate));
 
-        var @event = new AllocationAllocatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AllocationAllocatedEvent(Id));
     }
 
     public void Release()
     {
-        ValidateBeforeChange();
-
         var specification = new CanReleaseSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw AllocationErrors.InvalidStateTransition(Status, nameof(Release));
 
-        var @event = new AllocationReleasedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AllocationReleasedEvent(Id));
     }
 
-    private void Apply(AllocationCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.AllocationId;
-        ResourceId = @event.ResourceId;
-        RequestedCapacity = @event.RequestedCapacity;
-        Status = AllocationStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case AllocationCreatedEvent e:
+                Id = e.AllocationId;
+                ResourceId = e.ResourceId;
+                RequestedCapacity = e.RequestedCapacity;
+                Status = AllocationStatus.Pending;
+                break;
+            case AllocationAllocatedEvent:
+                Status = AllocationStatus.Allocated;
+                break;
+            case AllocationReleasedEvent:
+                Status = AllocationStatus.Released;
+                break;
+        }
     }
 
-    private void Apply(AllocationAllocatedEvent @event)
-    {
-        Status = AllocationStatus.Allocated;
-        Version++;
-    }
-
-    private void Apply(AllocationReleasedEvent @event)
-    {
-        Status = AllocationStatus.Released;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw AllocationErrors.MissingId();
@@ -94,10 +68,5 @@ public sealed class AllocationAggregate
 
         if (!Enum.IsDefined(Status))
             throw AllocationErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

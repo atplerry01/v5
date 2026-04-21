@@ -7,10 +7,10 @@ public sealed class EntryValidationService
         if (entry.Amount.Value <= 0)
             return false;
 
-        if (entry.JournalId == Guid.Empty)
+        if (entry.JournalId.Value == Guid.Empty)
             return false;
 
-        if (entry.AccountId == Guid.Empty)
+        if (entry.AccountId.Value == Guid.Empty)
             return false;
 
         if (entry.Direction != EntryDirection.Debit && entry.Direction != EntryDirection.Credit)

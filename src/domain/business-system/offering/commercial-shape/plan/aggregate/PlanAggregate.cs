@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Plan;
 
-public sealed class PlanAggregate
+public sealed class PlanAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public PlanId Id { get; private set; }
     public PlanDescriptor Descriptor { get; private set; }
     public PlanStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private PlanAggregate() { }
 
     // -- Factory ----------------------------------------------------------
 
@@ -18,12 +15,10 @@ public sealed class PlanAggregate
         PlanDescriptor descriptor)
     {
         var aggregate = new PlanAggregate();
+        if (aggregate.Version >= 0)
+            throw PlanErrors.AlreadyInitialized();
 
-        var @event = new PlanDraftedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new PlanDraftedEvent(id, descriptor));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class PlanAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PlanErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new PlanActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PlanActivatedEvent(Id));
     }
 
     // -- Deprecate --------------------------------------------------------
@@ -49,10 +41,7 @@ public sealed class PlanAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PlanErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new PlanDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PlanDeprecatedEvent(Id));
     }
 
     // -- Archive ----------------------------------------------------------
@@ -63,44 +52,33 @@ public sealed class PlanAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PlanErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new PlanArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PlanArchivedEvent(Id));
     }
 
     // -- Apply ------------------------------------------------------------
 
-    private void Apply(PlanDraftedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.PlanId;
-        Descriptor = @event.Descriptor;
-        Status = PlanStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case PlanDraftedEvent e:
+                Id = e.PlanId;
+                Descriptor = e.Descriptor;
+                Status = PlanStatus.Draft;
+                break;
+            case PlanActivatedEvent:
+                Status = PlanStatus.Active;
+                break;
+            case PlanDeprecatedEvent:
+                Status = PlanStatus.Deprecated;
+                break;
+            case PlanArchivedEvent:
+                Status = PlanStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(PlanActivatedEvent @event)
-    {
-        Status = PlanStatus.Active;
-        Version++;
-    }
-
-    private void Apply(PlanDeprecatedEvent @event)
-    {
-        Status = PlanStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(PlanArchivedEvent @event)
-    {
-        Status = PlanStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw PlanErrors.MissingId();

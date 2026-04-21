@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.delivery_governance.access.commands",
+    "whyce.content.streaming.delivery_governance.access.events",
+    "whyce.content.streaming.delivery_governance.access.retry",
+    "whyce.content.streaming.delivery_governance.access.deadletter"
+  ]
+}

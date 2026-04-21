@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.eligibility.commands",
+    "whyce.structural.humancapital.eligibility.events",
+    "whyce.structural.humancapital.eligibility.retry",
+    "whyce.structural.humancapital.eligibility.deadletter"
+  ]
+}

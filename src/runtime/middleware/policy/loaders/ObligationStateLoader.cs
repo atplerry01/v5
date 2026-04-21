@@ -86,7 +86,7 @@ public sealed class ObligationStateLoader : IAggregateStateLoader
         return new ObligationStateSnapshot(
             Status: aggregate.Status.ToString(),
             Amount: aggregate.Amount.Value,
-            CounterpartyId: aggregate.CounterpartyId,
+            CounterpartyId: aggregate.CounterpartyId.Value,
             Type: aggregate.Type.ToString(),
             Currency: aggregate.Currency.Code);
     }

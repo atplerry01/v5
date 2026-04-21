@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.LineItem;
 
 public readonly record struct LineQuantity
@@ -7,13 +9,10 @@ public readonly record struct LineQuantity
 
     public LineQuantity(decimal value, string unit)
     {
-        if (value <= 0m)
-            throw new ArgumentException("LineQuantity must be positive.", nameof(value));
-
-        if (string.IsNullOrWhiteSpace(unit))
-            throw new ArgumentException("LineQuantity unit must not be empty.", nameof(unit));
+        Guard.Against(value <= 0m, "LineQuantity must be positive.");
+        Guard.Against(string.IsNullOrWhiteSpace(unit), "LineQuantity unit must not be empty.");
 
         Value = value;
-        Unit = unit.Trim();
+        Unit = unit!.Trim();
     }
 }

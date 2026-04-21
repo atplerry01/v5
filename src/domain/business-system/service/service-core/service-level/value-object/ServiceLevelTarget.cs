@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceLevel;
 
 public readonly record struct ServiceLevelTarget
@@ -8,12 +10,10 @@ public readonly record struct ServiceLevelTarget
 
     public ServiceLevelTarget(string descriptor)
     {
-        if (string.IsNullOrWhiteSpace(descriptor))
-            throw new ArgumentException("ServiceLevelTarget descriptor must not be empty.", nameof(descriptor));
+        Guard.Against(string.IsNullOrWhiteSpace(descriptor), "ServiceLevelTarget descriptor must not be empty.");
 
-        var trimmed = descriptor.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"ServiceLevelTarget descriptor exceeds {MaxLength} characters.", nameof(descriptor));
+        var trimmed = descriptor!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"ServiceLevelTarget descriptor exceeds {MaxLength} characters.");
 
         Descriptor = trimmed;
     }

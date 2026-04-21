@@ -1,23 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Temporal.Timeline;
 
-public sealed class TimelineAggregate
+public sealed class TimelineAggregate : AggregateRoot
 {
     public static TimelineAggregate Create()
     {
         var aggregate = new TimelineAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw TimelineErrors.AlreadyInitialized();
+
         // POLICY HOOK (to be enforced by runtime)
         return aggregate;
-    }
-
-    private void EnsureInvariants()
-    {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
     }
 }

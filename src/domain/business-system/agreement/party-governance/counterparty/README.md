@@ -64,9 +64,9 @@ Suspended ──Terminate()──> Terminated (terminal)
 * **AlreadyTerminated** — Cannot transition an already-terminated counterparty.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **CounterpartyService** — Reserved for cross-aggregate coordination within counterparty context.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

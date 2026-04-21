@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.provider.provider-coverage.commands",
+    "whyce.business.provider.provider-coverage.events",
+    "whyce.business.provider.provider-coverage.retry",
+    "whyce.business.provider.provider-coverage.deadletter"
+  ]
+}

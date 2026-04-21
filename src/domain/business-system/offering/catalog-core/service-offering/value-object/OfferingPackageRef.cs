@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.ServiceOffering;
 
 public readonly record struct OfferingPackageRef
@@ -6,9 +8,7 @@ public readonly record struct OfferingPackageRef
 
     public OfferingPackageRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("OfferingPackageRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "OfferingPackageRef cannot be empty.");
         Value = value;
     }
 }

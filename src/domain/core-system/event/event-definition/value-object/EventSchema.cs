@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventDefinition;
 
 public readonly record struct EventSchema
@@ -7,11 +9,8 @@ public readonly record struct EventSchema
 
     public EventSchema(string eventName, int schemaVersion)
     {
-        if (string.IsNullOrWhiteSpace(eventName))
-            throw new ArgumentException("Event name must not be empty.", nameof(eventName));
-
-        if (schemaVersion <= 0)
-            throw new ArgumentException("Schema version must be positive.", nameof(schemaVersion));
+        Guard.Against(string.IsNullOrWhiteSpace(eventName), "Event name must not be empty.");
+        Guard.Against(schemaVersion <= 0, "Schema version must be positive.");
 
         EventName = eventName;
         SchemaVersion = schemaVersion;

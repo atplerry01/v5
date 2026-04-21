@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.Cancellation;
 
 public readonly record struct CancellationReason
@@ -8,12 +10,10 @@ public readonly record struct CancellationReason
 
     public CancellationReason(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("CancellationReason must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "CancellationReason must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"CancellationReason exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"CancellationReason exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

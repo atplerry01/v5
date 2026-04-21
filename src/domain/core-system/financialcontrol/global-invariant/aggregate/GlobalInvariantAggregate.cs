@@ -1,23 +1,16 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Financialcontrol.GlobalInvariant;
 
-public sealed class GlobalInvariantAggregate
+public sealed class GlobalInvariantAggregate : AggregateRoot
 {
     public static GlobalInvariantAggregate Create()
     {
         var aggregate = new GlobalInvariantAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
+        if (aggregate.Version >= 0)
+            throw GlobalInvariantErrors.AlreadyInitialized();
+
         // POLICY HOOK (to be enforced by runtime)
         return aggregate;
-    }
-
-    private void EnsureInvariants()
-    {
-        // Domain invariant checks enforced BEFORE any event is raised
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-change validation gate
     }
 }

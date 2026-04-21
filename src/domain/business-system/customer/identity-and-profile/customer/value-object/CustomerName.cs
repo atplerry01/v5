@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Customer;
 
 public readonly record struct CustomerName
@@ -8,12 +10,10 @@ public readonly record struct CustomerName
 
     public CustomerName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("CustomerName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "CustomerName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"CustomerName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"CustomerName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

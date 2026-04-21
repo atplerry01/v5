@@ -1,29 +1,22 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateSnapshot;
 
-public sealed class StateSnapshotAggregate
+public sealed class StateSnapshotAggregate : AggregateRoot
 {
     public StateSnapshotId SnapshotId { get; private set; }
     public SnapshotDescriptor Descriptor { get; private set; }
     public SnapshotStatus Status { get; private set; }
 
-    private readonly List<object> _domainEvents = new();
-    public IReadOnlyList<object> DomainEvents => _domainEvents.AsReadOnly();
-
-    private StateSnapshotAggregate() { }
-
-    // ── Factory ──────────────────────────────────────────────────
-
     public static StateSnapshotAggregate Capture(StateSnapshotId id, SnapshotDescriptor descriptor)
     {
         var aggregate = new StateSnapshotAggregate();
-        var @event = new StateSnapshotCapturedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.EnsureInvariants();
-        aggregate._domainEvents.Add(@event);
+        if (aggregate.Version >= 0)
+            throw StateSnapshotErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new StateSnapshotCapturedEvent(id, descriptor));
         return aggregate;
     }
-
-    // ── Transitions ─────────────────────────────────────────────
 
     public void Verify()
     {
@@ -31,10 +24,7 @@ public sealed class StateSnapshotAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw StateSnapshotErrors.InvalidStateTransition(Status, "Verify");
 
-        var @event = new StateSnapshotVerifiedEvent(SnapshotId);
-        Apply(@event);
-        EnsureInvariants();
-        _domainEvents.Add(@event);
+        RaiseDomainEvent(new StateSnapshotVerifiedEvent(SnapshotId));
     }
 
     public void Expire()
@@ -43,15 +33,10 @@ public sealed class StateSnapshotAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw StateSnapshotErrors.InvalidStateTransition(Status, "Expire");
 
-        var @event = new StateSnapshotExpiredEvent(SnapshotId);
-        Apply(@event);
-        EnsureInvariants();
-        _domainEvents.Add(@event);
+        RaiseDomainEvent(new StateSnapshotExpiredEvent(SnapshotId));
     }
 
-    // ── Apply ────────────────────────────────────────────────────
-
-    private void Apply(object domainEvent)
+    protected override void Apply(object domainEvent)
     {
         switch (domainEvent)
         {
@@ -60,20 +45,16 @@ public sealed class StateSnapshotAggregate
                 Descriptor = e.Descriptor;
                 Status = SnapshotStatus.Captured;
                 break;
-
             case StateSnapshotVerifiedEvent:
                 Status = SnapshotStatus.Verified;
                 break;
-
             case StateSnapshotExpiredEvent:
                 Status = SnapshotStatus.Expired;
                 break;
         }
     }
 
-    // ── Invariants ───────────────────────────────────────────────
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (SnapshotId == default)
             throw StateSnapshotErrors.MissingId();

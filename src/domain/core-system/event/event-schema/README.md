@@ -24,10 +24,6 @@ Defines the schema validation rules for event payloads. Provides structural cont
 
   * Manages the lifecycle and integrity of an event schema
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * EventSchemaId — Unique identifier for a event-schema instance
@@ -42,9 +38,10 @@ Defines the schema validation rules for event payloads. Provides structural cont
 
 * EventSchemaSpecification — Validates event-schema structure and completeness
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* EventSchemaService — Domain operations for event-schema management
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

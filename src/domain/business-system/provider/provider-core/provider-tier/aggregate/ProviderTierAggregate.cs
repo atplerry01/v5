@@ -1,17 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderTier;
 
-public sealed class ProviderTierAggregate
+public sealed class ProviderTierAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ProviderTierId Id { get; private set; }
     public TierCode Code { get; private set; }
     public TierName Name { get; private set; }
     public TierRank Rank { get; private set; }
     public ProviderTierStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ProviderTierAggregate() { }
 
     public static ProviderTierAggregate Create(
         ProviderTierId id,
@@ -20,23 +17,17 @@ public sealed class ProviderTierAggregate
         TierRank rank)
     {
         var aggregate = new ProviderTierAggregate();
+        if (aggregate.Version >= 0)
+            throw ProviderTierErrors.AlreadyInitialized();
 
-        var @event = new ProviderTierCreatedEvent(id, code, name, rank);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ProviderTierCreatedEvent(id, code, name, rank));
         return aggregate;
     }
 
     public void Update(TierName name, TierRank rank)
     {
         EnsureMutable();
-
-        var @event = new ProviderTierUpdatedEvent(Id, name, rank);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderTierUpdatedEvent(Id, name, rank));
     }
 
     public void Activate()
@@ -45,10 +36,7 @@ public sealed class ProviderTierAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ProviderTierErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProviderTierActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderTierActivatedEvent(Id));
     }
 
     public void Archive()
@@ -56,39 +44,31 @@ public sealed class ProviderTierAggregate
         if (Status == ProviderTierStatus.Archived)
             throw ProviderTierErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ProviderTierArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderTierArchivedEvent(Id));
     }
 
-    private void Apply(ProviderTierCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ProviderTierId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Rank = @event.Rank;
-        Status = ProviderTierStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ProviderTierUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Rank = @event.Rank;
-        Version++;
-    }
-
-    private void Apply(ProviderTierActivatedEvent @event)
-    {
-        Status = ProviderTierStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ProviderTierArchivedEvent @event)
-    {
-        Status = ProviderTierStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProviderTierCreatedEvent e:
+                Id = e.ProviderTierId;
+                Code = e.Code;
+                Name = e.Name;
+                Rank = e.Rank;
+                Status = ProviderTierStatus.Draft;
+                break;
+            case ProviderTierUpdatedEvent e:
+                Name = e.Name;
+                Rank = e.Rank;
+                break;
+            case ProviderTierActivatedEvent:
+                Status = ProviderTierStatus.Active;
+                break;
+            case ProviderTierArchivedEvent:
+                Status = ProviderTierStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -98,11 +78,7 @@ public sealed class ProviderTierAggregate
             throw ProviderTierErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProviderTierErrors.MissingId();

@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandDefinition;
 
-public sealed record CommandDefinitionPublishedEvent(CommandDefinitionId DefinitionId);
+public sealed record CommandDefinitionPublishedEvent(
+    [property: JsonPropertyName("AggregateId")] CommandDefinitionId DefinitionId) : DomainEvent;

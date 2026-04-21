@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Reservation;
 
 public readonly record struct LineItemRef
@@ -6,9 +8,7 @@ public readonly record struct LineItemRef
 
     public LineItemRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("LineItemRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "LineItemRef cannot be empty.");
         Value = value;
     }
 }

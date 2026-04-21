@@ -34,12 +34,13 @@ public sealed class KanbanAggregate : AggregateRoot
     public void CreateCard(
         KanbanCardId cardId,
         KanbanListId listId,
-        string title,
-        string description,
+        KanbanCardTitle title,
+        DocumentRef description,
         KanbanPosition position,
         KanbanPriority? priority = null)
     {
-        Guard.Against(string.IsNullOrWhiteSpace(title), KanbanDomainErrors.CardTitleRequired);
+        Guard.Against(title == default, KanbanDomainErrors.CardTitleRequired);
+        Guard.Against(description == default, KanbanDomainErrors.CardDescriptionRequired);
         Guard.Against(position.Value < 0, KanbanDomainErrors.InvalidPosition);
         Guard.Against(!_lists.Exists(l => l.Id == listId), KanbanDomainErrors.ListNotFound);
         Guard.Against(CardExistsOnBoard(cardId), KanbanDomainErrors.DuplicateCardId);
@@ -83,9 +84,10 @@ public sealed class KanbanAggregate : AggregateRoot
         RaiseDomainEvent(new KanbanCardCompletedEvent(new AggregateId(Id.Value), cardId));
     }
 
-    public void ReviseCardDetail(KanbanCardId cardId, string title, string description)
+    public void ReviseCardDetail(KanbanCardId cardId, KanbanCardTitle title, DocumentRef description)
     {
-        Guard.Against(string.IsNullOrWhiteSpace(title), KanbanDomainErrors.CardTitleRequired);
+        Guard.Against(title == default, KanbanDomainErrors.CardTitleRequired);
+        Guard.Against(description == default, KanbanDomainErrors.CardDescriptionRequired);
 
         var (_, card) = FindCardOnBoard(cardId);
         Guard.Against(card is null, KanbanDomainErrors.CardNotFound);
@@ -153,7 +155,8 @@ public sealed class KanbanAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        Guard.Against(Id.Value == Guid.Empty, KanbanDomainErrors.EmptyBoardIdentity);
+        Guard.Against(string.IsNullOrWhiteSpace(Name), KanbanDomainErrors.BoardNameRequired);
     }
 
     private bool CardExistsOnBoard(KanbanCardId cardId)

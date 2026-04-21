@@ -42,10 +42,6 @@ Manages assignment of resources or rights to parties. Tracks the lifecycle of an
 * CanReleaseSpecification -- Only Allocated allocations can be released
 * IsAllocatedSpecification -- Checks if allocation is currently active
 
-## Domain Services
-
-* AllocationService -- Domain operations for allocation management
-
 ## Errors
 
 * MissingId -- AllocationId is required
@@ -71,6 +67,11 @@ Manages assignment of resources or rights to parties. Tracks the lifecycle of an
 
 * eligibility (determines if allocation is permitted)
 * entitlement-grant (allocation may fulfill a grant)
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

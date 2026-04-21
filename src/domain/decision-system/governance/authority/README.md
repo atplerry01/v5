@@ -29,7 +29,7 @@ Defines and manages decision-making authority within governance structures.
 
 ## Value Objects
 
-* AuthorityId
+* GovernanceAuthorityId
 
 ## Domain Events
 

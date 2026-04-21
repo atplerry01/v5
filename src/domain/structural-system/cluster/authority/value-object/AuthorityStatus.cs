@@ -4,5 +4,7 @@ public enum AuthorityStatus
 {
     Established,
     Active,
-    Revoked
+    Revoked,
+    Suspended,
+    Retired
 }

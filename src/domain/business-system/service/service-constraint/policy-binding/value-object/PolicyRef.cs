@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.PolicyBinding;
 
 public readonly record struct PolicyRef
@@ -8,12 +10,10 @@ public readonly record struct PolicyRef
 
     public PolicyRef(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("PolicyRef must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "PolicyRef must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"PolicyRef exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"PolicyRef exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

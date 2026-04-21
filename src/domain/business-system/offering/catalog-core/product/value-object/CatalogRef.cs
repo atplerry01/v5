@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Product;
 
 public readonly record struct CatalogRef
@@ -6,9 +8,7 @@ public readonly record struct CatalogRef
 
     public CatalogRef(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CatalogRef value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CatalogRef cannot be empty.");
         Value = value;
     }
 }

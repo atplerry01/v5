@@ -51,3 +51,28 @@ Everything here describes **how a stream technically exists and is delivered**, 
 - `delivery-governance/observability` — metrics/observability (formerly `persistence-and-observability/metrics`).
 - `live-streaming/archive` — stream-native recording/archive (moved from legacy `persistence-and-observability/recording` in CS.6; events broadcast-side only per §DF-06).
 - `playback-consumption/replay` — (SCAFFOLD) viewer-initiated replay of an archive; no events migrated from legacy recording.
+
+## E1→Ex delivery status (2026-04-21)
+
+Full vertical slice (sections 1–15, 18) delivered for the **9 populated BCs** per [claude/templates/delivery-pattern/](../../../../claude/templates/delivery-pattern/):
+
+| BC | Events | T2E handlers | Projection | Controller | Topics | Policy | Schema registration |
+|---|---|---|---|---|---|---|---|
+| stream-core/stream | 6 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| stream-core/channel | 5 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| stream-core/manifest | 5 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| stream-core/availability *(PlaybackAggregate)* | 5 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| live-streaming/broadcast | 7 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| live-streaming/archive | 5 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| playback-consumption/session | 7 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| delivery-governance/access *(StreamAccessAggregate)* | 5 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| delivery-governance/observability | 4 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Cross-system invariants** (per [01-domain-skeleton.md § Cross-System Invariants](../../../../claude/templates/delivery-pattern/01-domain-skeleton.md)) — see [../invariant/](../invariant/README.md):
+
+- `BroadcastStreamBindingPolicy` — enforced in [CreateBroadcastHandler](../../../../engines/T2E/content/streaming/live-streaming/broadcast/CreateBroadcastHandler.cs) via [IStreamStatusLookup](../../../../shared/contracts/content/streaming/stream-core/stream/IStreamStatusLookup.cs).
+- `SessionStreamAccessPolicy` — registered, enforcement deferred (session aggregate lacks subject/access-id binding).
+
+**Still D0 (scaffold only):** `live-streaming/ingest-session`, `playback-consumption/progress`, `playback-consumption/replay`, `delivery-governance/entitlement-hook`, `delivery-governance/moderation`.
+
+**Section 16 (Tests):** not yet delivered for streaming — follows the same gap as the media context. Tests are tracked as a separate content-system work item.

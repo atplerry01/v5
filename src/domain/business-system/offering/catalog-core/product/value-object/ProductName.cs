@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Product;
 
 public readonly record struct ProductName
@@ -8,12 +10,10 @@ public readonly record struct ProductName
 
     public ProductName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ProductName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "ProductName must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"ProductName exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"ProductName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

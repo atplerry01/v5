@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventDefinition;
 
-public sealed class EventDefinitionAggregate
+public sealed class EventDefinitionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public EventDefinitionId Id { get; private set; }
     public EventSchema Schema { get; private set; }
     public EventDefinitionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private EventDefinitionAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
 
@@ -18,12 +15,10 @@ public sealed class EventDefinitionAggregate
         EventSchema schema)
     {
         var aggregate = new EventDefinitionAggregate();
+        if (aggregate.Version >= 0)
+            throw EventDefinitionErrors.AlreadyInitialized();
 
-        var @event = new EventDefinitionRegisteredEvent(id, schema);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new EventDefinitionRegisteredEvent(id, schema));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class EventDefinitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EventDefinitionErrors.InvalidStateTransition(Status, nameof(Publish));
 
-        var @event = new EventDefinitionPublishedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EventDefinitionPublishedEvent(Id));
     }
 
     // ── Deprecate ────────────────────────────────────────────────
@@ -49,38 +41,30 @@ public sealed class EventDefinitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EventDefinitionErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new EventDefinitionDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EventDefinitionDeprecatedEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(EventDefinitionRegisteredEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.DefinitionId;
-        Schema = @event.Schema;
-        Status = EventDefinitionStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case EventDefinitionRegisteredEvent e:
+                Id = e.DefinitionId;
+                Schema = e.Schema;
+                Status = EventDefinitionStatus.Draft;
+                break;
+            case EventDefinitionPublishedEvent:
+                Status = EventDefinitionStatus.Published;
+                break;
+            case EventDefinitionDeprecatedEvent:
+                Status = EventDefinitionStatus.Deprecated;
+                break;
+        }
     }
 
-    private void Apply(EventDefinitionPublishedEvent @event)
-    {
-        Status = EventDefinitionStatus.Published;
-        Version++;
-    }
-
-    private void Apply(EventDefinitionDeprecatedEvent @event)
-    {
-        Status = EventDefinitionStatus.Deprecated;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw EventDefinitionErrors.MissingId();

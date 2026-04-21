@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Reservation;
 
 public enum ReservationSubjectKind
@@ -10,15 +12,12 @@ public enum ReservationSubjectKind
 public readonly record struct ReservationSubjectRef
 {
     public ReservationSubjectKind Kind { get; }
-    public Guid SubjectId { get; }
+    public ReservationSubjectId SubjectId { get; }
 
-    public ReservationSubjectRef(ReservationSubjectKind kind, Guid subjectId)
+    public ReservationSubjectRef(ReservationSubjectKind kind, ReservationSubjectId subjectId)
     {
-        if (!Enum.IsDefined(kind))
-            throw new ArgumentException("ReservationSubjectKind is invalid.", nameof(kind));
-
-        if (subjectId == Guid.Empty)
-            throw new ArgumentException("ReservationSubject id must not be empty.", nameof(subjectId));
+        Guard.Against(!Enum.IsDefined(kind), "ReservationSubjectKind is invalid.");
+        Guard.Against(subjectId == default, "ReservationSubject id must not be empty.");
 
         Kind = kind;
         SubjectId = subjectId;

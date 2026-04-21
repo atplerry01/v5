@@ -1,44 +1,34 @@
-using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
 
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderCapability;
 
-public sealed class ProviderCapabilityAggregate
+public sealed class ProviderCapabilityAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ProviderCapabilityId Id { get; private set; }
-    public ProviderRef Provider { get; private set; }
+    public ClusterProviderRef Provider { get; private set; }
     public CapabilityCode Code { get; private set; }
     public CapabilityName Name { get; private set; }
     public CapabilityStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ProviderCapabilityAggregate() { }
 
     public static ProviderCapabilityAggregate Create(
         ProviderCapabilityId id,
-        ProviderRef provider,
+        ClusterProviderRef provider,
         CapabilityCode code,
         CapabilityName name)
     {
         var aggregate = new ProviderCapabilityAggregate();
+        if (aggregate.Version >= 0)
+            throw ProviderCapabilityErrors.AlreadyInitialized();
 
-        var @event = new ProviderCapabilityCreatedEvent(id, provider, code, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ProviderCapabilityCreatedEvent(id, provider, code, name));
         return aggregate;
     }
 
     public void Update(CapabilityName name)
     {
         EnsureMutable();
-
-        var @event = new ProviderCapabilityUpdatedEvent(Id, name);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderCapabilityUpdatedEvent(Id, name));
     }
 
     public void Activate()
@@ -47,10 +37,7 @@ public sealed class ProviderCapabilityAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ProviderCapabilityErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProviderCapabilityActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderCapabilityActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,38 +45,30 @@ public sealed class ProviderCapabilityAggregate
         if (Status == CapabilityStatus.Archived)
             throw ProviderCapabilityErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ProviderCapabilityArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProviderCapabilityArchivedEvent(Id));
     }
 
-    private void Apply(ProviderCapabilityCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ProviderCapabilityId;
-        Provider = @event.Provider;
-        Code = @event.Code;
-        Name = @event.Name;
-        Status = CapabilityStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ProviderCapabilityUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Version++;
-    }
-
-    private void Apply(ProviderCapabilityActivatedEvent @event)
-    {
-        Status = CapabilityStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ProviderCapabilityArchivedEvent @event)
-    {
-        Status = CapabilityStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProviderCapabilityCreatedEvent e:
+                Id = e.ProviderCapabilityId;
+                Provider = e.Provider;
+                Code = e.Code;
+                Name = e.Name;
+                Status = CapabilityStatus.Draft;
+                break;
+            case ProviderCapabilityUpdatedEvent e:
+                Name = e.Name;
+                break;
+            case ProviderCapabilityActivatedEvent:
+                Status = CapabilityStatus.Active;
+                break;
+            case ProviderCapabilityArchivedEvent:
+                Status = CapabilityStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -99,11 +78,7 @@ public sealed class ProviderCapabilityAggregate
             throw ProviderCapabilityErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProviderCapabilityErrors.MissingId();

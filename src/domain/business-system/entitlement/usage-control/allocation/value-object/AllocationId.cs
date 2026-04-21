@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.UsageControl.Allocation;
 
 public readonly record struct AllocationId
@@ -6,9 +8,7 @@ public readonly record struct AllocationId
 
     public AllocationId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("AllocationId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "AllocationId cannot be empty.");
         Value = value;
     }
 }

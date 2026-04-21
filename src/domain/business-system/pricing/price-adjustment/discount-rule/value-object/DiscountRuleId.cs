@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.DiscountRule;
 
 public readonly record struct DiscountRuleId
@@ -6,9 +8,7 @@ public readonly record struct DiscountRuleId
 
     public DiscountRuleId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("DiscountRuleId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "DiscountRuleId cannot be empty.");
         Value = value;
     }
 }

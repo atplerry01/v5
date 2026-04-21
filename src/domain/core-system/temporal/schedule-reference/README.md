@@ -22,11 +22,7 @@ Defines the foundational structure for schedule references — pointers to tempo
 
 * ScheduleReferenceAggregate
 
-  * Represents a schedule reference instance and its coordination state
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for schedule references — pointers to tempo
 ## Domain Events
 
 * ScheduleReferenceCreatedEvent — Raised when a new schedule-reference is created
-* ScheduleReferenceUpdatedEvent — Raised when schedule-reference metadata is updated
-* ScheduleReferenceStateChangedEvent — Raised when schedule-reference lifecycle state transitions
 
 ## Specifications
 
-* ScheduleReferenceSpecification — Validates schedule-reference structure and completeness
+* ScheduleReferenceSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* ScheduleReferenceService — Domain operations for schedule-reference management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for schedule references — pointers to tempo
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

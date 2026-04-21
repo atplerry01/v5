@@ -1,18 +1,15 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Eligibility;
 
-public sealed class EligibilityAggregate
+public sealed class EligibilityAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public EligibilityId Id { get; private set; }
     public EligibilitySubjectRef Subject { get; private set; }
     public EligibilityTargetRef Target { get; private set; }
     public EligibilityScope Scope { get; private set; }
     public EligibilityStatus Status { get; private set; }
     public IneligibilityReason? Reason { get; private set; }
-    public int Version { get; private set; }
-
-    private EligibilityAggregate() { }
 
     public static EligibilityAggregate Create(
         EligibilityId id,
@@ -21,12 +18,10 @@ public sealed class EligibilityAggregate
         EligibilityScope scope)
     {
         var aggregate = new EligibilityAggregate();
+        if (aggregate.Version >= 0)
+            throw EligibilityErrors.AlreadyInitialized();
 
-        var @event = new EligibilityCreatedEvent(id, subject, target, scope);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new EligibilityCreatedEvent(id, subject, target, scope));
         return aggregate;
     }
 
@@ -36,10 +31,7 @@ public sealed class EligibilityAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EligibilityErrors.AlreadyEvaluated(Id, Status);
 
-        var @event = new EligibilityEvaluatedEligibleEvent(Id, evaluatedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EligibilityEvaluatedEligibleEvent(Id, evaluatedAt));
     }
 
     public void MarkIneligible(IneligibilityReason reason, DateTimeOffset evaluatedAt)
@@ -48,40 +40,31 @@ public sealed class EligibilityAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EligibilityErrors.AlreadyEvaluated(Id, Status);
 
-        var @event = new EligibilityEvaluatedIneligibleEvent(Id, reason, evaluatedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EligibilityEvaluatedIneligibleEvent(Id, reason, evaluatedAt));
     }
 
-    private void Apply(EligibilityCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.EligibilityId;
-        Subject = @event.Subject;
-        Target = @event.Target;
-        Scope = @event.Scope;
-        Status = EligibilityStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case EligibilityCreatedEvent e:
+                Id = e.EligibilityId;
+                Subject = e.Subject;
+                Target = e.Target;
+                Scope = e.Scope;
+                Status = EligibilityStatus.Pending;
+                break;
+            case EligibilityEvaluatedEligibleEvent:
+                Status = EligibilityStatus.Eligible;
+                break;
+            case EligibilityEvaluatedIneligibleEvent e:
+                Status = EligibilityStatus.Ineligible;
+                Reason = e.Reason;
+                break;
+        }
     }
 
-    private void Apply(EligibilityEvaluatedEligibleEvent @event)
-    {
-        Status = EligibilityStatus.Eligible;
-        Version++;
-    }
-
-    private void Apply(EligibilityEvaluatedIneligibleEvent @event)
-    {
-        Status = EligibilityStatus.Ineligible;
-        Reason = @event.Reason;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw EligibilityErrors.MissingId();

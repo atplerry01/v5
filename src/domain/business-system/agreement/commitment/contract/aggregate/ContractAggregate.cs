@@ -1,42 +1,35 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.Commitment.Contract;
 
-public sealed class ContractAggregate
+public sealed class ContractAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly List<ContractParty> _parties = new();
 
     public ContractId Id { get; private set; }
     public ContractStatus Status { get; private set; }
     public IReadOnlyList<ContractParty> Parties => _parties.AsReadOnly();
-    public int Version { get; private set; }
 
-    private ContractAggregate() { }
-
-    public static ContractAggregate Create(ContractId id)
+    public static ContractAggregate Create(ContractId id, DateTimeOffset createdAt)
     {
         var aggregate = new ContractAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw ContractErrors.AlreadyInitialized();
 
-        var @event = new ContractCreatedEvent(id);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ContractCreatedEvent(id, createdAt));
         return aggregate;
     }
 
-    public void AddParty(ContractParty party)
+    public void AddParty(PartyId partyId, string role)
     {
-        if (party is null)
-            throw new ArgumentNullException(nameof(party));
+        Guard.Against(partyId == default, "PartyId must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(role), "Role must not be empty.");
 
-        _parties.Add(party);
+        RaiseDomainEvent(new ContractPartyAddedEvent(Id, partyId, role));
     }
 
     public void Activate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ContractErrors.InvalidStateTransition(Status, nameof(Activate));
@@ -44,83 +37,56 @@ public sealed class ContractAggregate
         if (_parties.Count == 0)
             throw ContractErrors.PartyRequired();
 
-        var @event = new ContractActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContractActivatedEvent(Id));
     }
 
     public void Suspend()
     {
-        ValidateBeforeChange();
-
         var specification = new CanSuspendSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ContractErrors.InvalidStateTransition(Status, nameof(Suspend));
 
-        var @event = new ContractSuspendedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContractSuspendedEvent(Id));
     }
 
     public void Terminate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanTerminateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw ContractErrors.InvalidStateTransition(Status, nameof(Terminate));
 
-        var @event = new ContractTerminatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ContractTerminatedEvent(Id));
     }
 
-    private void Apply(ContractCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ContractId;
-        Status = ContractStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case ContractCreatedEvent e:
+                Id = e.ContractId;
+                Status = ContractStatus.Draft;
+                break;
+            case ContractPartyAddedEvent e:
+                _parties.Add(new ContractParty(e.PartyId, e.Role));
+                break;
+            case ContractActivatedEvent:
+                Status = ContractStatus.Active;
+                break;
+            case ContractSuspendedEvent:
+                Status = ContractStatus.Suspended;
+                break;
+            case ContractTerminatedEvent:
+                Status = ContractStatus.Terminated;
+                break;
+        }
     }
 
-    private void Apply(ContractActivatedEvent @event)
-    {
-        Status = ContractStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ContractSuspendedEvent @event)
-    {
-        Status = ContractStatus.Suspended;
-        Version++;
-    }
-
-    private void Apply(ContractTerminatedEvent @event)
-    {
-        Status = ContractStatus.Terminated;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ContractErrors.MissingId();
 
         if (!Enum.IsDefined(Status))
             throw ContractErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

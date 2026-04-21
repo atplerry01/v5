@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Pricing;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.DiscountRule;
 
-public sealed class DiscountRuleAggregate
+public sealed class DiscountRuleAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public DiscountRuleId Id { get; private set; }
     public DiscountRuleCode Code { get; private set; }
     public DiscountRuleName Name { get; private set; }
     public AdjustmentBasis Basis { get; private set; }
     public DiscountAmount Amount { get; private set; }
     public DiscountRuleStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private DiscountRuleAggregate() { }
 
     public static DiscountRuleAggregate Create(
         DiscountRuleId id,
@@ -26,12 +22,10 @@ public sealed class DiscountRuleAggregate
         ValidateBasisAmount(basis, amount);
 
         var aggregate = new DiscountRuleAggregate();
+        if (aggregate.Version >= 0)
+            throw DiscountRuleErrors.AlreadyInitialized();
 
-        var @event = new DiscountRuleCreatedEvent(id, code, name, basis, amount);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new DiscountRuleCreatedEvent(id, code, name, basis, amount));
         return aggregate;
     }
 
@@ -42,10 +36,7 @@ public sealed class DiscountRuleAggregate
 
         ValidateBasisAmount(basis, amount);
 
-        var @event = new DiscountRuleUpdatedEvent(Id, name, basis, amount);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new DiscountRuleUpdatedEvent(Id, name, basis, amount));
     }
 
     public void Activate()
@@ -54,10 +45,7 @@ public sealed class DiscountRuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw DiscountRuleErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new DiscountRuleActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new DiscountRuleActivatedEvent(Id));
     }
 
     public void Deprecate()
@@ -66,10 +54,7 @@ public sealed class DiscountRuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw DiscountRuleErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new DiscountRuleDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new DiscountRuleDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -77,10 +62,7 @@ public sealed class DiscountRuleAggregate
         if (Status == DiscountRuleStatus.Archived)
             throw DiscountRuleErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new DiscountRuleArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new DiscountRuleArchivedEvent(Id));
     }
 
     private static void ValidateBasisAmount(AdjustmentBasis basis, DiscountAmount amount)
@@ -89,48 +71,36 @@ public sealed class DiscountRuleAggregate
             throw DiscountRuleErrors.PercentageOutOfRange(amount.Value);
     }
 
-    private void Apply(DiscountRuleCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.DiscountRuleId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Status = DiscountRuleStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case DiscountRuleCreatedEvent e:
+                Id = e.DiscountRuleId;
+                Code = e.Code;
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                Status = DiscountRuleStatus.Draft;
+                break;
+            case DiscountRuleUpdatedEvent e:
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                break;
+            case DiscountRuleActivatedEvent:
+                Status = DiscountRuleStatus.Active;
+                break;
+            case DiscountRuleDeprecatedEvent:
+                Status = DiscountRuleStatus.Deprecated;
+                break;
+            case DiscountRuleArchivedEvent:
+                Status = DiscountRuleStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(DiscountRuleUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Version++;
-    }
-
-    private void Apply(DiscountRuleActivatedEvent @event)
-    {
-        Status = DiscountRuleStatus.Active;
-        Version++;
-    }
-
-    private void Apply(DiscountRuleDeprecatedEvent @event)
-    {
-        Status = DiscountRuleStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(DiscountRuleArchivedEvent @event)
-    {
-        Status = DiscountRuleStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw DiscountRuleErrors.MissingId();

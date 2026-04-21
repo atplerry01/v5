@@ -1,24 +1,24 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderGovernance.ProviderAgreement;
 
 public static class ProviderAgreementErrors
 {
-    public static ProviderAgreementDomainException MissingId()
-        => new("ProviderAgreementId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("ProviderAgreementId is required and must not be empty.");
 
-    public static ProviderAgreementDomainException MissingProviderRef()
-        => new("ProviderAgreement must reference a provider.");
+    public static DomainException MissingProviderRef()
+        => new DomainInvariantViolationException("ProviderAgreement must reference a provider.");
 
-    public static ProviderAgreementDomainException InvalidStateTransition(ProviderAgreementStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(ProviderAgreementStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static ProviderAgreementDomainException ActivationRequiresEffectiveWindow()
-        => new("ProviderAgreement requires an effective window before activation.");
+    public static DomainException ActivationRequiresEffectiveWindow()
+        => new DomainInvariantViolationException("ProviderAgreement requires an effective window before activation.");
 
-    public static ProviderAgreementDomainException AlreadyTerminated(ProviderAgreementId id)
-        => new($"ProviderAgreement '{id.Value}' has already been terminated.");
-}
+    public static DomainException AlreadyTerminated(ProviderAgreementId id)
+        => new DomainInvariantViolationException($"ProviderAgreement '{id.Value}' has already been terminated.");
 
-public sealed class ProviderAgreementDomainException : Exception
-{
-    public ProviderAgreementDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("ProviderAgreement has already been initialized.");
 }

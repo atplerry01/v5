@@ -7,7 +7,7 @@ public sealed class CanActivateSpecification : Specification<ExchangeRateAggrega
     public override bool IsSatisfiedBy(ExchangeRateAggregate rate)
     {
         if (rate.Status != ExchangeRateStatus.Defined) return false;
-        if (rate.RateValue <= 0m) return false;
+        if (rate.RateValue.Value <= 0m) return false;
 
         return true;
     }

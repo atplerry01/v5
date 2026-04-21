@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Order;
 
 public readonly record struct OrderId
@@ -6,8 +8,7 @@ public readonly record struct OrderId
 
     public OrderId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("OrderId value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "OrderId cannot be empty.");
         Value = value;
     }
 }

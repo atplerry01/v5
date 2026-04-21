@@ -8,5 +8,5 @@ public sealed record AuditRecordCreatedEvent(
     SourceAggregateId SourceAggregateId,
     SourceEventId SourceEventId,
     AuditType AuditType,
-    EvidenceSummary EvidenceSummary,
+    DocumentRef EvidenceSummary,
     Timestamp RecordedAt) : DomainEvent;

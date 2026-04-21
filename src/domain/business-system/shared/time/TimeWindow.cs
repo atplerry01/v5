@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Shared.Time;
 
 // Shared time-window primitive for business-system leaves.
@@ -12,8 +14,7 @@ public readonly record struct TimeWindow
 
     public TimeWindow(DateTimeOffset startsAt, DateTimeOffset? endsAt)
     {
-        if (endsAt.HasValue && endsAt.Value <= startsAt)
-            throw new ArgumentException("TimeWindow.EndsAt must be after StartsAt.", nameof(endsAt));
+        Guard.Against(endsAt.HasValue && endsAt.Value <= startsAt, "TimeWindow.EndsAt must be after StartsAt.");
 
         StartsAt = startsAt;
         EndsAt = endsAt;

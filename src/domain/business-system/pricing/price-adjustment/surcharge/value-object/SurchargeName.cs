@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Surcharge;
 
 public readonly record struct SurchargeName
@@ -8,12 +10,10 @@ public readonly record struct SurchargeName
 
     public SurchargeName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("SurchargeName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "SurchargeName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"SurchargeName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"SurchargeName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

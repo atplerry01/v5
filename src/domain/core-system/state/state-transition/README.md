@@ -26,13 +26,11 @@ This domain defines state transition structure only and contains no state machin
 
 * StateTransitionAggregate
 
-  * Factory: Define(id, rule) — creates a new transition in Defined status
-  * Transitions: Activate(), Retire()
-  * Manages the lifecycle and integrity of a single state transition instance
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; created via `Define(StateTransitionId, TransitionRule)` factory.
+  * Transitions: `Activate()`, `Retire()`.
+  * Event-sourced: all state derived from applied events.
+  * Enforces invariants after every state change.
+  * Supports optimistic concurrency via inherited `Version` property.
 
 ## Value Objects
 
@@ -51,9 +49,12 @@ This domain defines state transition structure only and contains no state machin
 * CanActivateSpecification — Status must be Defined
 * CanRetireSpecification — Status must be Active
 
-## Domain Services
+## Errors
 
-* StateTransitionService — Reserved for future domain operations
+* MissingId — StateTransitionId is required.
+* MissingTransitionRule — TransitionRule is required.
+* InvalidStateTransition — Guard for illegal status transitions.
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -72,6 +73,11 @@ This domain defines state transition structure only and contains no state machin
 ## Lifecycle
 
 TERMINAL: Defined -> Active -> Retired
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

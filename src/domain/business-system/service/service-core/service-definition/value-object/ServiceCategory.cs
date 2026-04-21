@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceDefinition;
 
 public readonly record struct ServiceCategory
@@ -8,12 +10,10 @@ public readonly record struct ServiceCategory
 
     public ServiceCategory(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ServiceCategory must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "ServiceCategory must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"ServiceCategory exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"ServiceCategory exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

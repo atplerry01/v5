@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Topology;
 
 public readonly record struct TopologyId
@@ -6,9 +8,7 @@ public readonly record struct TopologyId
 
     public TopologyId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw TopologyErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "TopologyId cannot be empty.");
         Value = value;
     }
 }

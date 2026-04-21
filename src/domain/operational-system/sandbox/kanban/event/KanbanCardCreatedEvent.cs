@@ -6,7 +6,7 @@ public sealed record KanbanCardCreatedEvent(
     AggregateId AggregateId,
     KanbanCardId CardId,
     KanbanListId ListId,
-    string Title,
-    string Description,
+    KanbanCardTitle Title,
+    DocumentRef Description,
     KanbanPosition Position,
     KanbanPriority? Priority) : DomainEvent;

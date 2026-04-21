@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.Segment;
 
 public sealed record SegmentCreatedEvent(
-    SegmentId SegmentId,
+    [property: JsonPropertyName("AggregateId")] SegmentId SegmentId,
     SegmentCode Code,
     SegmentName Name,
     SegmentType Type,
-    SegmentCriteria Criteria);
+    SegmentCriteria Criteria) : DomainEvent;

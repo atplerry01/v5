@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceLevel;
 
 public readonly record struct LevelCode
@@ -8,12 +10,10 @@ public readonly record struct LevelCode
 
     public LevelCode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("LevelCode must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "LevelCode must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"LevelCode exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"LevelCode exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

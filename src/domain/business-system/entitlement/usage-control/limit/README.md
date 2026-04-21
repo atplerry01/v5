@@ -42,10 +42,6 @@ Defines and enforces boundary controls on entitlements. A limit represents a thr
 * CanBreachSpecification — Only Enforced limits can be breached
 * IsEnforcedSpecification — Checks if limit is currently enforced
 
-## Domain Services
-
-* LimitService — Domain operations for limit management
-
 ## Errors
 
 * MissingId — LimitId is required
@@ -72,6 +68,11 @@ Defines and enforces boundary controls on entitlements. A limit represents a thr
 
 * quota (limits may constrain quota capacity)
 * restriction (breach may trigger restriction)
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

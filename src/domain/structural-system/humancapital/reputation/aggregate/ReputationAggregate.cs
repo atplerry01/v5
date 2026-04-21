@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Reputation;
 
-public sealed class ReputationAggregate
+public sealed class ReputationAggregate : AggregateRoot
 {
-    public static ReputationAggregate Create()
+    public ReputationId Id { get; private set; }
+    public ReputationDescriptor Descriptor { get; private set; }
+
+    public static ReputationAggregate Create(ReputationId id, ReputationDescriptor descriptor)
     {
         var aggregate = new ReputationAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw ReputationErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new ReputationCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case ReputationCreatedEvent e:
+                Id = e.ReputationId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw ReputationErrors.MissingId();
+
+        if (Descriptor == default)
+            throw ReputationErrors.MissingDescriptor();
     }
 }

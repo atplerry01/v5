@@ -41,10 +41,6 @@ Defines eligibility rules and evaluates whether a subject meets the conditions r
 * CanEvaluateSpecification — Only Pending eligibilities can be evaluated
 * IsEligibleSpecification — Checks if eligibility status is Eligible
 
-## Domain Services
-
-* EligibilityService — Domain operations for eligibility management
-
 ## Errors
 
 * MissingId — EligibilityId is required
@@ -71,6 +67,11 @@ Defines eligibility rules and evaluates whether a subject meets the conditions r
 
 * allocation (eligibility gates allocation decisions)
 * entitlement-grant (eligibility determines grant permissibility)
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

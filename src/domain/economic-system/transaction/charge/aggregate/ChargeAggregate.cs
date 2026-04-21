@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Transaction.Transaction;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,7 +7,7 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Charge;
 public sealed class ChargeAggregate : AggregateRoot
 {
     public ChargeId ChargeId { get; private set; }
-    public Guid TransactionId { get; private set; }
+    public TransactionId TransactionId { get; private set; }
     public ChargeType Type { get; private set; }
     public Amount BaseAmount { get; private set; }
     public Amount ChargeAmount { get; private set; }
@@ -20,7 +21,7 @@ public sealed class ChargeAggregate : AggregateRoot
 
     public static ChargeAggregate Calculate(
         ChargeId chargeId,
-        Guid transactionId,
+        TransactionId transactionId,
         ChargeType type,
         Amount baseAmount,
         Amount chargeAmount,
@@ -29,12 +30,25 @@ public sealed class ChargeAggregate : AggregateRoot
     {
         if (baseAmount.Value <= 0m) throw ChargeErrors.InvalidBaseAmount();
         if (chargeAmount.Value < 0m) throw ChargeErrors.InvalidChargeAmount();
-        if (transactionId == Guid.Empty) throw ChargeErrors.MissingTransactionReference();
 
         var aggregate = new ChargeAggregate();
         aggregate.RaiseDomainEvent(new ChargeCalculatedEvent(
-            chargeId, transactionId, type, baseAmount, chargeAmount, currency, calculatedAt));
+            chargeId, transactionId.Value, type, baseAmount, chargeAmount, currency, calculatedAt));
         return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static ChargeAggregate Calculate(
+        ChargeId chargeId,
+        Guid transactionId,
+        ChargeType type,
+        Amount baseAmount,
+        Amount chargeAmount,
+        Currency currency,
+        Timestamp calculatedAt)
+    {
+        if (transactionId == Guid.Empty) throw ChargeErrors.MissingTransactionReference();
+        return Calculate(chargeId, new TransactionId(transactionId), type, baseAmount, chargeAmount, currency, calculatedAt);
     }
 
     // ── Behavior ─────────────────────────────────────────────────
@@ -44,7 +58,7 @@ public sealed class ChargeAggregate : AggregateRoot
         if (Status == ChargeStatus.Applied) throw ChargeErrors.ChargeAlreadyApplied();
         if (Status != ChargeStatus.Calculated) throw ChargeErrors.ChargeNotCalculated();
 
-        RaiseDomainEvent(new ChargeAppliedEvent(ChargeId, TransactionId, ChargeAmount, appliedAt));
+        RaiseDomainEvent(new ChargeAppliedEvent(ChargeId, TransactionId.Value, ChargeAmount, appliedAt));
     }
 
     // ── Apply ────────────────────────────────────────────────────
@@ -55,7 +69,7 @@ public sealed class ChargeAggregate : AggregateRoot
         {
             case ChargeCalculatedEvent e:
                 ChargeId = e.ChargeId;
-                TransactionId = e.TransactionId;
+                TransactionId = new TransactionId(e.TransactionId);
                 Type = e.Type;
                 BaseAmount = e.BaseAmount;
                 ChargeAmount = e.ChargeAmount;

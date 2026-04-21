@@ -22,11 +22,7 @@ Defines the foundational structure for time windows — bounded temporal ranges 
 
 * TimeWindowAggregate
 
-  * Represents a time window instance and its bounded temporal range
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for time windows — bounded temporal ranges 
 ## Domain Events
 
 * TimeWindowCreatedEvent — Raised when a new time-window is created
-* TimeWindowUpdatedEvent — Raised when time-window metadata is updated
-* TimeWindowStateChangedEvent — Raised when time-window lifecycle state transitions
 
 ## Specifications
 
-* TimeWindowSpecification — Validates time-window structure and completeness
+* TimeWindowSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* TimeWindowService — Domain operations for time-window management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for time windows — bounded temporal ranges 
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

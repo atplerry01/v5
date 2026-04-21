@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderChange.Amendment;
 
 public readonly record struct AmendmentReason
@@ -8,12 +10,10 @@ public readonly record struct AmendmentReason
 
     public AmendmentReason(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("AmendmentReason must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "AmendmentReason must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"AmendmentReason exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"AmendmentReason exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

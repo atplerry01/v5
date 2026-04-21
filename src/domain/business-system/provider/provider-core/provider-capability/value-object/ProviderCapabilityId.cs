@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderCapability;
 
 public readonly record struct ProviderCapabilityId
@@ -6,9 +8,7 @@ public readonly record struct ProviderCapabilityId
 
     public ProviderCapabilityId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ProviderCapabilityId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ProviderCapabilityId cannot be empty.");
         Value = value;
     }
 }

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.stream_core.channel.commands",
+    "whyce.content.streaming.stream_core.channel.events",
+    "whyce.content.streaming.stream_core.channel.retry",
+    "whyce.content.streaming.stream_core.channel.deadletter"
+  ]
+}

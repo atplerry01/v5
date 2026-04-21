@@ -135,6 +135,13 @@ operational-system
 - may create local operational contexts without re-owning external authoritative truth
 
 
+structural-system
+business-system
+content-system
+economic-system
+operational-system
+
+
 
 TRUTH RELATIONSHIP FOUNDATION
 
@@ -158,7 +165,7 @@ Supporting Constitutional / Trust / Decision / Core / Orchestration / Intelligen
 - intelligence truth
 
 
-
+## Cross-System Invariants
 
 
 

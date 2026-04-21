@@ -17,7 +17,7 @@ public sealed class AuditService
         SourceAggregateId sourceAggregateId,
         SourceEventId sourceEventId,
         AuditType auditType,
-        EvidenceSummary evidenceSummary,
+        DocumentRef evidenceSummary,
         Timestamp recordedAt)
     {
         return AuditRecordAggregate.CreateRecord(

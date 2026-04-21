@@ -1,13 +1,18 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventDefinition;
 
 public static class EventDefinitionErrors
 {
-    public static InvalidOperationException MissingId() =>
-        new("EventDefinitionId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("EventDefinitionId is required and must not be empty.");
 
-    public static InvalidOperationException MissingSchema() =>
-        new("Event definition must include a valid schema.");
+    public static DomainException MissingSchema()
+        => new DomainInvariantViolationException("Event definition must include a valid schema.");
 
-    public static InvalidOperationException InvalidStateTransition(EventDefinitionStatus current, string attemptedAction) =>
-        new($"Cannot '{attemptedAction}' when current status is '{current}'.");
+    public static DomainException InvalidStateTransition(EventDefinitionStatus current, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{current}'.");
+
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("EventDefinition has already been initialized.");
 }

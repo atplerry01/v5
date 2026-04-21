@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Order;
 
 public readonly record struct OrderSourceReference
@@ -6,8 +8,7 @@ public readonly record struct OrderSourceReference
 
     public OrderSourceReference(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("OrderSourceReference value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "OrderSourceReference cannot be empty.");
         Value = value;
     }
 }

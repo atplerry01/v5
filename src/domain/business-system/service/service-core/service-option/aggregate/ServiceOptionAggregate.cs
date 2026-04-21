@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceOption;
 
-public sealed class ServiceOptionAggregate
+public sealed class ServiceOptionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceOptionId Id { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public OptionCode Code { get; private set; }
     public OptionName Name { get; private set; }
     public OptionKind Kind { get; private set; }
     public ServiceOptionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceOptionAggregate() { }
 
     public static ServiceOptionAggregate Create(
         ServiceOptionId id,
@@ -24,12 +20,10 @@ public sealed class ServiceOptionAggregate
         OptionKind kind)
     {
         var aggregate = new ServiceOptionAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceOptionErrors.AlreadyInitialized();
 
-        var @event = new ServiceOptionCreatedEvent(id, serviceDefinition, code, name, kind);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceOptionCreatedEvent(id, serviceDefinition, code, name, kind));
         return aggregate;
     }
 
@@ -37,10 +31,7 @@ public sealed class ServiceOptionAggregate
     {
         EnsureMutable();
 
-        var @event = new ServiceOptionUpdatedEvent(Id, name, kind);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceOptionUpdatedEvent(Id, name, kind));
     }
 
     public void Activate()
@@ -49,10 +40,7 @@ public sealed class ServiceOptionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceOptionErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceOptionActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceOptionActivatedEvent(Id));
     }
 
     public void Archive()
@@ -60,40 +48,7 @@ public sealed class ServiceOptionAggregate
         if (Status == ServiceOptionStatus.Archived)
             throw ServiceOptionErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceOptionArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
-    }
-
-    private void Apply(ServiceOptionCreatedEvent @event)
-    {
-        Id = @event.ServiceOptionId;
-        ServiceDefinition = @event.ServiceDefinition;
-        Code = @event.Code;
-        Name = @event.Name;
-        Kind = @event.Kind;
-        Status = ServiceOptionStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceOptionUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Kind = @event.Kind;
-        Version++;
-    }
-
-    private void Apply(ServiceOptionActivatedEvent @event)
-    {
-        Status = ServiceOptionStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceOptionArchivedEvent @event)
-    {
-        Status = ServiceOptionStatus.Archived;
-        Version++;
+        RaiseDomainEvent(new ServiceOptionArchivedEvent(Id));
     }
 
     private void EnsureMutable()
@@ -103,11 +58,32 @@ public sealed class ServiceOptionAggregate
             throw ServiceOptionErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceOptionCreatedEvent e:
+                Id = e.ServiceOptionId;
+                ServiceDefinition = e.ServiceDefinition;
+                Code = e.Code;
+                Name = e.Name;
+                Kind = e.Kind;
+                Status = ServiceOptionStatus.Draft;
+                break;
+            case ServiceOptionUpdatedEvent e:
+                Name = e.Name;
+                Kind = e.Kind;
+                break;
+            case ServiceOptionActivatedEvent:
+                Status = ServiceOptionStatus.Active;
+                break;
+            case ServiceOptionArchivedEvent:
+                Status = ServiceOptionStatus.Archived;
+                break;
+        }
+    }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceOptionErrors.MissingId();

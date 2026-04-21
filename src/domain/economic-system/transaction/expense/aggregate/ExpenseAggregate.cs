@@ -1,3 +1,4 @@
+using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.EconomicSystem.Transaction.Expense;
@@ -13,7 +14,7 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Expense;
 public sealed class ExpenseAggregate : AggregateRoot
 {
     public ExpenseId ExpenseId { get; private set; }
-    public decimal Amount { get; private set; }
+    public Amount Amount { get; private set; }
     public ExpenseMetadata Metadata { get; private set; } = ExpenseMetadata.Of("USD");
     public ExpenseCategory Category { get; private set; }
     public ExpenseSourceReference SourceReference { get; private set; }
@@ -23,12 +24,12 @@ public sealed class ExpenseAggregate : AggregateRoot
 
     public static ExpenseAggregate Create(
         ExpenseId expenseId,
-        decimal amount,
+        Amount amount,
         ExpenseMetadata metadata,
         ExpenseCategory category,
         ExpenseSourceReference sourceReference)
     {
-        if (amount <= 0m)
+        if (amount.Value <= 0m)
             throw ExpenseErrors.InvalidAmount();
         if (metadata is null)
             throw new ArgumentNullException(nameof(metadata));
@@ -39,13 +40,22 @@ public sealed class ExpenseAggregate : AggregateRoot
 
         aggregate.RaiseDomainEvent(new ExpenseCreatedEvent(
             expenseId.Value.ToString(),
-            amount,
+            amount.Value,
             metadata.Currency,
             category.Value,
             sourceReference.Value));
 
         return aggregate;
     }
+
+    // D-VO-TYPING-01 dual-path: legacy decimal overload normalizes to typed VO.
+    public static ExpenseAggregate Create(
+        ExpenseId expenseId,
+        decimal amount,
+        ExpenseMetadata metadata,
+        ExpenseCategory category,
+        ExpenseSourceReference sourceReference)
+        => Create(expenseId, new Amount(amount), metadata, category, sourceReference);
 
     public void Record()
     {
@@ -58,7 +68,7 @@ public sealed class ExpenseAggregate : AggregateRoot
 
         RaiseDomainEvent(new ExpenseRecordedEvent(
             ExpenseId.Value.ToString(),
-            Amount,
+            Amount.Value,
             Metadata.Currency));
     }
 
@@ -79,7 +89,7 @@ public sealed class ExpenseAggregate : AggregateRoot
         {
             case ExpenseCreatedEvent e:
                 ExpenseId = ExpenseId.From(Guid.Parse(e.ExpenseId));
-                Amount = e.Amount;
+                Amount = new Amount(e.Amount);
                 Metadata = ExpenseMetadata.Of(e.Currency);
                 Category = ExpenseCategory.From(e.Category);
                 SourceReference = ExpenseSourceReference.From(e.SourceReference);
@@ -98,7 +108,7 @@ public sealed class ExpenseAggregate : AggregateRoot
 
     protected override void EnsureInvariants()
     {
-        if (Amount < 0m)
+        if (Amount.Value < 0m)
             throw ExpenseErrors.NegativeAmount();
     }
 }

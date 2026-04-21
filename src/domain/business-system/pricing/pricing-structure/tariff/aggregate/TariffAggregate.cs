@@ -1,22 +1,17 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
-
 using Whycespace.Domain.BusinessSystem.Shared.Time;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.Tariff;
 
-public sealed class TariffAggregate
+public sealed class TariffAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public TariffId Id { get; private set; }
     public PriceBookRef PriceBook { get; private set; }
     public TariffCode Code { get; private set; }
     public TariffName Name { get; private set; }
     public TariffStatus Status { get; private set; }
     public TimeWindow? Effective { get; private set; }
-    public int Version { get; private set; }
-
-    private TariffAggregate() { }
 
     public static TariffAggregate Create(
         TariffId id,
@@ -25,12 +20,10 @@ public sealed class TariffAggregate
         TariffName name)
     {
         var aggregate = new TariffAggregate();
+        if (aggregate.Version >= 0)
+            throw TariffErrors.AlreadyInitialized();
 
-        var @event = new TariffCreatedEvent(id, priceBook, code, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new TariffCreatedEvent(id, priceBook, code, name));
         return aggregate;
     }
 
@@ -40,10 +33,7 @@ public sealed class TariffAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw TariffErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new TariffActivatedEvent(Id, effective);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new TariffActivatedEvent(Id, effective));
     }
 
     public void Deprecate()
@@ -52,10 +42,7 @@ public sealed class TariffAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw TariffErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new TariffDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new TariffDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -63,46 +50,34 @@ public sealed class TariffAggregate
         if (Status == TariffStatus.Archived)
             throw TariffErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new TariffArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new TariffArchivedEvent(Id));
     }
 
-    private void Apply(TariffCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.TariffId;
-        PriceBook = @event.PriceBook;
-        Code = @event.Code;
-        Name = @event.Name;
-        Status = TariffStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case TariffCreatedEvent e:
+                Id = e.TariffId;
+                PriceBook = e.PriceBook;
+                Code = e.Code;
+                Name = e.Name;
+                Status = TariffStatus.Draft;
+                break;
+            case TariffActivatedEvent e:
+                Effective = e.Effective;
+                Status = TariffStatus.Active;
+                break;
+            case TariffDeprecatedEvent:
+                Status = TariffStatus.Deprecated;
+                break;
+            case TariffArchivedEvent:
+                Status = TariffStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(TariffActivatedEvent @event)
-    {
-        Effective = @event.Effective;
-        Status = TariffStatus.Active;
-        Version++;
-    }
-
-    private void Apply(TariffDeprecatedEvent @event)
-    {
-        Status = TariffStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(TariffArchivedEvent @event)
-    {
-        Status = TariffStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw TariffErrors.MissingId();

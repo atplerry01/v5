@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.Tariff;
 
 public readonly record struct TariffId
@@ -6,9 +8,7 @@ public readonly record struct TariffId
 
     public TariffId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("TariffId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "TariffId cannot be empty.");
         Value = value;
     }
 }

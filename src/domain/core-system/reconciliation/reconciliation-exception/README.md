@@ -24,10 +24,6 @@ Defines the foundational structure for reconciliation exceptions — discrepanci
 
   * Manages the lifecycle and state of a reconciliation exception instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * ReconciliationExceptionId — Unique identifier for a reconciliation exception instance
@@ -35,16 +31,10 @@ Defines the foundational structure for reconciliation exceptions — discrepanci
 ## Domain Events
 
 * ReconciliationExceptionCreatedEvent — Raised when a new reconciliation exception is created
-* ReconciliationExceptionUpdatedEvent — Raised when reconciliation exception metadata is updated
-* ReconciliationExceptionStateChangedEvent — Raised when reconciliation exception lifecycle state transitions
 
 ## Specifications
 
 * ReconciliationExceptionSpecification — Validates reconciliation exception structure and completeness
-
-## Domain Services
-
-* ReconciliationExceptionService — Domain operations for reconciliation exception management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for reconciliation exceptions — discrepanci
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

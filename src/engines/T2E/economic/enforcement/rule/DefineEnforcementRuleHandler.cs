@@ -1,4 +1,5 @@
 using Whycespace.Domain.EconomicSystem.Enforcement.Rule;
+using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Rule;
 using Whycespace.Shared.Contracts.Engine;
@@ -18,14 +19,18 @@ public sealed class DefineEnforcementRuleHandler : IEngine
         if (!Enum.TryParse<RuleSeverity>(cmd.Severity, ignoreCase: true, out var severity))
             throw new InvalidOperationException($"Unknown rule severity: '{cmd.Severity}'.");
 
+        if (!ContentId.TryParse(cmd.Description, out var descriptionContentId))
+            throw new InvalidOperationException(
+                "DefineEnforcementRuleCommand.Description must be a non-empty GUID identifying the description content aggregate (ContentId).");
+
         var aggregate = EnforcementRuleAggregate.Define(
             new RuleId(cmd.RuleId),
             new RuleCode(cmd.RuleCode),
-            cmd.RuleName,
+            new RuleName(cmd.RuleName),
             new RuleCategory(cmd.RuleCategory),
             scope,
             severity,
-            cmd.Description,
+            new DocumentRef(descriptionContentId),
             new Timestamp(cmd.CreatedAt));
 
         context.EmitEvents(aggregate.DomainEvents);

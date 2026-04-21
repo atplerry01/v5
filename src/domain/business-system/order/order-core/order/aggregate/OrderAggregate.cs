@@ -1,106 +1,77 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Order;
 
-public sealed class OrderAggregate
+public sealed class OrderAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public OrderId Id { get; private set; }
     public OrderSourceReference SourceReference { get; private set; }
-    public string OrderDescription { get; private set; } = null!;
+    public OrderDescription Description { get; private set; }
     public OrderStatus Status { get; private set; }
-    public int Version { get; private set; }
 
-    private OrderAggregate() { }
-
-    public static OrderAggregate Create(OrderId id, OrderSourceReference sourceReference, string orderDescription)
+    public static OrderAggregate Create(OrderId id, OrderSourceReference sourceReference, OrderDescription description)
     {
-        if (string.IsNullOrWhiteSpace(orderDescription))
-            throw new ArgumentException("Order description must not be empty.", nameof(orderDescription));
+        if (description == default)
+            throw OrderErrors.MissingDescription();
 
         var aggregate = new OrderAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw OrderErrors.AlreadyInitialized();
 
-        var @event = new OrderCreatedEvent(id, sourceReference, orderDescription);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new OrderCreatedEvent(id, sourceReference, description));
         return aggregate;
     }
 
     public void Confirm()
     {
-        ValidateBeforeChange();
-
         var specification = new CanConfirmOrderSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw OrderErrors.InvalidStateTransition(Status, nameof(Confirm));
 
-        var @event = new OrderConfirmedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new OrderConfirmedEvent(Id));
     }
 
     public void Complete()
     {
-        ValidateBeforeChange();
-
         var specification = new CanCompleteOrderSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw OrderErrors.InvalidStateTransition(Status, nameof(Complete));
 
-        var @event = new OrderCompletedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new OrderCompletedEvent(Id));
     }
 
     public void Cancel(DateTimeOffset cancelledAt)
     {
-        ValidateBeforeChange();
-
         var specification = new CanCancelOrderSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw OrderErrors.InvalidStateTransition(Status, nameof(Cancel));
 
-        var @event = new OrderCancelledEvent(Id, cancelledAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new OrderCancelledEvent(Id, cancelledAt));
     }
 
-    private void Apply(OrderCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.OrderId;
-        SourceReference = @event.SourceReference;
-        OrderDescription = @event.OrderDescription;
-        Status = OrderStatus.Created;
-        Version++;
+        switch (domainEvent)
+        {
+            case OrderCreatedEvent e:
+                Id = e.OrderId;
+                SourceReference = e.SourceReference;
+                Description = e.Description;
+                Status = OrderStatus.Created;
+                break;
+            case OrderConfirmedEvent:
+                Status = OrderStatus.Confirmed;
+                break;
+            case OrderCompletedEvent:
+                Status = OrderStatus.Completed;
+                break;
+            case OrderCancelledEvent:
+                Status = OrderStatus.Cancelled;
+                break;
+        }
     }
 
-    private void Apply(OrderConfirmedEvent @event)
-    {
-        Status = OrderStatus.Confirmed;
-        Version++;
-    }
-
-    private void Apply(OrderCompletedEvent @event)
-    {
-        Status = OrderStatus.Completed;
-        Version++;
-    }
-
-    private void Apply(OrderCancelledEvent @event)
-    {
-        Status = OrderStatus.Cancelled;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw OrderErrors.MissingId();
@@ -108,12 +79,10 @@ public sealed class OrderAggregate
         if (SourceReference == default)
             throw OrderErrors.MissingSourceReference();
 
+        if (Description == default)
+            throw OrderErrors.MissingDescription();
+
         if (!Enum.IsDefined(Status))
             throw OrderErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

@@ -22,11 +22,7 @@ Defines the foundational structure for system-level state — the overall health
 
 * SystemStateAggregate
 
-  * Manages the lifecycle and integrity of a single system state instance
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for system-level state — the overall health
 ## Domain Events
 
 * SystemStateCreatedEvent — Raised when a new system state is created
-* SystemStateUpdatedEvent — Raised when system state metadata is updated
-* SystemStateStateChangedEvent — Raised when system state lifecycle state transitions
 
 ## Specifications
 
-* SystemStateSpecification — Validates system state structure and completeness
+* SystemStateSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* SystemStateService — Domain operations for system state management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for system-level state — the overall health
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Catalog;
 
 public readonly record struct CatalogId
@@ -6,9 +8,7 @@ public readonly record struct CatalogId
 
     public CatalogId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("CatalogId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "CatalogId cannot be empty.");
         Value = value;
     }
 }

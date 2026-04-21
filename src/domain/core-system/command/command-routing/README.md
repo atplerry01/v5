@@ -30,10 +30,6 @@ This domain defines command routing structure only and contains no dispatch or e
   * Transitions: Activate(), Disable()
   * Lifecycle: Defined -> Active -> Disabled (TERMINAL)
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * CommandRoutingId — Validated Guid identifier for a command-routing instance
@@ -51,9 +47,10 @@ This domain defines command routing structure only and contains no dispatch or e
 * CanActivateSpecification — status == Defined
 * CanDisableSpecification — status == Active
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* CommandRoutingService — Empty (no domain operations required)
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

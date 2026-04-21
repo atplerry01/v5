@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Performance;
 
-public sealed class PerformanceAggregate
+public sealed class PerformanceAggregate : AggregateRoot
 {
-    public static PerformanceAggregate Create()
+    public PerformanceId Id { get; private set; }
+    public PerformanceDescriptor Descriptor { get; private set; }
+
+    public static PerformanceAggregate Create(PerformanceId id, PerformanceDescriptor descriptor)
     {
         var aggregate = new PerformanceAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw PerformanceErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new PerformanceCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case PerformanceCreatedEvent e:
+                Id = e.PerformanceId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw PerformanceErrors.MissingId();
+
+        if (Descriptor == default)
+            throw PerformanceErrors.MissingDescriptor();
     }
 }

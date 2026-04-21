@@ -68,7 +68,7 @@ public sealed class KanbanSchemaModule : ISchemaModule
             var evt = (DomainEvents.KanbanCardCreatedEvent)e;
             return new KanbanCardCreatedEventSchema(
                 evt.AggregateId.Value, evt.CardId.Value, evt.ListId.Value,
-                evt.Title, evt.Description, evt.Position.Value, evt.Priority?.ToString());
+                evt.Title.Value, evt.Description.Value.Value.ToString(), evt.Position.Value, evt.Priority?.ToString());
         });
 
         sink.RegisterPayloadMapper("KanbanCardMovedEvent", e =>
@@ -95,7 +95,7 @@ public sealed class KanbanSchemaModule : ISchemaModule
         {
             var evt = (DomainEvents.KanbanCardDetailRevisedEvent)e;
             return new KanbanCardUpdatedEventSchema(
-                evt.AggregateId.Value, evt.CardId.Value, evt.Title, evt.Description);
+                evt.AggregateId.Value, evt.CardId.Value, evt.Title.Value, evt.Description.Value.Value.ToString());
         });
     }
 }

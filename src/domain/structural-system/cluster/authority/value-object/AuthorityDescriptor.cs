@@ -1,17 +1,17 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Authority;
 
 public readonly record struct AuthorityDescriptor
 {
-    public Guid ClusterReference { get; }
+    public ClusterRef ClusterReference { get; }
     public string AuthorityName { get; }
 
-    public AuthorityDescriptor(Guid clusterReference, string authorityName)
+    public AuthorityDescriptor(ClusterRef clusterReference, string authorityName)
     {
-        if (clusterReference == Guid.Empty)
-            throw AuthorityErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(authorityName))
-            throw AuthorityErrors.MissingDescriptor();
+        Guard.Against(clusterReference == default, "AuthorityDescriptor cluster reference cannot be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(authorityName), "AuthorityDescriptor name must not be null or whitespace.");
 
         ClusterReference = clusterReference;
         AuthorityName = authorityName;

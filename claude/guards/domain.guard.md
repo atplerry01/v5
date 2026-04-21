@@ -100,6 +100,7 @@ These MUST NOT exist under `src/domain/`:
 
 - **D-PURITY-01**: Files under `src/domain/**` MUST NOT reference `Microsoft.Extensions.DependencyInjection.*` or any DI container abstraction. Domain assembly references limited to BCL + shared kernel ($7 layer purity).
 - **D-DET-01**: All domain value-object ID factories are forbidden from calling `Guid.NewGuid()`, `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.UtcNow`, or `Random`. ID generation goes through injected `IIdGenerator`; timestamps through `IClock`. Applies to every `*Id` / value object under `src/domain/**`.
+  - **Extension (2026-04-20)**: D-DET-01 additionally forbids **temporal and async primitives** across the entire `src/domain/**` layer (aggregates, entities, value objects, services, specifications, events, errors): `Task.Delay`, `Thread.Sleep`, `Timer`, `CancellationToken`, `async Task`, and `await`. Domain code is synchronous and time-agnostic by construction — temporal orchestration, retry scheduling, and cooperative cancellation belong in the engines/runtime layer. ArchTest `StructuralEnforcementArchTests.Domain_layer_does_not_contain_temporal_or_async_primitives` pins this with comment-stripping (forbidden tokens appearing only inside `///` / `//` / `/* */` comments are tolerated as documentation references). Severity: S1 (block merge).
 - **D-NO-SYSCLOCK**: No `SystemClock` or clock implementations in `src/domain/**` (delete on sight — dead code).
 
 ---
@@ -1598,3 +1599,466 @@ References:
 - `src/domain/integration-system/outbound-effect/event/**`
 - `claude/project-topics/v2b/closure/20260420-100946-r3-b-design.md` §3.2, §17.1 D-R3B-1
 - `claude/project-topics/v2b/closure/20260420-103811-r3-b-1-design.md` §3.12
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-20) — Phase 2.5 Structural Central-Spine
+
+Rules below were captured in `claude/new-rules/` during Phase 2.5 (P1–P3) of the Structural-System Central-Spine Enforcement pass and promoted into this guard on 2026-04-20. They lock the structural-system-as-central-spine doctrine: canonical refs, identity dedupe, lifecycle vocabulary, attachment contracts, parent-validity ports, reference vocabularies, topology definition/instance split, economic SpvRef access discipline, and humancapital structural binding.
+
+**Severity legend (2026-04-20 scheme, ratified during P4):**
+- **S0** = correctness-critical (compile / replay / data-integrity risk) — block merge, fail CI, immediate remediation.
+- **S1** = structural integrity (must not drift) — block merge, fail CI.
+- **S2** = advisory / audit — warn; captured for sprint cleanup.
+
+Source captures:
+- `claude/new-rules/20260420-225416-guards.md` (P1)
+- `claude/new-rules/20260420-232242-guards.md` (P2)
+- `claude/new-rules/20260420-233744-guards.md` (P3)
+
+Originating prompt: `claude/project-prompts/20260420-215431-structural-structural-system-central-spine-enforcement.md`.
+
+---
+
+### [S0] DG-STRUCT-CONTRACTS-IMPORT-01 — Non-structural systems import only structural contracts
+
+Definition:
+Files under `src/domain/business-system/**`, `src/domain/content-system/**`, `src/domain/economic-system/**`, `src/domain/operational-system/**`, `src/domain/decision-system/**`, and any other `*-system` sibling of `structural-system` (excluding `structural-system` itself and `shared-kernel`) MUST NOT import structural-system core namespaces (`Whycespace.Domain.StructuralSystem.Cluster.*`, `Whycespace.Domain.StructuralSystem.Structure.*`, `Whycespace.Domain.StructuralSystem.Humancapital.*`, or any deeper sub-namespace of structural core). Cross-system references to structural entities MUST flow through `using Whycespace.Domain.StructuralSystem.Contracts.References;` and use the canonical `*Ref` types only.
+
+Enforcement:
+Grep `src/domain/{business-system,content-system,economic-system,operational-system,decision-system}/**/*.cs` for `using Whycespace\.Domain\.StructuralSystem\.\(Cluster\|Structure\|Humancapital\)` — any match = S0 fail.
+
+Severity:
+S0
+
+References:
+- `src/domain/structural-system/contracts/references/` (canonical surface)
+- Source: `claude/new-rules/20260420-225416-guards.md`
+
+---
+
+### [S0] DG-STRUCT-ID-DEDUPE-01 — Structural identity records live only in structural-system
+
+Definition:
+Identity value-objects named `Cluster*Id`, `AuthorityId`, `ProviderId`, `AdministrationId`, `Subcluster*Id`, `SpvId` — where the semantics describe a STRUCTURAL placement node — MUST be declared only under `src/domain/structural-system/cluster/**`. Where a non-structural system legitimately has its own identity with distinct semantics, the type MUST carry a qualifying prefix (e.g., `GovernanceAuthorityId`, `BusinessProviderId`) AND live under the corresponding non-structural-system folder. Duplicate declarations of structural identities in `shared-kernel/**` or any non-structural `*-system/**` are forbidden.
+
+Enforcement:
+Repo-wide grep `(readonly record struct|record|class) (Cluster[A-Za-z]*Id|AuthorityId|ProviderId|AdministrationId|Subcluster[A-Za-z]*Id|SpvId)\b`. Any match outside `src/domain/structural-system/cluster/**` that does NOT carry a non-structural qualifying prefix = S0 fail.
+
+Severity:
+S0
+
+References:
+- P2 dedupe work: `shared-kernel/primitive/identity/ClusterId.cs` (deleted), `business-system/provider/provider-core/provider/` (deleted shadow aggregate), `decision-system/.../AuthorityId.cs` → `GovernanceAuthorityId.cs`
+- Source: `claude/new-rules/20260420-232242-guards.md`
+
+---
+
+### [S1] DG-STRUCT-REF-CANONICAL-01 — Six canonical structural refs are locked
+
+Definition:
+The canonical structural references are exactly six, defined only at `src/domain/structural-system/contracts/references/`:
+1. `ClusterRef`
+2. `ClusterAuthorityRef`
+3. `ClusterProviderRef`
+4. `ClusterAdministrationRef`
+5. `SubClusterRef`
+6. `SpvRef`
+
+No other location may declare a type with these names. No `*Ref` type with structural semantics may exist outside this directory. Each ref is a `readonly record struct` wrapping `Guid` with non-empty validation in its ctor.
+
+Enforcement:
+Repo-wide grep for `readonly record struct (ClusterRef|ClusterAuthorityRef|ClusterProviderRef|ClusterAdministrationRef|SubClusterRef|SpvRef)` outside `src/domain/structural-system/contracts/references/` = S1 fail.
+
+Severity:
+S1
+
+References:
+- P2 consolidation eliminated 5 `ProviderRef` duplicates in `business-system/provider/**` and `business-system/shared/reference/`
+- Source: `claude/new-rules/20260420-225416-guards.md`
+
+---
+
+### [S1] DG-STRUCT-CONTRACTS-PURITY-01 — contracts/ layer stays contract-only
+
+Definition:
+`src/domain/structural-system/contracts/**` MUST contain only value-only declarations: `readonly record struct`, `record`, `enum`, and interface declarations for cross-system contracts. Aggregates, events, specifications, services, and error-factory classes are forbidden in this surface.
+
+Enforcement:
+Grep `src/domain/structural-system/contracts/**/*.cs` for `(public\s+)?(sealed\s+)?(class|abstract class)` that is NOT an `interface` declaration — any match = S1 fail.
+
+Severity:
+S1
+
+References:
+- `src/domain/structural-system/contracts/references/IStructuralParentLookup.cs` (the sole interface member, port definition)
+- Source: `claude/new-rules/20260420-225416-guards.md`
+
+---
+
+### [S1] DG-STRUCT-ATTACH-EFFECTIVE-01 — Attachment events carry canonical ref and effective date
+
+Definition:
+Every cluster-child aggregate factory that establishes a new structural node (Authority.Establish, Provider.Register, Administration.Establish, Subcluster.Define, Spv.Create) MUST provide an overload accepting `DateTimeOffset effectiveAt` that emits an `*AttachedEvent` carrying the canonical `ClusterRef` (or `SubClusterRef` for SPV in the future SPV-under-SubCluster doctrine) plus the effective date. `*AttachedEvent` types MUST use only canonical structural refs from `Whycespace.Domain.StructuralSystem.Contracts.References`. Raw `Guid` parent references in attached events are forbidden.
+
+Enforcement:
+For each aggregate factory in `src/domain/structural-system/cluster/**`, verify an overload exists with `DateTimeOffset` in its signature. Grep `*AttachedEvent` record declarations for `Guid ` in parameter position — any match = S1 fail.
+
+Severity:
+S1
+
+References:
+- Attached events: `AuthorityAttachedEvent`, `ProviderAttachedEvent`, `AdministrationAttachedEvent`, `SubclusterAttachedEvent`, `SpvAttachedEvent`
+- Source: `claude/new-rules/20260420-232242-guards.md`
+
+---
+
+### [S1] DG-STRUCT-PARENT-LOOKUP-01 — Parent-validity specs depend on runtime-provided lookup
+
+Definition:
+`CanAttachUnderParentSpecification` and any future parent-validity spec (CanRebind, CanCascadeRetire, etc.) MUST accept an `IStructuralParentLookup` (from `Whycespace.Domain.StructuralSystem.Contracts.References`) via constructor. The lookup interface MUST remain in contracts, NOT promoted into core. Runtime MUST register at least one concrete `IStructuralParentLookup` implementation and compose it at attachment-command dispatch. Humancapital placement factories (`ParticipantAggregate.Place`, `AssignmentAggregate.Assign`) MUST take the lookup and reject non-Active parents.
+
+Enforcement:
+- Grep `src/domain/structural-system/cluster/**/specification/*.cs` — each `CanAttach*` / `CanRebind*` class MUST have a constructor taking `IStructuralParentLookup`.
+- Grep `src/domain/structural-system/contracts/references/IStructuralParentLookup.cs` — MUST exist.
+- Composition-root scan: at least one `IStructuralParentLookup` registration. Missing = S1 fail.
+
+Severity:
+S1
+
+References:
+- `src/domain/structural-system/contracts/references/IStructuralParentLookup.cs`
+- `src/domain/structural-system/contracts/references/StructuralParentState.cs`
+- Source: `claude/new-rules/20260420-232242-guards.md`
+
+---
+
+### [S1] DG-STRUCT-VOCAB-LOCATION-01 — Reference vocabularies live only in structure/reference-vocabularies/
+
+Definition:
+Every enum or code vocabulary that classifies a structural node (`SpvType`, `AuthorityRole`, `ProviderCategory`, and any future `*Type` / `*Role` / `*Category` / `*Class` / `*Kind` enum with structural semantics) MUST be declared only under `src/domain/structural-system/structure/reference-vocabularies/`. Per-aggregate `value-object/` folders (e.g., `cluster/spv/value-object/`, `cluster/authority/value-object/`) MUST NOT contain structural classification vocabularies.
+
+**Extended scope (P4 2026-04-20):**
+- **No duplicate enums outside reference-vocabularies/** — an enum whose name + value set matches a type in `structure/reference-vocabularies/` MUST NOT be redeclared anywhere else under `src/domain/**`.
+- **No string-based type codes where vocab exists** — wherever a canonical vocabulary enum exists (e.g., `SpvType`), consumer code MUST reference the enum, not a raw `string` field carrying the same classification concept. Introducing `public string SpvType` / `public string AuthorityRole` / etc. alongside an existing vocab enum is S1 drift.
+
+Exception whitelist: `*Status` enums (state-machine concern, stays with the aggregate).
+
+Enforcement:
+- Grep `public enum` declarations in `src/domain/structural-system/cluster/**/value-object/` whose name matches `.*(Type|Role|Category|Class|Kind)$` = S1 fail.
+- For each vocab under `structure/reference-vocabularies/*.cs`: repo-wide grep for identical-name enum declarations elsewhere = S1 fail.
+- Grep `src/domain/**/*.cs` for `public string (SpvType|AuthorityRole|ProviderCategory)` or equivalent classification-named string fields where the vocab enum exists = S1 fail.
+
+Severity:
+S1
+
+References:
+- `src/domain/structural-system/structure/reference-vocabularies/SpvType.cs` (moved from `cluster/spv/value-object/` in P3)
+- `AuthorityRole.cs`, `ProviderCategory.cs` (created P3)
+- Source: `claude/new-rules/20260420-233744-guards.md`
+
+---
+
+### [S1] DG-STRUCT-DEFN-VS-INSTANCE-01 — Definition surfaces under structure/, live instances under cluster/
+
+Definition:
+Definition-model aggregates (rules, templates, allowed-shapes, reference models) MUST live under `src/domain/structural-system/structure/<topic>-definition/`. Live-instance aggregates (bound to a specific cluster at runtime) MUST live under `src/domain/structural-system/cluster/<topic>/`. An aggregate whose lifecycle is purely definitional (Draft → Active → Retired, no parent cluster-reference, no runtime ops) inside `cluster/` is drift — promote or relabel.
+
+**Extended scope (P4 2026-04-20):**
+- **No new development under `cluster/topology/`.** The legacy `TopologyAggregate` / `TopologyDefinedEvent` / `TopologyValidatedEvent` / `TopologyLockedEvent` surface is retained for replay and read-only / compatibility usage only. New topology definition work MUST land in `structure/topology-definition/` (canonical surface created P3). Any new `.cs` file added under `cluster/topology/**` after 2026-04-20 = S1 fail unless it documents a replay/compat rationale and is approved in a paired new-rules capture.
+
+Enforcement:
+- Grep `src/domain/structural-system/cluster/**/value-object/*Descriptor.cs` for descriptors that lack a `ClusterRef` / `ClusterReference` field AND whose owning aggregate has a purely definitional lifecycle (Draft/Defined → Validated/Active → Locked/Retired with no runtime ops) = S1 flag for relocation.
+- Git-history scan: any `.cs` added under `cluster/topology/**` with commit date > 2026-04-20 that does not reference a paired replay/compat rationale = S1 fail.
+
+Severity:
+S1 (upgraded from S2 at P4 per 2026-04-20 user directive)
+
+References:
+- `src/domain/structural-system/structure/topology-definition/` (canonical definition surface)
+- `src/domain/structural-system/cluster/topology/` (legacy / replay-only)
+- Source: `claude/new-rules/20260420-233744-guards.md`
+
+---
+
+### [S1] DG-HC-STRUCTURAL-BINDING-01 — Humancapital aggregates bind via canonical structural refs only
+
+Definition:
+Every aggregate under `src/domain/structural-system/humancapital/**` that represents workforce placement or role-in-structure (`assignment`, `participant`, and any future placement-bearing aggregate) MUST use canonical refs from `Whycespace.Domain.StructuralSystem.Contracts.References` (`ClusterRef`, `ClusterAuthorityRef`, `SubClusterRef`, `SpvRef`, `ClusterAdministrationRef`). Raw `Guid` parent fields, raw `string` parent fields, or locally-minted ref value-objects are forbidden in humancapital placement contexts. Additionally, humancapital placement factories (`ParticipantAggregate.Place`, `AssignmentAggregate.Assign`) MUST: (a) require a non-null `IStructuralParentLookup`, (b) reject non-Active parent state, (c) reject `default` / `MinValue` / `MaxValue` effective dates.
+
+Enforcement:
+- Grep `src/domain/structural-system/humancapital/**/*.cs` for `Guid ` or `string ` fields whose name matches `(Cluster|Authority|Provider|Subcluster|Spv|Administration)(Id|Reference|Ref)` = S1 fail.
+- For each humancapital placement factory: verify it accepts `IStructuralParentLookup` and performs the three checks above. Missing = S1 fail.
+
+Severity:
+S1
+
+References:
+- `ParticipantAggregate.Place`, `AssignmentAggregate.Assign` (bound via canonical refs; parent-active + date-sanity invariants enforced at P4)
+- Source: `claude/new-rules/20260420-233744-guards.md`
+
+---
+
+### [S2] DG-STRUCT-LIFECYCLE-CANONICAL-01 — Canonical lifecycle vocabulary for cluster children
+
+Definition:
+Every aggregate under `src/domain/structural-system/cluster/` that represents a cluster child (Authority, Provider, Administration, Subcluster, SPV, and any future child) MUST:
+- include `Suspended` and `Retired` members in its status enum;
+- emit a `*ReactivatedEvent` for the Suspended→Active transition.
+
+The enum values `Revoked`, `Archived`, `Closed` remain permitted **for replay compatibility only** — new state transitions introduced after 2026-04-20 MUST use the canonical terminology `{Established|Defined|Created|Registered, Active, Suspended, Retired}`.
+
+Enforcement:
+- Grep `src/domain/structural-system/cluster/**/value-object/*Status.cs` — each status enum MUST contain `Suspended` and `Retired` members.
+- Grep new event-type declarations (commit-date > 2026-04-20) matching `.*ArchivedEvent|.*RevokedEvent|.*ClosedEvent` outside the existing pre-P4 set = S2 fail.
+
+Severity:
+S2 (advisory — existing legacy terminal states are preserved; audit tracks drift of new work).
+
+References:
+- Source: `claude/new-rules/20260420-232242-guards.md`
+
+---
+
+### [S2] DG-ECON-SPV-REF-ACCESS-01 — Economic surfaces expose typed SpvRef where string SpvId is carried
+
+Definition:
+Every aggregate, event, or projection record in `src/domain/economic-system/**` that carries an SPV identifier as a raw string field MUST expose a typed `SpvRef?` accessor (computed from the string field, null-safe for malformed legacy data) imported from `Whycespace.Domain.StructuralSystem.Contracts.References`. The raw string field is preserved for wire/replay compatibility; the typed accessor is the canonical read surface and MUST be marked `[System.Text.Json.Serialization.JsonIgnore]` so it is never serialized to the wire.
+
+New factory overloads MUST accept `SpvRef` directly and delegate internally to the string-taking overload.
+
+Enforcement:
+- For each `.cs` under `src/domain/economic-system/**` with `public string SpvId` or `public string TargetId` (SPV target) as a property, verify a sibling `public SpvRef?` computed property exists carrying `[JsonIgnore]`. Absent or un-`JsonIgnore`d = S2 fail.
+
+Severity:
+S2
+
+References:
+- `DistributionAggregate.Spv`, `RevenueAggregate.Spv`, `CapitalAllocatedToSpvEvent.TargetSpv` (all `[JsonIgnore]`)
+- Source: `claude/new-rules/20260420-233744-guards.md`
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-20) — D-ID-REF-01 Inter-aggregate Reference Typing
+
+Rules below were captured in `claude/new-rules/20260420-150000-domain.md` during the D-ID-REF-01 Migration pass and promoted into this guard on 2026-04-20. They lock the structural-closure doctrine for aggregate inter-relationship references: every FK on an aggregate root is a typed value-object, not a raw `Guid`. Events keep primitive payloads unchanged — the typing lives at the aggregate boundary only, constructed on `Apply()`.
+
+Originating prompt: `claude/project-prompts/20260420-150000-runtime-structural-system-enforcement.md`.
+
+---
+
+### [S1] D-ID-REF-01 — Inter-aggregate references MUST be typed value objects
+
+Definition:
+Every inter-aggregate reference property on an aggregate root (or entity) MUST be a typed value object — either the owning aggregate's primary `*Id` VO or a canonical `*Ref` VO. Raw `System.Guid` (or `string`) as an inter-aggregate reference field on an aggregate root is FORBIDDEN. Rationale: primitive references silently defeat the structural-parent discipline enforced elsewhere (D69/D74, DG-ECON-SPV-REF-ACCESS-01); a zero-Guid relationship FK is structurally invalid yet passes compile.
+
+Factory methods on aggregates whose reference parameters have been typed MUST provide a dual-path contract:
+- A primary factory signature accepting the typed VO.
+- A legacy overload accepting `Guid` (or `string`) that normalises into the typed VO and delegates to the primary path.
+
+Apply methods are the event → domain normalisation boundary: events carry primitive payloads; `Apply()` wraps into the typed VO when restoring aggregate state. Event record schemas are unchanged — the typing lives at the aggregate boundary only.
+
+Enforcement:
+Grep `src/domain/**/*Aggregate.cs` for `public\s+Guid\s+\w+Id\s*\{\s*get` — zero hits required. Exceptions: primitive `Guid` parameters on methods representing transient inputs (not persisted state), and the `AggregateIdentity` rehydration seam on `AggregateRoot`.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- `src/domain/economic-system/capital/account/value-object/{OwnerId,AccountId}.cs` (canonical reuse targets)
+- `src/domain/economic-system/ledger/obligation/value-object/CounterpartyRef.cs` (sole new ref introduced)
+- Source: `claude/new-rules/20260420-150000-domain.md`
+
+---
+
+### [S2] D-INV-NON-EMPTY-01 — Aggregate `EnsureInvariants()` MUST enforce identity non-emptiness
+
+Definition:
+Every `AggregateRoot` subclass MUST have a non-empty `EnsureInvariants()` body that, at minimum, asserts its primary identity is non-empty post-Apply. A body containing only a comment is treated as absent. Rationale: `AggregateRoot.RaiseDomainEvent` already runs `EnsureInvariants()` after `Apply()`; an empty body silently allows invariant drift on newly-raised or replayed events.
+
+Enforcement:
+Static scan under `src/domain/**/*Aggregate.cs` — any `EnsureInvariants()` override whose body is empty or comment-only is a violation. ArchTest `StructuralEnforcementArchTests.EnsureInvariants_bodies_are_non_empty_on_every_aggregate_root` enforces.
+
+Severity:
+S2 (warn; must resolve within sprint).
+
+References:
+- Remediated 2026-04-20 in `TodoAggregate`, `KanbanAggregate` (Operational sandbox)
+- Source: `claude/new-rules/20260420-150000-domain.md`
+
+---
+
+### [S1] D-VO-TYPING-ECON-01 — Economic-system aggregate roots MUST wrap decimal values in typed VOs
+
+Definition:
+Aggregate roots under `src/domain/economic-system/**` MUST NOT declare `public decimal <field> { get; }` properties. Monetary, rate, and quantity values carry invariants (non-negativity, strictly-positive rates, sentinel rejection) that only a typed value object can encode. Typed wrappers in the canonical kernel: `Amount` (`src/domain/shared-kernel/primitive/money/Amount.cs`), context-local VOs like `ExchangeRate` (`src/domain/economic-system/exchange/rate/value-object/ExchangeRate.cs`).
+
+Event payloads MAY continue to carry `decimal` for wire-schema compatibility; the aggregate wraps at `Apply()` and unwraps when emitting events via `.Value`. No event schema change is required by this rule.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.No_economic_aggregate_root_declares_a_raw_decimal_value_property` scans every `*Aggregate.cs` under `src/domain/economic-system/**` and fails on any match of `public\s+decimal\s+\w+\s*\{\s*get`.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Remediated 2026-04-20: `DistributionAggregate.TotalAmount` (→ `Amount`), `ExchangeRateAggregate.RateValue` (→ `ExchangeRate`), `ExpenseAggregate.Amount` (→ `Amount`).
+- Complements `D-VO-TYPING-01` (domain.audit.md line 64) and `D-ID-REF-01` (typed inter-aggregate references).
+- Source: Economic-System Audit + Enforcement pass (Path A, 2026-04-20).
+
+---
+
+### [S1] D-TXN-IMMUTABLE-01 — Transaction aggregate roots MUST NOT expose public setters
+
+Definition:
+Aggregate root classes under `src/domain/economic-system/transaction/**` MUST NOT declare any property with a public setter (`{ get; set; }`). Transactions are immutable once created — state mutation flows exclusively through event application via `RaiseDomainEvent` → `Apply()`. Every property must be `{ get; private set; }` (or an equivalent private-mutation form).
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.No_transaction_aggregate_root_declares_a_public_setter` scans every `*Aggregate.cs` under `src/domain/economic-system/transaction/**` and fails on any match of `\{\s*get;\s*set;\s*\}`.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Pins the existing pattern in `TransactionAggregate`, `InstructionAggregate`, `ChargeAggregate`, `SettlementAggregate`, `LimitAggregate`, `ExpenseAggregate`, `WalletAggregate`.
+- Source: Economic-System Audit + Enforcement pass (Path A, 2026-04-20).
+
+---
+
+### [S1] D-BALANCE-APPLY-ONLY-01 — Every economic aggregate root MUST override `Apply(object)` for event-sourced mutation
+
+Definition:
+Every `*Aggregate.cs` under `src/domain/economic-system/**` MUST declare `protected override void Apply(object domainEvent)`. Rationale: balance state is derived from the event stream via the aggregate's Apply reducer; an aggregate without an Apply override cannot guarantee event-sourced state derivation. This rule replaces the user's earlier "no balance stored outside projections" formulation — the canonical event-sourcing pattern keeps balance on aggregates as a cached replay of events, not as "shadow state."
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.Every_economic_aggregate_root_overrides_Apply_for_event_sourced_mutation` scans every `*Aggregate.cs` under `src/domain/economic-system/**` and fails on any file that does not contain `protected\s+override\s+void\s+Apply\s*\(\s*object\s+\w+\s*\)`.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Complements `AggregateRoot.RaiseDomainEvent` pipeline: `Apply(event) → EnsureInvariants() → _domainEvents.Add(event)`.
+- Complements existing runtime test `JournalAggregateTests.Post_DebitNotEqualCredit_Throws_UnbalancedInvariant` (tests/unit/economic-system/ledger/journal/) which pins the balanced-journal runtime invariant.
+- Source: Economic-System Audit + Enforcement pass (Path A, 2026-04-20).
+
+---
+
+### [S2] R-TREASURY-SINGLETON-01 — `TreasuryAggregate` is a platform-per-currency singleton without owner binding
+
+Definition:
+`TreasuryAggregate` (under `src/domain/economic-system/ledger/treasury/`) is architecturally a platform-per-currency singleton: there is exactly one treasury per currency, representing the system's treasury balance. Unlike `CapitalAccountAggregate` (which carries `OwnerId`) and `WalletAggregate` (`OwnerId` + `AccountId`), `TreasuryAggregate` intentionally carries no structural owner reference — the "owner" is the platform itself. `TreasuryCreatedEvent(TreasuryId, Currency, CreatedAt)` reflects this: the currency is the partitioning key.
+
+Adding `OwnerRef` to `TreasuryAggregate` would require either (a) a breaking change to `TreasuryCreatedEvent` (forbidden by the "No event schema changes" constraint from the enforcement-lock pass), or (b) an additive `TreasuryOwnerBoundEvent` with replay-compat semantics for legacy streams. Neither is warranted for a platform-singleton.
+
+Enforcement:
+No ArchTest at present — the rule is a documented architectural decision. If additional treasury semantics ever require an owner binding, the decision MUST be revisited via a new rule and a planned event-schema evolution (not a silent in-place edit).
+
+Severity:
+S2 (advisory; document intent, revisit only with explicit scope).
+
+References:
+- `TreasuryAggregate.cs` — TreasuryId + Currency + Balance only.
+- Contrast: `CapitalAccountAggregate` carries typed `OwnerId` (per D-ID-REF-01).
+- Source: Economic-System Audit + Enforcement pass (Path A, 2026-04-20).
+
+---
+
+### [S1] D-AGG-NO-CROSS-01 — Aggregates MUST NOT invoke methods on other aggregates
+
+Definition:
+Inside any `*Aggregate.cs` file under `src/domain/**`, the only aggregate type whose methods may be invoked is the aggregate's own declared type (self-reference is permitted for static-factory delegation, e.g. a compensation overload calling the primary `Create(...)`). Invocations of the form `OtherAggregate.<Method>(...)` from within an aggregate body are FORBIDDEN. Rationale: cross-aggregate coordination breaks aggregate consistency boundaries (DDD), couples aggregate lifetimes, and introduces ordering constraints the event-sourced replay cannot reproduce. Cross-aggregate orchestration is the concern of T1M workflow steps / sagas, which issue commands through `ISystemIntentDispatcher` rather than calling aggregates directly.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.No_aggregate_invokes_another_aggregates_method` scans every `*Aggregate.cs` under `src/domain/**`, extracts the file's public aggregate class name, and fails on any match of `(\w+Aggregate)\.\w+\s*\(` whose captured type name differs from the file's own class. Comment text is stripped before scanning.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Companion to `D-T1M-NO-DIRECT-MUTATION-01` (sagas may not short-circuit the rule by directly calling aggregates either).
+- Source: Operational-Orchestration Enforcement Lock (2026-04-20).
+
+---
+
+### [S1] D-DOM-NO-INFRA-01 — Domain layer MUST NOT reference infrastructure abstractions
+
+Definition:
+Files under `src/domain/**` MUST NOT reference `IRepository`, `IEventStore`, `DbContext`, or `IServiceProvider` (nor their implementations). The domain layer is a pure DDD core — it knows nothing about persistence, event-store implementation, database contexts, or dependency-injection containers. Persistence is exclusively the runtime layer's concern; DI composition lives in `src/platform/host/**`.
+
+Complements the pre-existing `D-PURITY-01` (no `Microsoft.Extensions.DependencyInjection.*`). Extended here with the four persistence / DI abstractions that had not been explicitly enumerated.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.Domain_layer_does_not_reference_infrastructure_abstractions` scans every `*.cs` under `src/domain/**` and fails on any match of `\b(IRepository|IEventStore|DbContext|IServiceProvider)\b`. Comment text is stripped before scanning.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Companion to `D-PURITY-01` (no DI container abstractions).
+- Source: Operational-Orchestration Enforcement Lock (2026-04-20).
+
+---
+
+### [S1] D-T1M-NO-DIRECT-MUTATION-01 — T1M workflow steps MUST NOT invoke aggregate methods directly
+
+Definition:
+Files under `src/engines/T1M/**/*Step.cs` MUST NOT contain invocations of the form `<AnyAggregate>.<Method>(...)`. T1M workflow steps are process-manager / saga units that coordinate multi-aggregate workflows by dispatching commands through `ISystemIntentDispatcher`. Direct aggregate method calls from a step would bypass the runtime pipeline (policy evaluation, chain anchoring, outbox publication, replay determinism).
+
+Rationale: this rule pairs with `D-AGG-NO-CROSS-01` — together they guarantee that cross-aggregate coordination only ever occurs via the canonical command-dispatch path, preserving both aggregate consistency boundaries and the event-sourced audit trail.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.No_T1M_workflow_step_invokes_aggregate_methods_directly` scans every `*Step.cs` under `src/engines/T1M/**` and fails on any match of `(\w+Aggregate)\.\w+\s*\(`. Comment text is stripped before scanning. The test passes trivially if the T1M directory is absent.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Canonical pattern: `ExecutePayoutStep.cs` — injects `ISystemIntentDispatcher`, dispatches `DebitSliceCommand` / `CreditSliceCommand`, never calls aggregate methods.
+- Companion to `D-AGG-NO-CROSS-01`.
+- Source: Operational-Orchestration Enforcement Lock (2026-04-20).
+
+---
+
+### [S2] D-DOM-SVC-STATELESS-01 — Domain services MUST be stateless
+
+Definition:
+Files under `src/domain/**/*Service.cs` MUST NOT declare mutable private instance fields. A mutable private instance field is any declaration of the form `private <type> _<name>[;|=]` without the `readonly`, `static`, or `const` modifier. Allow-list:
+- `private readonly <type> _field` — injected dependency or spec holder.
+- `private static readonly <type> _field` — shared immutable constant.
+- `private const <type> _field` — compile-time constant.
+- Specification / configuration holders: field types whose names end in `Specification`, `Options`, `Config`, or `Settings` are treated as immutable predicate / configuration holders per the rule's allow-list (pass even if not `readonly`).
+
+Rationale: domain services are DDD-style stateless invariant-bearing predicates or pure coordinators. Mutable state in a domain service is a strong drift signal — the state belongs either on an aggregate (write-side) or a projection (read-side), never cached inside a service.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.Domain_services_do_not_carry_mutable_instance_fields` scans every `*Service.cs` under `src/domain/**` and fails on any line matching `^\s*private\s+(?!(readonly|static|const|event|async|new|override|virtual|abstract)\b)[\w<>?,\[\]\.]+\s+_\w+\s*[;=]` unless the matched type name falls into the specification / config / options / settings allow-list. Comment text is stripped before scanning.
+
+Severity:
+S2 (warn; resolve within sprint).
+
+References:
+- Sampled clean: `LedgerService.cs` (empty stub), `AuditService.cs` (`private readonly AuditRecordSpecification _specification` — passes via readonly).
+- Source: Operational-Orchestration Enforcement Lock (2026-04-20).
+
+---
+
+### [S1] D-CONTENT-STR-EMBED-01 — Aggregate roots MUST NOT carry raw content-like string fields
+
+Definition:
+Aggregate root classes outside `src/domain/content-system/**` MUST NOT declare properties of the form `public string Description { get; }`, `public string Body { get; }`, `public string Content { get; }`, or `public string Notes { get; }` (or any compound ending in those names). Content-like strings on aggregates indicate either (a) a short structural descriptive label that should be wrapped in a typed VO (e.g., `RuleDescription`, `OrderDescription`, `ExpenseLineDescription`), or (b) rich content that should be externalised via a cross-BC reference (`ContentRef` / `DocumentRef`) into `content-system/document/` or `content-system/media/`.
+
+Rationale: raw descriptive strings embedded on aggregates (1) conflate meaning with content, (2) break primitive-obsession discipline paralleled by D-ID-REF-01, (3) bypass the canonical `content-system/` topology which already provides versioning + lifecycle + external storage for rich content, (4) silently permit embedding large payloads into write-model aggregates.
+
+This rule deliberately excludes `content-system/**` — descriptive strings in the canonical content contexts (e.g., `DocumentTitle.Value`, `MetadataValue.Value`) are the target location for content, not a leakage source.
+
+Enforcement:
+ArchTest `StructuralEnforcementArchTests.No_aggregate_root_declares_a_raw_content_like_string_property` scans every `*Aggregate.cs` file under `src/domain/**` (excluding `content-system/**`) and fails on any match of `public\s+string\s+(Description|Body|Content|Notes)\s*\{`.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Remediated 2026-04-20 in `EnforcementRuleAggregate` (→ `RuleName`, `RuleDescription` VOs), `ExpenseLine` entity (→ `ExpenseLineDescription` VO).
+- `OrderAggregate.Description` (business-system) already uses the canonical `ContentRef` externalisation pattern — conforms by external reference.
+- Complement to D-ID-REF-01 (typed inter-aggregate references) and D-INV-NON-EMPTY-01 (non-empty invariants).
+- Source: Content-System Extraction pass (Phase 1 inventory + Path A enforcement).

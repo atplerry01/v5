@@ -1,13 +1,18 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CommercialShape.Plan;
 
 public static class PlanErrors
 {
-    public static InvalidOperationException MissingId() =>
-        new("PlanId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("PlanId is required and must not be empty.");
 
-    public static InvalidOperationException MissingDescriptor() =>
-        new("Plan must include a valid descriptor.");
+    public static DomainException MissingDescriptor()
+        => new DomainInvariantViolationException("Plan must include a valid descriptor.");
 
-    public static InvalidOperationException InvalidStateTransition(PlanStatus current, string attemptedAction) =>
-        new($"Cannot '{attemptedAction}' when current status is '{current}'.");
+    public static DomainException InvalidStateTransition(PlanStatus current, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{current}'.");
+
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Plan has already been initialized.");
 }

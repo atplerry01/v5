@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Approval;
 
 public readonly record struct ApprovalId
@@ -6,9 +8,7 @@ public readonly record struct ApprovalId
 
     public ApprovalId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ApprovalId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ApprovalId cannot be empty.");
         Value = value;
     }
 }

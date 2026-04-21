@@ -1,17 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Assignment;
 
-public sealed class AssignmentAggregate
+public sealed class AssignmentAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public AssignmentId Id { get; private set; }
     public GrantRef Grant { get; private set; }
     public AssignmentSubjectRef Subject { get; private set; }
     public AssignmentScope Scope { get; private set; }
     public AssignmentStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private AssignmentAggregate() { }
 
     public static AssignmentAggregate Create(
         AssignmentId id,
@@ -20,12 +17,10 @@ public sealed class AssignmentAggregate
         AssignmentScope scope)
     {
         var aggregate = new AssignmentAggregate();
+        if (aggregate.Version >= 0)
+            throw AssignmentErrors.AlreadyInitialized();
 
-        var @event = new AssignmentCreatedEvent(id, grant, subject, scope);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new AssignmentCreatedEvent(id, grant, subject, scope));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class AssignmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AssignmentErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new AssignmentActivatedEvent(Id, activatedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AssignmentActivatedEvent(Id, activatedAt));
     }
 
     public void Revoke(DateTimeOffset revokedAt)
@@ -47,39 +39,30 @@ public sealed class AssignmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AssignmentErrors.AlreadyRevoked(Id);
 
-        var @event = new AssignmentRevokedEvent(Id, revokedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AssignmentRevokedEvent(Id, revokedAt));
     }
 
-    private void Apply(AssignmentCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.AssignmentId;
-        Grant = @event.Grant;
-        Subject = @event.Subject;
-        Scope = @event.Scope;
-        Status = AssignmentStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case AssignmentCreatedEvent e:
+                Id = e.AssignmentId;
+                Grant = e.Grant;
+                Subject = e.Subject;
+                Scope = e.Scope;
+                Status = AssignmentStatus.Pending;
+                break;
+            case AssignmentActivatedEvent:
+                Status = AssignmentStatus.Active;
+                break;
+            case AssignmentRevokedEvent:
+                Status = AssignmentStatus.Revoked;
+                break;
+        }
     }
 
-    private void Apply(AssignmentActivatedEvent @event)
-    {
-        Status = AssignmentStatus.Active;
-        Version++;
-    }
-
-    private void Apply(AssignmentRevokedEvent @event)
-    {
-        Status = AssignmentStatus.Revoked;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw AssignmentErrors.MissingId();

@@ -1,85 +1,60 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Renewal;
 
-public sealed class RenewalAggregate
+public sealed class RenewalAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public RenewalId Id { get; private set; }
     public RenewalSourceId SourceId { get; private set; }
     public RenewalStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private RenewalAggregate() { }
 
     public static RenewalAggregate Create(RenewalId id, RenewalSourceId sourceId)
     {
         var aggregate = new RenewalAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw RenewalErrors.AlreadyInitialized();
 
-        var @event = new RenewalCreatedEvent(id, sourceId);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new RenewalCreatedEvent(id, sourceId));
         return aggregate;
     }
 
     public void Renew()
     {
-        ValidateBeforeChange();
-
         var specification = new CanRenewSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw RenewalErrors.InvalidStateTransition(Status, nameof(Renew));
 
-        var @event = new RenewalRenewedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RenewalRenewedEvent(Id));
     }
 
     public void Expire()
     {
-        ValidateBeforeChange();
-
         var specification = new CanExpireRenewalSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw RenewalErrors.InvalidStateTransition(Status, nameof(Expire));
 
-        var @event = new RenewalExpiredEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RenewalExpiredEvent(Id));
     }
 
-    private void Apply(RenewalCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.RenewalId;
-        SourceId = @event.SourceId;
-        Status = RenewalStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case RenewalCreatedEvent e:
+                Id = e.RenewalId;
+                SourceId = e.SourceId;
+                Status = RenewalStatus.Pending;
+                break;
+            case RenewalRenewedEvent:
+                Status = RenewalStatus.Renewed;
+                break;
+            case RenewalExpiredEvent:
+                Status = RenewalStatus.Expired;
+                break;
+        }
     }
 
-    private void Apply(RenewalRenewedEvent @event)
-    {
-        Status = RenewalStatus.Renewed;
-        Version++;
-    }
-
-    private void Apply(RenewalExpiredEvent @event)
-    {
-        Status = RenewalStatus.Expired;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw RenewalErrors.MissingId();
@@ -89,10 +64,5 @@ public sealed class RenewalAggregate
 
         if (!Enum.IsDefined(Status))
             throw RenewalErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

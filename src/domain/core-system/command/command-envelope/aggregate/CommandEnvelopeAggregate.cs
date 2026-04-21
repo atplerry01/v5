@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandEnvelope;
 
-public sealed class CommandEnvelopeAggregate
+public sealed class CommandEnvelopeAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CommandEnvelopeId Id { get; private set; }
     public EnvelopeMetadata Metadata { get; private set; }
     public CommandEnvelopeStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private CommandEnvelopeAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
 
@@ -18,12 +15,10 @@ public sealed class CommandEnvelopeAggregate
         EnvelopeMetadata metadata)
     {
         var aggregate = new CommandEnvelopeAggregate();
+        if (aggregate.Version >= 0)
+            throw CommandEnvelopeErrors.AlreadyInitialized();
 
-        var @event = new CommandEnvelopeSealedEvent(id, metadata);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CommandEnvelopeSealedEvent(id, metadata));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class CommandEnvelopeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandEnvelopeErrors.InvalidStateTransition(Status, nameof(Dispatch));
 
-        var @event = new CommandEnvelopeDispatchedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandEnvelopeDispatchedEvent(Id));
     }
 
     // ── Acknowledge ──────────────────────────────────────────────
@@ -49,38 +41,30 @@ public sealed class CommandEnvelopeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CommandEnvelopeErrors.InvalidStateTransition(Status, nameof(Acknowledge));
 
-        var @event = new CommandEnvelopeAcknowledgedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new CommandEnvelopeAcknowledgedEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(CommandEnvelopeSealedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.EnvelopeId;
-        Metadata = @event.Metadata;
-        Status = CommandEnvelopeStatus.Sealed;
-        Version++;
+        switch (domainEvent)
+        {
+            case CommandEnvelopeSealedEvent e:
+                Id = e.EnvelopeId;
+                Metadata = e.Metadata;
+                Status = CommandEnvelopeStatus.Sealed;
+                break;
+            case CommandEnvelopeDispatchedEvent:
+                Status = CommandEnvelopeStatus.Dispatched;
+                break;
+            case CommandEnvelopeAcknowledgedEvent:
+                Status = CommandEnvelopeStatus.Acknowledged;
+                break;
+        }
     }
 
-    private void Apply(CommandEnvelopeDispatchedEvent @event)
-    {
-        Status = CommandEnvelopeStatus.Dispatched;
-        Version++;
-    }
-
-    private void Apply(CommandEnvelopeAcknowledgedEvent @event)
-    {
-        Status = CommandEnvelopeStatus.Acknowledged;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CommandEnvelopeErrors.MissingId();

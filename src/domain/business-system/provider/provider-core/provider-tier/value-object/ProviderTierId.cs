@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderTier;
 
 public readonly record struct ProviderTierId
@@ -6,9 +8,7 @@ public readonly record struct ProviderTierId
 
     public ProviderTierId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ProviderTierId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ProviderTierId cannot be empty.");
         Value = value;
     }
 }

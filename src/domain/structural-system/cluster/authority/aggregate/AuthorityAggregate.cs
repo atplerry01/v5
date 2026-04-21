@@ -1,85 +1,137 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Authority;
 
-public sealed class AuthorityAggregate
+public sealed class AuthorityAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public AuthorityId Id { get; private set; }
     public AuthorityDescriptor Descriptor { get; private set; }
     public AuthorityStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private AuthorityAggregate() { }
+    public DateTimeOffset? AttachedAt { get; private set; }
+    public AttachedUnder? AttachedUnder { get; private set; }
 
     public static AuthorityAggregate Establish(AuthorityId id, AuthorityDescriptor descriptor)
     {
         var aggregate = new AuthorityAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw AuthorityErrors.AlreadyInitialized();
 
-        var @event = new AuthorityEstablishedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
+        aggregate.RaiseDomainEvent(new AuthorityEstablishedEvent(id, descriptor));
+        return aggregate;
+    }
+
+    public static AuthorityAggregate Establish(AuthorityId id, AuthorityDescriptor descriptor, DateTimeOffset effectiveAt)
+    {
+        var aggregate = Establish(id, descriptor);
+        aggregate.RaiseDomainEvent(new AuthorityAttachedEvent(id, descriptor.ClusterReference, effectiveAt));
+        return aggregate;
+    }
+
+    public static AuthorityAggregate Establish(
+        AuthorityId id,
+        AuthorityDescriptor descriptor,
+        DateTimeOffset effectiveAt,
+        IStructuralParentLookup parentLookup)
+    {
+        Guard.Against(parentLookup is null, "IStructuralParentLookup must not be null.");
+
+        var parent = descriptor.ClusterReference;
+
+        var parentSpec = new CanAttachUnderParentSpecification(parentLookup!);
+        if (!parentSpec.IsSatisfiedBy(parent))
+            throw AuthorityErrors.InvalidParent();
+
+        var aggregate = Establish(id, descriptor, effectiveAt);
+
+        aggregate.RaiseDomainEvent(new AuthorityBindingValidatedEvent(
+            id,
+            parent,
+            parentLookup!.GetState(parent),
+            effectiveAt));
 
         return aggregate;
     }
 
     public void Activate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanActivateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw AuthorityErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new AuthorityActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AuthorityActivatedEvent(Id));
     }
 
     public void Revoke()
     {
-        ValidateBeforeChange();
-
         var specification = new CanRevokeSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw AuthorityErrors.InvalidStateTransition(Status, nameof(Revoke));
 
-        var @event = new AuthorityRevokedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AuthorityRevokedEvent(Id));
     }
 
-    private void Apply(AuthorityEstablishedEvent @event)
+    public void Suspend()
     {
-        Id = @event.AuthorityId;
-        Descriptor = @event.Descriptor;
-        Status = AuthorityStatus.Established;
-        Version++;
+        var specification = new CanSuspendSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw AuthorityErrors.InvalidStateTransition(Status, nameof(Suspend));
+
+        RaiseDomainEvent(new AuthoritySuspendedEvent(Id));
     }
 
-    private void Apply(AuthorityActivatedEvent @event)
+    public void Reactivate()
     {
-        Status = AuthorityStatus.Active;
-        Version++;
+        var specification = new CanReactivateSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw AuthorityErrors.InvalidStateTransition(Status, nameof(Reactivate));
+
+        RaiseDomainEvent(new AuthorityReactivatedEvent(Id));
     }
 
-    private void Apply(AuthorityRevokedEvent @event)
+    public void Retire()
     {
-        Status = AuthorityStatus.Revoked;
-        Version++;
+        var specification = new CanRetireSpecification();
+        if (!specification.IsSatisfiedBy(Status))
+            throw AuthorityErrors.InvalidStateTransition(Status, nameof(Retire));
+
+        RaiseDomainEvent(new AuthorityRetiredEvent(Id));
     }
 
-    private void AddEvent(object @event)
+    protected override void Apply(object domainEvent)
     {
-        _uncommittedEvents.Add(@event);
+        switch (domainEvent)
+        {
+            case AuthorityEstablishedEvent e:
+                Id = e.AuthorityId;
+                Descriptor = e.Descriptor;
+                Status = AuthorityStatus.Established;
+                break;
+            case AuthorityActivatedEvent:
+                Status = AuthorityStatus.Active;
+                break;
+            case AuthorityRevokedEvent:
+                Status = AuthorityStatus.Revoked;
+                break;
+            case AuthoritySuspendedEvent:
+                Status = AuthorityStatus.Suspended;
+                break;
+            case AuthorityReactivatedEvent:
+                Status = AuthorityStatus.Active;
+                break;
+            case AuthorityRetiredEvent:
+                Status = AuthorityStatus.Retired;
+                break;
+            case AuthorityAttachedEvent e:
+                AttachedAt = e.EffectiveAt;
+                break;
+            case AuthorityBindingValidatedEvent e:
+                AttachedUnder = new AttachedUnder(e.Parent, e.ParentState, e.EffectiveAt);
+                break;
+        }
     }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw AuthorityErrors.MissingId();
@@ -89,10 +141,5 @@ public sealed class AuthorityAggregate
 
         if (!Enum.IsDefined(Status))
             throw AuthorityErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

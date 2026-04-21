@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.stewardship.commands",
+    "whyce.structural.humancapital.stewardship.events",
+    "whyce.structural.humancapital.stewardship.retry",
+    "whyce.structural.humancapital.stewardship.deadletter"
+  ]
+}

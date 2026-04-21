@@ -1,3 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Workforce;
 
-public readonly record struct WorkforceId(Guid Value);
+public readonly record struct WorkforceId
+{
+    public Guid Value { get; }
+
+    public WorkforceId(Guid value)
+    {
+        Guard.Against(value == Guid.Empty, "WorkforceId cannot be empty.");
+        Value = value;
+    }
+}

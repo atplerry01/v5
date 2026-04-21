@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Sanction;
 
-public sealed class SanctionAggregate
+public sealed class SanctionAggregate : AggregateRoot
 {
-    public static SanctionAggregate Create()
+    public SanctionId Id { get; private set; }
+    public SanctionDescriptor Descriptor { get; private set; }
+
+    public static SanctionAggregate Create(SanctionId id, SanctionDescriptor descriptor)
     {
         var aggregate = new SanctionAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw SanctionErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new SanctionCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case SanctionCreatedEvent e:
+                Id = e.SanctionId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw SanctionErrors.MissingId();
+
+        if (Descriptor == default)
+            throw SanctionErrors.MissingDescriptor();
     }
 }

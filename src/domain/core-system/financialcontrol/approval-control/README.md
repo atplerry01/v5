@@ -24,10 +24,6 @@ Defines the foundational structure for approval workflows and control gates. Pro
 
   * Manages the lifecycle and state of an approval control instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * ApprovalControlId — Unique identifier for an approval-control instance
@@ -35,16 +31,10 @@ Defines the foundational structure for approval workflows and control gates. Pro
 ## Domain Events
 
 * ApprovalControlCreatedEvent — Raised when a new approval-control is created
-* ApprovalControlUpdatedEvent — Raised when approval-control metadata is updated
-* ApprovalControlStateChangedEvent — Raised when approval-control lifecycle state transitions
 
 ## Specifications
 
 * ApprovalControlSpecification — Validates approval-control structure and completeness
-
-## Domain Services
-
-* ApprovalControlService — Domain operations for approval-control management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for approval workflows and control gates. Pro
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

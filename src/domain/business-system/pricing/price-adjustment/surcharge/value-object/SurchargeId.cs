@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Surcharge;
 
 public readonly record struct SurchargeId
@@ -6,9 +8,7 @@ public readonly record struct SurchargeId
 
     public SurchargeId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("SurchargeId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "SurchargeId cannot be empty.");
         Value = value;
     }
 }

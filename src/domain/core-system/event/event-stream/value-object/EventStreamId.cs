@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventStream;
 
 public readonly record struct EventStreamId
@@ -6,8 +8,7 @@ public readonly record struct EventStreamId
 
     public EventStreamId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("EventStreamId value must not be empty.", nameof(value));
+        Guard.Against(value == Guid.Empty, "EventStreamId value must not be empty.");
         Value = value;
     }
 }

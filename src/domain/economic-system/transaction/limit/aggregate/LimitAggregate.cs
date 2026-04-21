@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,7 +7,7 @@ namespace Whycespace.Domain.EconomicSystem.Transaction.Limit;
 public sealed class LimitAggregate : AggregateRoot
 {
     public LimitId LimitId { get; private set; }
-    public Guid AccountId { get; private set; }
+    public AccountId AccountId { get; private set; }
     public LimitType Type { get; private set; }
     public Amount Threshold { get; private set; }
     public Currency Currency { get; private set; }
@@ -20,19 +21,31 @@ public sealed class LimitAggregate : AggregateRoot
 
     public static LimitAggregate Define(
         LimitId limitId,
-        Guid accountId,
+        AccountId accountId,
         LimitType type,
         Amount threshold,
         Currency currency,
         Timestamp definedAt)
     {
         if (threshold.Value <= 0m) throw LimitErrors.InvalidThreshold();
-        if (accountId == Guid.Empty) throw LimitErrors.MissingAccountReference();
 
         var aggregate = new LimitAggregate();
         aggregate.RaiseDomainEvent(new LimitDefinedEvent(
-            limitId, accountId, type, threshold, currency, definedAt));
+            limitId, accountId.Value, type, threshold, currency, definedAt));
         return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static LimitAggregate Define(
+        LimitId limitId,
+        Guid accountId,
+        LimitType type,
+        Amount threshold,
+        Currency currency,
+        Timestamp definedAt)
+    {
+        if (accountId == Guid.Empty) throw LimitErrors.MissingAccountReference();
+        return Define(limitId, new AccountId(accountId), type, threshold, currency, definedAt);
     }
 
     // ── Behavior ─────────────────────────────────────────────────
@@ -76,7 +89,7 @@ public sealed class LimitAggregate : AggregateRoot
         {
             case LimitDefinedEvent e:
                 LimitId = e.LimitId;
-                AccountId = e.AccountId;
+                AccountId = new AccountId(e.AccountId);
                 Type = e.Type;
                 Threshold = e.Threshold;
                 Currency = e.Currency;

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.structure.topology_definition.commands",
+    "whyce.structural.structure.topology_definition.events",
+    "whyce.structural.structure.topology_definition.retry",
+    "whyce.structural.structure.topology_definition.deadletter"
+  ]
+}

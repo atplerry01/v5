@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.QuoteBasis;
 
 public readonly record struct QuoteBasisId
@@ -6,9 +8,7 @@ public readonly record struct QuoteBasisId
 
     public QuoteBasisId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("QuoteBasisId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "QuoteBasisId cannot be empty.");
         Value = value;
     }
 }

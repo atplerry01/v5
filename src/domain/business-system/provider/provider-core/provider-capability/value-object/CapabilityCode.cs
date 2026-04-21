@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderCapability;
 
 public readonly record struct CapabilityCode
@@ -8,12 +10,10 @@ public readonly record struct CapabilityCode
 
     public CapabilityCode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("CapabilityCode must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "CapabilityCode must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"CapabilityCode exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"CapabilityCode exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

@@ -26,10 +26,6 @@ Defines the transport envelope that wraps domain events with correlation, causat
   * Transitions: Publish(), Acknowledge()
   * Terminal lifecycle: Sealed -> Published -> Acknowledged
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * EventEnvelopeId — Unique validated Guid identifier for an event-envelope instance
@@ -47,9 +43,10 @@ Defines the transport envelope that wraps domain events with correlation, causat
 * CanPublishSpecification — Validates status == Sealed before publishing
 * CanAcknowledgeSpecification — Validates status == Published before acknowledging
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* EventEnvelopeService — Empty (no domain operations required)
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Errors
 

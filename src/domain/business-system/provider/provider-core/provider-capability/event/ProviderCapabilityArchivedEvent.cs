@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderCapability;
 
-public sealed record ProviderCapabilityArchivedEvent(ProviderCapabilityId ProviderCapabilityId);
+public sealed record ProviderCapabilityArchivedEvent(
+    [property: JsonPropertyName("AggregateId")] ProviderCapabilityId ProviderCapabilityId) : DomainEvent;

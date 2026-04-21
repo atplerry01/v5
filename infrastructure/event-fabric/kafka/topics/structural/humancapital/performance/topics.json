@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.performance.commands",
+    "whyce.structural.humancapital.performance.events",
+    "whyce.structural.humancapital.performance.retry",
+    "whyce.structural.humancapital.performance.deadletter"
+  ]
+}

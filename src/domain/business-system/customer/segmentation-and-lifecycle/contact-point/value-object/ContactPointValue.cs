@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.ContactPoint;
 
 public readonly record struct ContactPointValue
@@ -8,12 +10,10 @@ public readonly record struct ContactPointValue
 
     public ContactPointValue(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ContactPointValue must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "ContactPointValue must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"ContactPointValue exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"ContactPointValue exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

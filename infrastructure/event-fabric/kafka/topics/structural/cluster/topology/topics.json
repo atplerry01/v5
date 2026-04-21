@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.cluster.topology.commands",
+    "whyce.structural.cluster.topology.events",
+    "whyce.structural.cluster.topology.retry",
+    "whyce.structural.cluster.topology.deadletter"
+  ]
+}

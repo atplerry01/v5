@@ -4,5 +4,6 @@ public enum ProviderStatus
 {
     Registered,
     Active,
-    Suspended
+    Suspended,
+    Retired
 }

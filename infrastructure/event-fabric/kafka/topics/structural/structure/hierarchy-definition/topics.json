@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.structure.hierarchy_definition.commands",
+    "whyce.structural.structure.hierarchy_definition.events",
+    "whyce.structural.structure.hierarchy_definition.retry",
+    "whyce.structural.structure.hierarchy_definition.deadletter"
+  ]
+}

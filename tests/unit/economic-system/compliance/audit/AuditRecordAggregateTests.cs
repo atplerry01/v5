@@ -1,4 +1,5 @@
 using Whycespace.Domain.EconomicSystem.Compliance.Audit;
+using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Tests.Shared;
 
@@ -21,7 +22,7 @@ public sealed class AuditRecordAggregateTests
             sourceAggregateId,
             sourceEventId,
             AuditType.Financial,
-            new EvidenceSummary("Quarterly ledger reconciliation evidence."),
+            new DocumentRef(new ContentId(IdGen.Generate($"AuditRecordAggregateTests:{seed}:evidence-doc"))),
             RecordedAt);
     }
 
@@ -37,7 +38,7 @@ public sealed class AuditRecordAggregateTests
 
         var evt = Assert.IsType<AuditRecordCreatedEvent>(Assert.Single(aggregate.DomainEvents));
         Assert.Equal("ledger", evt.SourceDomain.Value);
-        Assert.Equal("Quarterly ledger reconciliation evidence.", evt.EvidenceSummary.Value);
+        Assert.NotEqual(Guid.Empty, evt.EvidenceSummary.Value.Value);
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public sealed class AuditRecordAggregateTests
                 sourceAggregateId,
                 sourceEventId,
                 AuditType.Settlement,
-                new EvidenceSummary("Settlement closure evidence."),
+                new DocumentRef(new ContentId(IdGen.Generate("AuditRecordAggregateTests:History:evidence-doc"))),
                 RecordedAt),
             new AuditRecordFinalizedEvent(auditRecordId, FinalizedAt),
         };

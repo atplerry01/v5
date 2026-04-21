@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Time;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingExecution.Quote;
 
-public sealed class QuoteAggregate
+public sealed class QuoteAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public QuoteId Id { get; private set; }
     public QuoteBasisRef QuoteBasis { get; private set; }
     public QuoteReference Reference { get; private set; }
     public QuoteStatus Status { get; private set; }
     public TimeWindow? Validity { get; private set; }
-    public int Version { get; private set; }
-
-    private QuoteAggregate() { }
 
     public static QuoteAggregate Create(
         QuoteId id,
@@ -21,12 +17,10 @@ public sealed class QuoteAggregate
         QuoteReference reference)
     {
         var aggregate = new QuoteAggregate();
+        if (aggregate.Version >= 0)
+            throw QuoteErrors.AlreadyInitialized();
 
-        var @event = new QuoteCreatedEvent(id, quoteBasis, reference);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new QuoteCreatedEvent(id, quoteBasis, reference));
         return aggregate;
     }
 
@@ -39,10 +33,7 @@ public sealed class QuoteAggregate
         if (!validity.IsClosed)
             throw QuoteErrors.IssuanceRequiresValidity();
 
-        var @event = new QuoteIssuedEvent(Id, validity);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteIssuedEvent(Id, validity));
     }
 
     public void Accept(DateTimeOffset acceptedAt)
@@ -54,10 +45,7 @@ public sealed class QuoteAggregate
         if (Validity.HasValue && Validity.Value.IsExpiredAt(acceptedAt))
             throw QuoteErrors.InvalidStateTransition(Status, $"{nameof(Accept)}-after-expiry");
 
-        var @event = new QuoteAcceptedEvent(Id, acceptedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteAcceptedEvent(Id, acceptedAt));
     }
 
     public void Reject(DateTimeOffset rejectedAt)
@@ -66,10 +54,7 @@ public sealed class QuoteAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw QuoteErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new QuoteRejectedEvent(Id, rejectedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteRejectedEvent(Id, rejectedAt));
     }
 
     public void Expire(DateTimeOffset expiredAt)
@@ -84,51 +69,36 @@ public sealed class QuoteAggregate
         if (!Validity.Value.IsExpiredAt(expiredAt))
             throw QuoteErrors.ExpiryNotReached();
 
-        var @event = new QuoteExpiredEvent(Id, expiredAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new QuoteExpiredEvent(Id, expiredAt));
     }
 
-    private void Apply(QuoteCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.QuoteId;
-        QuoteBasis = @event.QuoteBasis;
-        Reference = @event.Reference;
-        Status = QuoteStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case QuoteCreatedEvent e:
+                Id = e.QuoteId;
+                QuoteBasis = e.QuoteBasis;
+                Reference = e.Reference;
+                Status = QuoteStatus.Draft;
+                break;
+            case QuoteIssuedEvent e:
+                Validity = e.Validity;
+                Status = QuoteStatus.Issued;
+                break;
+            case QuoteAcceptedEvent:
+                Status = QuoteStatus.Accepted;
+                break;
+            case QuoteRejectedEvent:
+                Status = QuoteStatus.Rejected;
+                break;
+            case QuoteExpiredEvent:
+                Status = QuoteStatus.Expired;
+                break;
+        }
     }
 
-    private void Apply(QuoteIssuedEvent @event)
-    {
-        Validity = @event.Validity;
-        Status = QuoteStatus.Issued;
-        Version++;
-    }
-
-    private void Apply(QuoteAcceptedEvent @event)
-    {
-        Status = QuoteStatus.Accepted;
-        Version++;
-    }
-
-    private void Apply(QuoteRejectedEvent @event)
-    {
-        Status = QuoteStatus.Rejected;
-        Version++;
-    }
-
-    private void Apply(QuoteExpiredEvent @event)
-    {
-        Status = QuoteStatus.Expired;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw QuoteErrors.MissingId();

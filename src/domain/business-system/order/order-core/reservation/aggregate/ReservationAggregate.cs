@@ -1,11 +1,10 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Reservation;
 
-public sealed class ReservationAggregate
+public sealed class ReservationAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ReservationId Id { get; private set; }
     public OrderRef Order { get; private set; }
     public LineItemRef? LineItem { get; private set; }
@@ -13,9 +12,6 @@ public sealed class ReservationAggregate
     public ReservationQuantity Quantity { get; private set; }
     public ReservationExpiry Expiry { get; private set; }
     public ReservationStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ReservationAggregate() { }
 
     public static ReservationAggregate Hold(
         ReservationId id,
@@ -30,12 +26,10 @@ public sealed class ReservationAggregate
             throw ReservationErrors.ExpiryInPast();
 
         var aggregate = new ReservationAggregate();
+        if (aggregate.Version >= 0)
+            throw ReservationErrors.AlreadyInitialized();
 
-        var @event = new ReservationHeldEvent(id, order, lineItem, subject, quantity, expiry, heldAt);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ReservationHeldEvent(id, order, lineItem, subject, quantity, expiry, heldAt));
         return aggregate;
     }
 
@@ -45,10 +39,7 @@ public sealed class ReservationAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ReservationErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new ReservationConfirmedEvent(Id, confirmedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ReservationConfirmedEvent(Id, confirmedAt));
     }
 
     public void Release(DateTimeOffset releasedAt)
@@ -57,10 +48,7 @@ public sealed class ReservationAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ReservationErrors.AlreadyTerminal(Id, Status);
 
-        var @event = new ReservationReleasedEvent(Id, releasedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ReservationReleasedEvent(Id, releasedAt));
     }
 
     public void Expire(DateTimeOffset expiredAt)
@@ -72,53 +60,50 @@ public sealed class ReservationAggregate
         if (!Expiry.IsExpiredAt(expiredAt))
             throw ReservationErrors.ExpiryNotReached();
 
-        var @event = new ReservationExpiredEvent(Id, expiredAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ReservationExpiredEvent(Id, expiredAt));
     }
 
-    private void Apply(ReservationHeldEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ReservationId;
-        Order = @event.Order;
-        LineItem = @event.LineItem;
-        Subject = @event.Subject;
-        Quantity = @event.Quantity;
-        Expiry = @event.Expiry;
-        Status = ReservationStatus.Held;
-        Version++;
+        switch (domainEvent)
+        {
+            case ReservationHeldEvent e:
+                Id = e.ReservationId;
+                Order = e.Order;
+                LineItem = e.LineItem;
+                Subject = e.Subject;
+                Quantity = e.Quantity;
+                Expiry = e.Expiry;
+                Status = ReservationStatus.Held;
+                break;
+            case ReservationConfirmedEvent:
+                Status = ReservationStatus.Confirmed;
+                break;
+            case ReservationReleasedEvent:
+                Status = ReservationStatus.Released;
+                break;
+            case ReservationExpiredEvent:
+                Status = ReservationStatus.Expired;
+                break;
+        }
     }
 
-    private void Apply(ReservationConfirmedEvent @event)
-    {
-        Status = ReservationStatus.Confirmed;
-        Version++;
-    }
-
-    private void Apply(ReservationReleasedEvent @event)
-    {
-        Status = ReservationStatus.Released;
-        Version++;
-    }
-
-    private void Apply(ReservationExpiredEvent @event)
-    {
-        Status = ReservationStatus.Expired;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ReservationErrors.MissingId();
 
         if (Order == default)
             throw ReservationErrors.MissingOrderRef();
+
+        if (Subject == default)
+            throw ReservationErrors.MissingSubject();
+
+        if (Quantity == default)
+            throw ReservationErrors.MissingQuantity();
+
+        if (Expiry == default)
+            throw ReservationErrors.MissingExpiry();
 
         if (!Enum.IsDefined(Status))
             throw ReservationErrors.InvalidStateTransition(Status, "validate");

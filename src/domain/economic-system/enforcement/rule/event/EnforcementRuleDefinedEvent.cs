@@ -9,5 +9,5 @@ public sealed record EnforcementRuleDefinedEvent(
     RuleCategory RuleCategory,
     RuleScope Scope,
     RuleSeverity Severity,
-    string Description,
+    DocumentRef Description,
     Timestamp CreatedAt) : DomainEvent;

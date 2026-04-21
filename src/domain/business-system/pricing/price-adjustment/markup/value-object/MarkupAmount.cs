@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Markup;
 
 public readonly record struct MarkupAmount
@@ -6,9 +8,7 @@ public readonly record struct MarkupAmount
 
     public MarkupAmount(decimal value)
     {
-        if (value < 0m)
-            throw new ArgumentException("MarkupAmount must be non-negative.", nameof(value));
-
+        Guard.Against(value < 0m, "MarkupAmount must be non-negative.");
         Value = value;
     }
 }

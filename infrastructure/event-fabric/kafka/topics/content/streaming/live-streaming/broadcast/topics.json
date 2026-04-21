@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.live_streaming.broadcast.commands",
+    "whyce.content.streaming.live_streaming.broadcast.events",
+    "whyce.content.streaming.live_streaming.broadcast.retry",
+    "whyce.content.streaming.live_streaming.broadcast.deadletter"
+  ]
+}

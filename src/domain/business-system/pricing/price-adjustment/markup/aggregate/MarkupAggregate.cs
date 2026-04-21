@@ -1,20 +1,16 @@
 using Whycespace.Domain.BusinessSystem.Shared.Pricing;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Pricing.PriceAdjustment.Markup;
 
-public sealed class MarkupAggregate
+public sealed class MarkupAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public MarkupId Id { get; private set; }
     public MarkupCode Code { get; private set; }
     public MarkupName Name { get; private set; }
     public AdjustmentBasis Basis { get; private set; }
     public MarkupAmount Amount { get; private set; }
     public MarkupStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private MarkupAggregate() { }
 
     public static MarkupAggregate Create(
         MarkupId id,
@@ -26,12 +22,10 @@ public sealed class MarkupAggregate
         ValidateBasisAmount(basis, amount);
 
         var aggregate = new MarkupAggregate();
+        if (aggregate.Version >= 0)
+            throw MarkupErrors.AlreadyInitialized();
 
-        var @event = new MarkupCreatedEvent(id, code, name, basis, amount);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new MarkupCreatedEvent(id, code, name, basis, amount));
         return aggregate;
     }
 
@@ -42,10 +36,7 @@ public sealed class MarkupAggregate
 
         ValidateBasisAmount(basis, amount);
 
-        var @event = new MarkupUpdatedEvent(Id, name, basis, amount);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new MarkupUpdatedEvent(Id, name, basis, amount));
     }
 
     public void Activate()
@@ -54,10 +45,7 @@ public sealed class MarkupAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw MarkupErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new MarkupActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new MarkupActivatedEvent(Id));
     }
 
     public void Deprecate()
@@ -66,10 +54,7 @@ public sealed class MarkupAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw MarkupErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new MarkupDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new MarkupDeprecatedEvent(Id));
     }
 
     public void Archive()
@@ -77,10 +62,7 @@ public sealed class MarkupAggregate
         if (Status == MarkupStatus.Archived)
             throw MarkupErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new MarkupArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new MarkupArchivedEvent(Id));
     }
 
     private static void ValidateBasisAmount(AdjustmentBasis basis, MarkupAmount amount)
@@ -89,48 +71,36 @@ public sealed class MarkupAggregate
             throw MarkupErrors.PercentageOutOfRange(amount.Value);
     }
 
-    private void Apply(MarkupCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.MarkupId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Status = MarkupStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case MarkupCreatedEvent e:
+                Id = e.MarkupId;
+                Code = e.Code;
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                Status = MarkupStatus.Draft;
+                break;
+            case MarkupUpdatedEvent e:
+                Name = e.Name;
+                Basis = e.Basis;
+                Amount = e.Amount;
+                break;
+            case MarkupActivatedEvent:
+                Status = MarkupStatus.Active;
+                break;
+            case MarkupDeprecatedEvent:
+                Status = MarkupStatus.Deprecated;
+                break;
+            case MarkupArchivedEvent:
+                Status = MarkupStatus.Archived;
+                break;
+        }
     }
 
-    private void Apply(MarkupUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Basis = @event.Basis;
-        Amount = @event.Amount;
-        Version++;
-    }
-
-    private void Apply(MarkupActivatedEvent @event)
-    {
-        Status = MarkupStatus.Active;
-        Version++;
-    }
-
-    private void Apply(MarkupDeprecatedEvent @event)
-    {
-        Status = MarkupStatus.Deprecated;
-        Version++;
-    }
-
-    private void Apply(MarkupArchivedEvent @event)
-    {
-        Status = MarkupStatus.Archived;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw MarkupErrors.MissingId();

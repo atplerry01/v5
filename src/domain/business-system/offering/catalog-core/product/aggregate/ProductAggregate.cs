@@ -1,17 +1,14 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Product;
 
-public sealed class ProductAggregate
+public sealed class ProductAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ProductId Id { get; private set; }
     public ProductName Name { get; private set; }
     public ProductType Type { get; private set; }
     public ProductStatus Status { get; private set; }
     public CatalogRef? Catalog { get; private set; }
-    public int Version { get; private set; }
-
-    private ProductAggregate() { }
 
     public static ProductAggregate Create(
         ProductId id,
@@ -20,12 +17,10 @@ public sealed class ProductAggregate
         CatalogRef? catalog = null)
     {
         var aggregate = new ProductAggregate();
+        if (aggregate.Version >= 0)
+            throw ProductErrors.AlreadyInitialized();
 
-        var @event = new ProductCreatedEvent(id, name, type, catalog);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ProductCreatedEvent(id, name, type, catalog));
         return aggregate;
     }
 
@@ -33,10 +28,7 @@ public sealed class ProductAggregate
     {
         EnsureMutable(nameof(Update));
 
-        var @event = new ProductUpdatedEvent(Id, name, type);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProductUpdatedEvent(Id, name, type));
     }
 
     public void Activate()
@@ -45,10 +37,7 @@ public sealed class ProductAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ProductErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ProductActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProductActivatedEvent(Id));
     }
 
     public void Archive()
@@ -56,39 +45,31 @@ public sealed class ProductAggregate
         if (Status == ProductStatus.Archived)
             throw ProductErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ProductArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ProductArchivedEvent(Id));
     }
 
-    private void Apply(ProductCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ProductId;
-        Name = @event.Name;
-        Type = @event.Type;
-        Catalog = @event.Catalog;
-        Status = ProductStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ProductUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Type = @event.Type;
-        Version++;
-    }
-
-    private void Apply(ProductActivatedEvent @event)
-    {
-        Status = ProductStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ProductArchivedEvent @event)
-    {
-        Status = ProductStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ProductCreatedEvent e:
+                Id = e.ProductId;
+                Name = e.Name;
+                Type = e.Type;
+                Catalog = e.Catalog;
+                Status = ProductStatus.Draft;
+                break;
+            case ProductUpdatedEvent e:
+                Name = e.Name;
+                Type = e.Type;
+                break;
+            case ProductActivatedEvent:
+                Status = ProductStatus.Active;
+                break;
+            case ProductArchivedEvent:
+                Status = ProductStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable(string attemptedAction)
@@ -98,11 +79,7 @@ public sealed class ProductAggregate
             throw ProductErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ProductErrors.MissingId();

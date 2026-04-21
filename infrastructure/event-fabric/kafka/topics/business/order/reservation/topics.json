@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.order.reservation.commands",
+    "whyce.business.order.reservation.events",
+    "whyce.business.order.reservation.retry",
+    "whyce.business.order.reservation.deadletter"
+  ]
+}

@@ -1,16 +1,13 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceDefinition;
 
-public sealed class ServiceDefinitionAggregate
+public sealed class ServiceDefinitionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceDefinitionId Id { get; private set; }
     public ServiceDefinitionName Name { get; private set; }
     public ServiceCategory Category { get; private set; }
     public ServiceDefinitionStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceDefinitionAggregate() { }
 
     public static ServiceDefinitionAggregate Create(
         ServiceDefinitionId id,
@@ -18,12 +15,10 @@ public sealed class ServiceDefinitionAggregate
         ServiceCategory category)
     {
         var aggregate = new ServiceDefinitionAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceDefinitionErrors.AlreadyInitialized();
 
-        var @event = new ServiceDefinitionCreatedEvent(id, name, category);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceDefinitionCreatedEvent(id, name, category));
         return aggregate;
     }
 
@@ -31,10 +26,7 @@ public sealed class ServiceDefinitionAggregate
     {
         EnsureMutable();
 
-        var @event = new ServiceDefinitionUpdatedEvent(Id, name, category);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceDefinitionUpdatedEvent(Id, name, category));
     }
 
     public void Activate()
@@ -43,10 +35,7 @@ public sealed class ServiceDefinitionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceDefinitionErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceDefinitionActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceDefinitionActivatedEvent(Id));
     }
 
     public void Archive()
@@ -54,38 +43,7 @@ public sealed class ServiceDefinitionAggregate
         if (Status == ServiceDefinitionStatus.Archived)
             throw ServiceDefinitionErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceDefinitionArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
-    }
-
-    private void Apply(ServiceDefinitionCreatedEvent @event)
-    {
-        Id = @event.ServiceDefinitionId;
-        Name = @event.Name;
-        Category = @event.Category;
-        Status = ServiceDefinitionStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceDefinitionUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Category = @event.Category;
-        Version++;
-    }
-
-    private void Apply(ServiceDefinitionActivatedEvent @event)
-    {
-        Status = ServiceDefinitionStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceDefinitionArchivedEvent @event)
-    {
-        Status = ServiceDefinitionStatus.Archived;
-        Version++;
+        RaiseDomainEvent(new ServiceDefinitionArchivedEvent(Id));
     }
 
     private void EnsureMutable()
@@ -95,11 +53,30 @@ public sealed class ServiceDefinitionAggregate
             throw ServiceDefinitionErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceDefinitionCreatedEvent e:
+                Id = e.ServiceDefinitionId;
+                Name = e.Name;
+                Category = e.Category;
+                Status = ServiceDefinitionStatus.Draft;
+                break;
+            case ServiceDefinitionUpdatedEvent e:
+                Name = e.Name;
+                Category = e.Category;
+                break;
+            case ServiceDefinitionActivatedEvent:
+                Status = ServiceDefinitionStatus.Active;
+                break;
+            case ServiceDefinitionArchivedEvent:
+                Status = ServiceDefinitionStatus.Archived;
+                break;
+        }
+    }
 
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceDefinitionErrors.MissingId();

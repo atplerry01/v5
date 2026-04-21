@@ -1,3 +1,9 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Product;
 
-public sealed record ProductUpdatedEvent(ProductId ProductId, ProductName Name, ProductType Type);
+public sealed record ProductUpdatedEvent(
+    [property: JsonPropertyName("AggregateId")] ProductId ProductId,
+    ProductName Name,
+    ProductType Type) : DomainEvent;

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Spv;
 
 public readonly record struct SpvId
@@ -6,9 +8,7 @@ public readonly record struct SpvId
 
     public SpvId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw SpvErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "SpvId cannot be empty.");
         Value = value;
     }
 }

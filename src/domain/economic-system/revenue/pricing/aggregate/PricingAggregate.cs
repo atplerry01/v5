@@ -1,3 +1,4 @@
+using Whycespace.Domain.EconomicSystem.Revenue.Contract;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
@@ -6,7 +7,7 @@ namespace Whycespace.Domain.EconomicSystem.Revenue.Pricing;
 public sealed class PricingAggregate : AggregateRoot
 {
     public PricingId PricingId { get; private set; }
-    public Guid ContractId { get; private set; }
+    public RevenueContractId ContractId { get; private set; }
     public PricingModel Model { get; private set; }
     public Amount Price { get; private set; }
     public Currency Currency { get; private set; }
@@ -18,19 +19,31 @@ public sealed class PricingAggregate : AggregateRoot
 
     public static PricingAggregate DefinePrice(
         PricingId pricingId,
-        Guid contractId,
+        RevenueContractId contractId,
         PricingModel model,
         Amount price,
         Currency currency,
         Timestamp definedAt)
     {
         if (price.Value <= 0m) throw PricingErrors.InvalidPrice();
-        if (contractId == Guid.Empty) throw PricingErrors.MissingContractReference();
 
         var aggregate = new PricingAggregate();
         aggregate.RaiseDomainEvent(new PriceDefinedEvent(
-            pricingId, contractId, model, price, currency, definedAt));
+            pricingId, contractId.Value, model, price, currency, definedAt));
         return aggregate;
+    }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public static PricingAggregate DefinePrice(
+        PricingId pricingId,
+        Guid contractId,
+        PricingModel model,
+        Amount price,
+        Currency currency,
+        Timestamp definedAt)
+    {
+        if (contractId == Guid.Empty) throw PricingErrors.MissingContractReference();
+        return DefinePrice(pricingId, new RevenueContractId(contractId), model, price, currency, definedAt);
     }
 
     // ── Adjust ───────────────────────────────────────────────────
@@ -56,7 +69,7 @@ public sealed class PricingAggregate : AggregateRoot
         {
             case PriceDefinedEvent e:
                 PricingId = e.PricingId;
-                ContractId = e.ContractId;
+                ContractId = new RevenueContractId(e.ContractId);
                 Model = e.Model;
                 Price = e.Price;
                 Currency = e.Currency;
@@ -74,6 +87,6 @@ public sealed class PricingAggregate : AggregateRoot
     protected override void EnsureInvariants()
     {
         if (Price.Value < 0m) throw PricingErrors.NegativePrice();
-        if (ContractId == Guid.Empty) throw PricingErrors.ContractReferenceMustExist();
+        if (ContractId.Value == Guid.Empty) throw PricingErrors.ContractReferenceMustExist();
     }
 }

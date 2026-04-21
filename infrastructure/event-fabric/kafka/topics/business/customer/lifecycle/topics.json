@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.business.customer.lifecycle.commands",
+    "whyce.business.customer.lifecycle.events",
+    "whyce.business.customer.lifecycle.retry",
+    "whyce.business.customer.lifecycle.deadletter"
+  ]
+}

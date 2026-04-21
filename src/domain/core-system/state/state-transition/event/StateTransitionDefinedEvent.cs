@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.State.StateTransition;
 
 public sealed record StateTransitionDefinedEvent(
-    StateTransitionId TransitionId,
-    TransitionRule Rule);
+    [property: JsonPropertyName("AggregateId")] StateTransitionId TransitionId,
+    TransitionRule Rule) : DomainEvent;

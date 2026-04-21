@@ -25,10 +25,6 @@ Defines the structure and schema of individual domain events. Provides the canon
   * Factory: Register(id, schema) — creates a new event definition in Draft status
   * Transitions: Publish() (Draft -> Published), Deprecate() (Published -> Deprecated)
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * EventDefinitionId — Unique identifier for an event-definition instance (validated Guid)
@@ -46,9 +42,10 @@ Defines the structure and schema of individual domain events. Provides the canon
 * CanPublishSpecification — Validates that status is Draft before publishing
 * CanDeprecateSpecification — Validates that status is Published before deprecating
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* EventDefinitionService — Empty (no domain operations required)
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Invariants
 

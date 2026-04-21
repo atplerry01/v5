@@ -1,93 +1,63 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.PartyGovernance.Signature;
 
-public sealed class SignatureAggregate
+public sealed class SignatureAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public SignatureId Id { get; private set; }
     public SignatureStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private SignatureAggregate() { }
 
     public static SignatureAggregate Create(SignatureId id)
     {
         var aggregate = new SignatureAggregate();
-        aggregate.ValidateBeforeChange();
+        if (aggregate.Version >= 0)
+            throw SignatureErrors.AlreadyInitialized();
 
-        var @event = new SignatureCreatedEvent(id);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new SignatureCreatedEvent(id));
         return aggregate;
     }
 
     public void Sign()
     {
-        ValidateBeforeChange();
-
         var specification = new CanSignSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw SignatureErrors.InvalidStateTransition(Status, nameof(Sign));
 
-        var @event = new SignatureSignedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SignatureSignedEvent(Id));
     }
 
     public void Revoke()
     {
-        ValidateBeforeChange();
-
         var specification = new CanRevokeSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw SignatureErrors.InvalidStateTransition(Status, nameof(Revoke));
 
-        var @event = new SignatureRevokedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SignatureRevokedEvent(Id));
     }
 
-    private void Apply(SignatureCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.SignatureId;
-        Status = SignatureStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case SignatureCreatedEvent e:
+                Id = e.SignatureId;
+                Status = SignatureStatus.Pending;
+                break;
+            case SignatureSignedEvent:
+                Status = SignatureStatus.Signed;
+                break;
+            case SignatureRevokedEvent:
+                Status = SignatureStatus.Revoked;
+                break;
+        }
     }
 
-    private void Apply(SignatureSignedEvent @event)
-    {
-        Status = SignatureStatus.Signed;
-        Version++;
-    }
-
-    private void Apply(SignatureRevokedEvent @event)
-    {
-        Status = SignatureStatus.Revoked;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw SignatureErrors.MissingId();
 
         if (!Enum.IsDefined(Status))
             throw SignatureErrors.InvalidStateTransition(Status, "validate");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

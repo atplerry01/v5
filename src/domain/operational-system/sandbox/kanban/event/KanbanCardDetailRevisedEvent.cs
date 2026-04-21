@@ -5,5 +5,5 @@ namespace Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 public sealed record KanbanCardDetailRevisedEvent(
     AggregateId AggregateId,
     KanbanCardId CardId,
-    string Title,
-    string Description) : DomainEvent;
+    KanbanCardTitle Title,
+    DocumentRef Description) : DomainEvent;

@@ -18,6 +18,15 @@ using Whycespace.Platform.Host.Composition.Content.Media.Descriptor.Metadata.App
 using Whycespace.Platform.Host.Composition.Content.Media.Intake.Ingest.Application;
 using Whycespace.Platform.Host.Composition.Content.Media.LifecycleChange.Version.Application;
 using Whycespace.Platform.Host.Composition.Content.Media.TechnicalProcessing.Processing.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.StreamCore.Stream.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.StreamCore.Channel.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.StreamCore.Manifest.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.StreamCore.Availability.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.LiveStreaming.Broadcast.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.LiveStreaming.Archive.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.PlaybackConsumption.Session.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.Access.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.Observability.Application;
 using Whycespace.Projections.Content.Document.CoreObject.Bundle;
 using Whycespace.Projections.Content.Document.CoreObject.Document;
 using Whycespace.Projections.Content.Document.CoreObject.File;
@@ -35,6 +44,15 @@ using Whycespace.Projections.Content.Media.Descriptor.Metadata;
 using Whycespace.Projections.Content.Media.Intake.Ingest;
 using Whycespace.Projections.Content.Media.LifecycleChange.Version;
 using Whycespace.Projections.Content.Media.TechnicalProcessing.Processing;
+using Whycespace.Projections.Content.Streaming.StreamCore.Stream;
+using Whycespace.Projections.Content.Streaming.StreamCore.Channel;
+using Whycespace.Projections.Content.Streaming.StreamCore.Manifest;
+using Whycespace.Projections.Content.Streaming.StreamCore.Availability;
+using Whycespace.Projections.Content.Streaming.LiveStreaming.Broadcast;
+using Whycespace.Projections.Content.Streaming.LiveStreaming.Archive;
+using Whycespace.Projections.Content.Streaming.PlaybackConsumption.Session;
+using Whycespace.Projections.Content.Streaming.DeliveryGovernance.Access;
+using Whycespace.Projections.Content.Streaming.DeliveryGovernance.Observability;
 using Whycespace.Projections.Shared;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.EventFabric.DomainSchemas;
@@ -56,6 +74,17 @@ using Whycespace.Shared.Contracts.Content.Media.Descriptor.Metadata;
 using Whycespace.Shared.Contracts.Content.Media.Intake.Ingest;
 using Whycespace.Shared.Contracts.Content.Media.LifecycleChange.Version;
 using Whycespace.Shared.Contracts.Content.Media.TechnicalProcessing.Processing;
+using Whycespace.Shared.Contracts.Content.Streaming.StreamCore.Stream;
+using Whycespace.Shared.Contracts.Content.Streaming.StreamCore.Channel;
+using Whycespace.Shared.Contracts.Content.Streaming.StreamCore.Manifest;
+using Whycespace.Shared.Contracts.Content.Streaming.StreamCore.Availability;
+using Whycespace.Shared.Contracts.Content.Streaming.LiveStreaming.Broadcast;
+using Whycespace.Shared.Contracts.Content.Streaming.LiveStreaming.Archive;
+using Whycespace.Shared.Contracts.Content.Streaming.PlaybackConsumption.Session;
+using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.Access;
+using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.Observability;
+using Whycespace.Domain.ContentSystem.Invariant.BroadcastStreamBinding;
+using Whycespace.Domain.ContentSystem.Invariant.SessionStreamAccess;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.EventFabric;
 using Whycespace.Shared.Contracts.Runtime;
@@ -189,6 +218,79 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
             sp.GetRequiredService<PostgresProjectionStore<MediaVersionReadModel>>()));
         services.AddSingleton(sp => new MediaProcessingProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<MediaProcessingReadModel>>()));
+
+        // ── Streaming context (9 populated BCs across 4 domain-groups) ──
+
+        // streaming application modules
+        services.AddStreamApplication();
+        services.AddChannelApplication();
+        services.AddManifestApplication();
+        services.AddPlaybackApplication();
+        services.AddBroadcastApplication();
+        services.AddArchiveApplication();
+        services.AddSessionApplication();
+        services.AddStreamAccessApplication();
+        services.AddObservabilityApplication();
+
+        // streaming projection stores
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<StreamReadModel>("projection_content_streaming_stream_core_stream", "stream_read_model", "Stream"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ChannelReadModel>("projection_content_streaming_stream_core_channel", "channel_read_model", "Channel"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ManifestReadModel>("projection_content_streaming_stream_core_manifest", "manifest_read_model", "Manifest"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<PlaybackReadModel>("projection_content_streaming_stream_core_availability", "availability_read_model", "Playback"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<BroadcastReadModel>("projection_content_streaming_live_streaming_broadcast", "broadcast_read_model", "Broadcast"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ArchiveReadModel>("projection_content_streaming_live_streaming_archive", "archive_read_model", "Archive"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<SessionReadModel>("projection_content_streaming_playback_consumption_session", "session_read_model", "Session"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<StreamAccessReadModel>("projection_content_streaming_delivery_governance_access", "stream_access_read_model", "StreamAccess"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ObservabilityReadModel>("projection_content_streaming_delivery_governance_observability", "observability_read_model", "Observability"));
+
+        // streaming projection handlers
+        services.AddSingleton(sp => new StreamProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<StreamReadModel>>()));
+        services.AddSingleton(sp => new ChannelProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ChannelReadModel>>()));
+        services.AddSingleton(sp => new ManifestProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ManifestReadModel>>()));
+        services.AddSingleton(sp => new PlaybackProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<PlaybackReadModel>>()));
+        services.AddSingleton(sp => new BroadcastProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<BroadcastReadModel>>()));
+        services.AddSingleton(sp => new ArchiveProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ArchiveReadModel>>()));
+        services.AddSingleton(sp => new SessionProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<SessionReadModel>>()));
+        services.AddSingleton(sp => new StreamAccessProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<StreamAccessReadModel>>()));
+        services.AddSingleton(sp => new ObservabilityProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ObservabilityReadModel>>()));
+
+        // Cross-system invariants (domain policies) — per
+        // claude/templates/delivery-pattern/03-runtime-wiring.md § 6b.
+        // Pure, stateless — registered as singletons.
+        services.AddSingleton<BroadcastStreamBindingPolicy>();
+        services.AddSingleton<SessionStreamAccessPolicy>();
+
+        // Cross-BC state lookup adapters — thin adapters over projection
+        // stores, used by engine handlers to evaluate cross-system
+        // invariants without a direct infrastructure dependency.
+        services.AddSingleton<IStreamStatusLookup, StreamStatusLookup>();
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)
@@ -210,6 +312,17 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         DomainSchemaCatalog.RegisterContentMediaIntakeIngest(schema);
         DomainSchemaCatalog.RegisterContentMediaLifecycleChangeVersion(schema);
         DomainSchemaCatalog.RegisterContentMediaTechnicalProcessingProcessing(schema);
+
+        // streaming context
+        DomainSchemaCatalog.RegisterContentStreamingStreamCoreStream(schema);
+        DomainSchemaCatalog.RegisterContentStreamingStreamCoreChannel(schema);
+        DomainSchemaCatalog.RegisterContentStreamingStreamCoreManifest(schema);
+        DomainSchemaCatalog.RegisterContentStreamingStreamCoreAvailability(schema);
+        DomainSchemaCatalog.RegisterContentStreamingLiveStreamingBroadcast(schema);
+        DomainSchemaCatalog.RegisterContentStreamingLiveStreamingArchive(schema);
+        DomainSchemaCatalog.RegisterContentStreamingPlaybackConsumptionSession(schema);
+        DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceAccess(schema);
+        DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceObservability(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
@@ -334,6 +447,75 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         projection.Register("MediaProcessingCompletedEvent", mediaProcessingHandler);
         projection.Register("MediaProcessingFailedEvent", mediaProcessingHandler);
         projection.Register("MediaProcessingCancelledEvent", mediaProcessingHandler);
+
+        // ── streaming context ───────────────────────────────────────────
+
+        var streamHandler = provider.GetRequiredService<StreamProjectionHandler>();
+        projection.Register("StreamCreatedEvent", streamHandler);
+        projection.Register("StreamActivatedEvent", streamHandler);
+        projection.Register("StreamPausedEvent", streamHandler);
+        projection.Register("StreamResumedEvent", streamHandler);
+        projection.Register("StreamEndedEvent", streamHandler);
+        projection.Register("StreamArchivedEvent", streamHandler);
+
+        var channelHandler = provider.GetRequiredService<ChannelProjectionHandler>();
+        projection.Register("ChannelCreatedEvent", channelHandler);
+        projection.Register("ChannelRenamedEvent", channelHandler);
+        projection.Register("ChannelEnabledEvent", channelHandler);
+        projection.Register("ChannelDisabledEvent", channelHandler);
+        projection.Register("ChannelArchivedEvent", channelHandler);
+
+        var manifestHandler = provider.GetRequiredService<ManifestProjectionHandler>();
+        projection.Register("ManifestCreatedEvent", manifestHandler);
+        projection.Register("ManifestUpdatedEvent", manifestHandler);
+        projection.Register("ManifestPublishedEvent", manifestHandler);
+        projection.Register("ManifestRetiredEvent", manifestHandler);
+        projection.Register("ManifestArchivedEvent", manifestHandler);
+
+        var playbackHandler = provider.GetRequiredService<PlaybackProjectionHandler>();
+        projection.Register("PlaybackCreatedEvent", playbackHandler);
+        projection.Register("PlaybackEnabledEvent", playbackHandler);
+        projection.Register("PlaybackDisabledEvent", playbackHandler);
+        projection.Register("PlaybackWindowUpdatedEvent", playbackHandler);
+        projection.Register("PlaybackArchivedEvent", playbackHandler);
+
+        var broadcastHandler = provider.GetRequiredService<BroadcastProjectionHandler>();
+        projection.Register("BroadcastCreatedEvent", broadcastHandler);
+        projection.Register("BroadcastScheduledEvent", broadcastHandler);
+        projection.Register("BroadcastStartedEvent", broadcastHandler);
+        projection.Register("BroadcastPausedEvent", broadcastHandler);
+        projection.Register("BroadcastResumedEvent", broadcastHandler);
+        projection.Register("BroadcastEndedEvent", broadcastHandler);
+        projection.Register("BroadcastCancelledEvent", broadcastHandler);
+
+        var archiveHandler = provider.GetRequiredService<ArchiveProjectionHandler>();
+        projection.Register("ArchiveStartedEvent", archiveHandler);
+        projection.Register("ArchiveCompletedEvent", archiveHandler);
+        projection.Register("ArchiveFailedEvent", archiveHandler);
+        projection.Register("ArchiveFinalizedEvent", archiveHandler);
+        projection.Register("ArchiveArchivedEvent", archiveHandler);
+
+        var sessionHandler = provider.GetRequiredService<SessionProjectionHandler>();
+        projection.Register("SessionOpenedEvent", sessionHandler);
+        projection.Register("SessionActivatedEvent", sessionHandler);
+        projection.Register("SessionSuspendedEvent", sessionHandler);
+        projection.Register("SessionResumedEvent", sessionHandler);
+        projection.Register("SessionClosedEvent", sessionHandler);
+        projection.Register("SessionFailedEvent", sessionHandler);
+        projection.Register("SessionExpiredEvent", sessionHandler);
+
+        var streamAccessHandler = provider.GetRequiredService<StreamAccessProjectionHandler>();
+        projection.Register("StreamAccessGrantedEvent", streamAccessHandler);
+        projection.Register("StreamAccessRestrictedEvent", streamAccessHandler);
+        projection.Register("StreamAccessUnrestrictedEvent", streamAccessHandler);
+        projection.Register("StreamAccessRevokedEvent", streamAccessHandler);
+        projection.Register("StreamAccessExpiredEvent", streamAccessHandler);
+
+        var observabilityHandler = provider.GetRequiredService<ObservabilityProjectionHandler>();
+        projection.Register("ObservabilityCapturedEvent", observabilityHandler);
+        projection.Register("ObservabilityUpdatedEvent", observabilityHandler);
+        projection.Register("ObservabilityFinalizedEvent", observabilityHandler);
+        projection.Register("ObservabilityArchivedEvent", observabilityHandler);
     }
 
     public void RegisterEngines(IEngineRegistry engine)
@@ -355,6 +537,17 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         MediaIngestApplicationModule.RegisterEngines(engine);
         MediaVersionApplicationModule.RegisterEngines(engine);
         MediaProcessingApplicationModule.RegisterEngines(engine);
+
+        // streaming context
+        StreamApplicationModule.RegisterEngines(engine);
+        ChannelApplicationModule.RegisterEngines(engine);
+        ManifestApplicationModule.RegisterEngines(engine);
+        PlaybackApplicationModule.RegisterEngines(engine);
+        BroadcastApplicationModule.RegisterEngines(engine);
+        ArchiveApplicationModule.RegisterEngines(engine);
+        SessionApplicationModule.RegisterEngines(engine);
+        StreamAccessApplicationModule.RegisterEngines(engine);
+        ObservabilityApplicationModule.RegisterEngines(engine);
     }
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)

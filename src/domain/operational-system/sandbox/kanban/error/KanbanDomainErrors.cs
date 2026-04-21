@@ -2,9 +2,12 @@ namespace Whycespace.Domain.OperationalSystem.Sandbox.Kanban;
 
 public static class KanbanDomainErrors
 {
+    public const string EmptyBoardIdentity = "Kanban board identity must be non-empty.";
     public const string BoardNameRequired = "Board name is required.";
     public const string ListNameRequired = "List name is required.";
     public const string CardTitleRequired = "Card title is required.";
+    public const string CardDescriptionRequired = "Card description (DocumentRef) is required.";
+    public const string InvalidCardDescriptionRef = "Card description reference is not a valid non-empty Guid.";
     public const string ListNotFound = "The specified list does not exist on this board.";
     public const string CardNotFound = "The specified card does not exist on this board.";
     public const string InvalidMove = "The card cannot be moved to the specified position.";

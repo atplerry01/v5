@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.sanction.commands",
+    "whyce.structural.humancapital.sanction.events",
+    "whyce.structural.humancapital.sanction.retry",
+    "whyce.structural.humancapital.sanction.deadletter"
+  ]
+}

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Bundle;
 
 public readonly record struct BundleName
@@ -8,12 +10,10 @@ public readonly record struct BundleName
 
     public BundleName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("BundleName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "BundleName must not be empty.");
 
-        var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"BundleName exceeds {MaxLength} characters.", nameof(value));
+        var trimmed = value!.Trim();
+        Guard.Against(trimmed.Length > MaxLength, $"BundleName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

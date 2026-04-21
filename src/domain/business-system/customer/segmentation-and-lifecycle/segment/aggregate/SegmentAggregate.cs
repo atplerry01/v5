@@ -1,18 +1,15 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.Segment;
 
-public sealed class SegmentAggregate
+public sealed class SegmentAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public SegmentId Id { get; private set; }
     public SegmentCode Code { get; private set; }
     public SegmentName Name { get; private set; }
     public SegmentType Type { get; private set; }
     public SegmentCriteria Criteria { get; private set; }
     public SegmentStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private SegmentAggregate() { }
 
     public static SegmentAggregate Create(
         SegmentId id,
@@ -22,23 +19,17 @@ public sealed class SegmentAggregate
         SegmentCriteria criteria)
     {
         var aggregate = new SegmentAggregate();
+        if (aggregate.Version >= 0)
+            throw SegmentErrors.AlreadyInitialized();
 
-        var @event = new SegmentCreatedEvent(id, code, name, type, criteria);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new SegmentCreatedEvent(id, code, name, type, criteria));
         return aggregate;
     }
 
     public void Update(SegmentName name, SegmentCriteria criteria)
     {
         EnsureMutable();
-
-        var @event = new SegmentUpdatedEvent(Id, name, criteria);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SegmentUpdatedEvent(Id, name, criteria));
     }
 
     public void Activate()
@@ -47,10 +38,7 @@ public sealed class SegmentAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw SegmentErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new SegmentActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SegmentActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,40 +46,32 @@ public sealed class SegmentAggregate
         if (Status == SegmentStatus.Archived)
             throw SegmentErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new SegmentArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new SegmentArchivedEvent(Id));
     }
 
-    private void Apply(SegmentCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.SegmentId;
-        Code = @event.Code;
-        Name = @event.Name;
-        Type = @event.Type;
-        Criteria = @event.Criteria;
-        Status = SegmentStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(SegmentUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Criteria = @event.Criteria;
-        Version++;
-    }
-
-    private void Apply(SegmentActivatedEvent @event)
-    {
-        Status = SegmentStatus.Active;
-        Version++;
-    }
-
-    private void Apply(SegmentArchivedEvent @event)
-    {
-        Status = SegmentStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case SegmentCreatedEvent e:
+                Id = e.SegmentId;
+                Code = e.Code;
+                Name = e.Name;
+                Type = e.Type;
+                Criteria = e.Criteria;
+                Status = SegmentStatus.Draft;
+                break;
+            case SegmentUpdatedEvent e:
+                Name = e.Name;
+                Criteria = e.Criteria;
+                break;
+            case SegmentActivatedEvent:
+                Status = SegmentStatus.Active;
+                break;
+            case SegmentArchivedEvent:
+                Status = SegmentStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -101,11 +81,7 @@ public sealed class SegmentAggregate
             throw SegmentErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw SegmentErrors.MissingId();

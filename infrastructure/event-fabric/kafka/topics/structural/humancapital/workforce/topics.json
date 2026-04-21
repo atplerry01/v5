@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.workforce.commands",
+    "whyce.structural.humancapital.workforce.events",
+    "whyce.structural.humancapital.workforce.retry",
+    "whyce.structural.humancapital.workforce.deadletter"
+  ]
+}

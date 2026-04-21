@@ -1,5 +1,7 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
 
 namespace Whycespace.Domain.EconomicSystem.Revenue.Revenue;
 
@@ -18,7 +20,24 @@ public sealed class RevenueAggregate : AggregateRoot
     public string SourceRef { get; private set; } = string.Empty;
     public RevenueStatus Status { get; private set; }
 
+    /// Typed accessor over <see cref="SpvId"/>. Internal / in-memory only —
+    /// never serialized to the wire. Null when the persisted SpvId is not a
+    /// valid non-empty Guid (legacy data tolerated for replay).
+    [JsonIgnore]
+    public SpvRef? Spv =>
+        Guid.TryParse(SpvId, out var g) && g != Guid.Empty
+            ? new SpvRef(g)
+            : null;
+
     private RevenueAggregate() { }
+
+    public static RevenueAggregate RecordRevenue(
+        RevenueId revenueId,
+        SpvRef spv,
+        decimal amount,
+        string currency,
+        string sourceRef)
+        => RecordRevenue(revenueId, spv.Value.ToString(), amount, currency, sourceRef);
 
     public static RevenueAggregate RecordRevenue(
         RevenueId revenueId,

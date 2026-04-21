@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.ServiceOffering;
 
-public sealed class ServiceOfferingAggregate
+public sealed class ServiceOfferingAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public ServiceOfferingId Id { get; private set; }
     public ServiceOfferingName Name { get; private set; }
     public ServiceDefinitionRef ServiceDefinition { get; private set; }
     public ServiceOfferingStatus Status { get; private set; }
     public OfferingPackageRef? Package { get; private set; }
-    public int Version { get; private set; }
-
-    private ServiceOfferingAggregate() { }
 
     public static ServiceOfferingAggregate Create(
         ServiceOfferingId id,
@@ -22,12 +18,10 @@ public sealed class ServiceOfferingAggregate
         OfferingPackageRef? package = null)
     {
         var aggregate = new ServiceOfferingAggregate();
+        if (aggregate.Version >= 0)
+            throw ServiceOfferingErrors.AlreadyInitialized();
 
-        var @event = new ServiceOfferingCreatedEvent(id, name, serviceDefinition, package);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new ServiceOfferingCreatedEvent(id, name, serviceDefinition, package));
         return aggregate;
     }
 
@@ -35,10 +29,7 @@ public sealed class ServiceOfferingAggregate
     {
         EnsureMutable(nameof(Update));
 
-        var @event = new ServiceOfferingUpdatedEvent(Id, name);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceOfferingUpdatedEvent(Id, name));
     }
 
     public void Activate()
@@ -47,10 +38,7 @@ public sealed class ServiceOfferingAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw ServiceOfferingErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new ServiceOfferingActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceOfferingActivatedEvent(Id));
     }
 
     public void Archive()
@@ -58,38 +46,30 @@ public sealed class ServiceOfferingAggregate
         if (Status == ServiceOfferingStatus.Archived)
             throw ServiceOfferingErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new ServiceOfferingArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new ServiceOfferingArchivedEvent(Id));
     }
 
-    private void Apply(ServiceOfferingCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.ServiceOfferingId;
-        Name = @event.Name;
-        ServiceDefinition = @event.ServiceDefinition;
-        Package = @event.Package;
-        Status = ServiceOfferingStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(ServiceOfferingUpdatedEvent @event)
-    {
-        Name = @event.Name;
-        Version++;
-    }
-
-    private void Apply(ServiceOfferingActivatedEvent @event)
-    {
-        Status = ServiceOfferingStatus.Active;
-        Version++;
-    }
-
-    private void Apply(ServiceOfferingArchivedEvent @event)
-    {
-        Status = ServiceOfferingStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case ServiceOfferingCreatedEvent e:
+                Id = e.ServiceOfferingId;
+                Name = e.Name;
+                ServiceDefinition = e.ServiceDefinition;
+                Package = e.Package;
+                Status = ServiceOfferingStatus.Draft;
+                break;
+            case ServiceOfferingUpdatedEvent e:
+                Name = e.Name;
+                break;
+            case ServiceOfferingActivatedEvent:
+                Status = ServiceOfferingStatus.Active;
+                break;
+            case ServiceOfferingArchivedEvent:
+                Status = ServiceOfferingStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable(string attemptedAction)
@@ -99,17 +79,13 @@ public sealed class ServiceOfferingAggregate
             throw ServiceOfferingErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw ServiceOfferingErrors.MissingId();
 
         if (ServiceDefinition == default)
-            throw new ServiceOfferingDomainException("ServiceDefinitionRef is required for a service-offering.");
+            throw ServiceOfferingErrors.MissingServiceDefinition();
 
         if (!Enum.IsDefined(Status))
             throw ServiceOfferingErrors.InvalidStateTransition(Status, "validate");

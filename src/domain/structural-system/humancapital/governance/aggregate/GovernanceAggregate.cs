@@ -1,23 +1,39 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Humancapital.Governance;
 
-public sealed class GovernanceAggregate
+public sealed class GovernanceAggregate : AggregateRoot
 {
-    public static GovernanceAggregate Create()
+    public GovernanceId Id { get; private set; }
+    public GovernanceDescriptor Descriptor { get; private set; }
+
+    public static GovernanceAggregate Create(GovernanceId id, GovernanceDescriptor descriptor)
     {
         var aggregate = new GovernanceAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        if (aggregate.Version >= 0)
+            throw GovernanceErrors.AlreadyInitialized();
+
+        aggregate.RaiseDomainEvent(new GovernanceCreatedEvent(id, descriptor));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void Apply(object domainEvent)
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        switch (domainEvent)
+        {
+            case GovernanceCreatedEvent e:
+                Id = e.GovernanceId;
+                Descriptor = e.Descriptor;
+                break;
+        }
     }
 
-    private void ValidateBeforeChange()
+    protected override void EnsureInvariants()
     {
-        // Pre-change validation gate
+        if (Id == default)
+            throw GovernanceErrors.MissingId();
+
+        if (Descriptor == default)
+            throw GovernanceErrors.MissingDescriptor();
     }
 }

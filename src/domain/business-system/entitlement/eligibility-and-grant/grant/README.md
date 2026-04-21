@@ -47,3 +47,8 @@ Business entitlement grant truth. Owns the identity, subject/target binding, sco
 
 ## Status
 S4 — E1 domain model implemented. Aggregate + VOs + events + specs + errors. No service or entity required at this stage.
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.

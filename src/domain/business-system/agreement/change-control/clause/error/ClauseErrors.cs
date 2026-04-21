@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Clause;
 
 public static class ClauseErrors
 {
-    public static ClauseDomainException MissingId()
-        => new("ClauseId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("ClauseId is required and must not be empty.");
 
-    public static ClauseDomainException InvalidClauseType()
-        => new("ClauseType must be a valid defined value.");
+    public static DomainException InvalidClauseType()
+        => new DomainInvariantViolationException("ClauseType must be a valid defined value.");
 
-    public static ClauseDomainException AlreadySuperseded(ClauseId id)
-        => new($"Clause '{id.Value}' has already been superseded.");
+    public static DomainException AlreadySuperseded(ClauseId id)
+        => new DomainInvariantViolationException($"Clause '{id.Value}' has already been superseded.");
 
-    public static ClauseDomainException InvalidStateTransition(ClauseStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
-}
+    public static DomainException InvalidStateTransition(ClauseStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-public sealed class ClauseDomainException : Exception
-{
-    public ClauseDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Clause has already been initialized.");
 }

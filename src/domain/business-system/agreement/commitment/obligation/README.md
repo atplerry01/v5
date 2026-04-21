@@ -57,9 +57,10 @@ Pending ──Breach()───> Breached (terminal)
 * **AlreadyBreached** — Cannot transition an already-breached obligation.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **ObligationService** — Reserved for cross-aggregate coordination within obligation context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

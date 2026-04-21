@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.delivery_governance.observability.commands",
+    "whyce.content.streaming.delivery_governance.observability.events",
+    "whyce.content.streaming.delivery_governance.observability.retry",
+    "whyce.content.streaming.delivery_governance.observability.deadletter"
+  ]
+}

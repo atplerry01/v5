@@ -8,6 +8,7 @@ namespace Whycespace.Domain.IntegrationSystem.OutboundEffect;
 /// </summary>
 public static class OutboundEffectDomainErrors
 {
+    public const string EmptyIdentity = "OutboundEffect identity must be non-empty.";
     public const string ProviderIdRequired = "OutboundEffect ProviderId is required.";
     public const string EffectTypeRequired = "OutboundEffect EffectType is required.";
     public const string IdempotencyKeyRequired = "OutboundEffect IdempotencyKey is required.";

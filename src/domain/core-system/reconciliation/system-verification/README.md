@@ -24,10 +24,6 @@ Defines the foundational structure for system-level verification checks — cros
 
   * Manages the lifecycle and state of a system verification instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * SystemVerificationId — Unique identifier for a system verification instance
@@ -35,16 +31,10 @@ Defines the foundational structure for system-level verification checks — cros
 ## Domain Events
 
 * SystemVerificationCreatedEvent — Raised when a new system verification is created
-* SystemVerificationUpdatedEvent — Raised when system verification metadata is updated
-* SystemVerificationStateChangedEvent — Raised when system verification lifecycle state transitions
 
 ## Specifications
 
 * SystemVerificationSpecification — Validates system verification structure and completeness
-
-## Domain Services
-
-* SystemVerificationService — Domain operations for system verification management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for system-level verification checks — cros
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

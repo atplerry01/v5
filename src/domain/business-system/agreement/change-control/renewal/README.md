@@ -61,9 +61,10 @@ Pending ──Expire()──> Expired (terminal)
 * **AlreadyExpired** — Cannot act on an expired renewal.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **RenewalService** — Reserved for cross-aggregate coordination within renewal context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

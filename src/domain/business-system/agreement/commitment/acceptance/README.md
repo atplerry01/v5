@@ -57,9 +57,10 @@ Pending ──Reject()──> Rejected (terminal)
 * **AlreadyRejected** — Cannot transition an already-rejected acceptance.
 * **InvalidStateTransition** — Generic guard for illegal status transitions.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **AcceptanceService** — Reserved for cross-aggregate coordination within acceptance context.
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

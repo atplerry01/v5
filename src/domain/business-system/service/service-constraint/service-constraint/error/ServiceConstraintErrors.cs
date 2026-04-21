@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceConstraint;
 
 public static class ServiceConstraintErrors
 {
-    public static ServiceConstraintDomainException MissingId()
-        => new("ServiceConstraintId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("ServiceConstraintId is required and must not be empty.");
 
-    public static ServiceConstraintDomainException MissingServiceDefinitionRef()
-        => new("ServiceConstraint must reference a service definition.");
+    public static DomainException MissingServiceDefinitionRef()
+        => new DomainInvariantViolationException("ServiceConstraint must reference a service definition.");
 
-    public static ServiceConstraintDomainException InvalidStateTransition(ConstraintStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
+    public static DomainException InvalidStateTransition(ConstraintStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-    public static ServiceConstraintDomainException ArchivedImmutable(ServiceConstraintId id)
-        => new($"ServiceConstraint '{id.Value}' is archived and cannot be mutated.");
-}
+    public static DomainException ArchivedImmutable(ServiceConstraintId id)
+        => new DomainInvariantViolationException($"ServiceConstraint '{id.Value}' is archived and cannot be mutated.");
 
-public sealed class ServiceConstraintDomainException : Exception
-{
-    public ServiceConstraintDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("ServiceConstraint has already been initialized.");
 }

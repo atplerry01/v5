@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.ChangeControl.Clause;
 
 public readonly record struct ClauseId
@@ -6,9 +8,7 @@ public readonly record struct ClauseId
 
     public ClauseId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ClauseId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ClauseId cannot be empty.");
         Value = value;
     }
 }

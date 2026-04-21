@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Cluster;
 
 public readonly record struct ClusterId
@@ -6,9 +8,7 @@ public readonly record struct ClusterId
 
     public ClusterId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw ClusterErrors.MissingId();
-
+        Guard.Against(value == Guid.Empty, "ClusterId cannot be empty.");
         Value = value;
     }
 }

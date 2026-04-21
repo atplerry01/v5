@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Customer;
 
 public readonly record struct CustomerReferenceCode
@@ -8,12 +10,10 @@ public readonly record struct CustomerReferenceCode
 
     public CustomerReferenceCode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("CustomerReferenceCode must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "CustomerReferenceCode must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"CustomerReferenceCode exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"CustomerReferenceCode exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

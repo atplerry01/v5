@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceConstraint;
 
 public readonly record struct ServiceConstraintId
@@ -6,9 +8,7 @@ public readonly record struct ServiceConstraintId
 
     public ServiceConstraintId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ServiceConstraintId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ServiceConstraintId cannot be empty.");
         Value = value;
     }
 }

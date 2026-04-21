@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Order.OrderCore.Reservation;
 
 public readonly record struct ReservationQuantity
@@ -7,13 +9,10 @@ public readonly record struct ReservationQuantity
 
     public ReservationQuantity(decimal value, string unit)
     {
-        if (value <= 0m)
-            throw new ArgumentException("ReservationQuantity must be positive.", nameof(value));
-
-        if (string.IsNullOrWhiteSpace(unit))
-            throw new ArgumentException("ReservationQuantity unit must not be empty.", nameof(unit));
+        Guard.Against(value <= 0m, "ReservationQuantity must be positive.");
+        Guard.Against(string.IsNullOrWhiteSpace(unit), "ReservationQuantity unit must not be empty.");
 
         Value = value;
-        Unit = unit.Trim();
+        Unit = unit!.Trim();
     }
 }

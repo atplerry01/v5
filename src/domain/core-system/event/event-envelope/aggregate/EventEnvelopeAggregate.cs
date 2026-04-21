@@ -1,15 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Event.EventEnvelope;
 
-public sealed class EventEnvelopeAggregate
+public sealed class EventEnvelopeAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public EventEnvelopeId Id { get; private set; }
     public EventEnvelopeMetadata Metadata { get; private set; }
     public EventEnvelopeStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private EventEnvelopeAggregate() { }
 
     // ── Factory ──────────────────────────────────────────────────
 
@@ -18,12 +15,10 @@ public sealed class EventEnvelopeAggregate
         EventEnvelopeMetadata metadata)
     {
         var aggregate = new EventEnvelopeAggregate();
+        if (aggregate.Version >= 0)
+            throw EventEnvelopeErrors.AlreadyInitialized();
 
-        var @event = new EventEnvelopeSealedEvent(id, metadata);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new EventEnvelopeSealedEvent(id, metadata));
         return aggregate;
     }
 
@@ -35,10 +30,7 @@ public sealed class EventEnvelopeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EventEnvelopeErrors.InvalidStateTransition(Status, nameof(Publish));
 
-        var @event = new EventEnvelopePublishedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EventEnvelopePublishedEvent(Id));
     }
 
     // ── Acknowledge ──────────────────────────────────────────────
@@ -49,38 +41,30 @@ public sealed class EventEnvelopeAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EventEnvelopeErrors.InvalidStateTransition(Status, nameof(Acknowledge));
 
-        var @event = new EventEnvelopeAcknowledgedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EventEnvelopeAcknowledgedEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(EventEnvelopeSealedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.EnvelopeId;
-        Metadata = @event.Metadata;
-        Status = EventEnvelopeStatus.Sealed;
-        Version++;
+        switch (domainEvent)
+        {
+            case EventEnvelopeSealedEvent e:
+                Id = e.EnvelopeId;
+                Metadata = e.Metadata;
+                Status = EventEnvelopeStatus.Sealed;
+                break;
+            case EventEnvelopePublishedEvent:
+                Status = EventEnvelopeStatus.Published;
+                break;
+            case EventEnvelopeAcknowledgedEvent:
+                Status = EventEnvelopeStatus.Acknowledged;
+                break;
+        }
     }
 
-    private void Apply(EventEnvelopePublishedEvent @event)
-    {
-        Status = EventEnvelopeStatus.Published;
-        Version++;
-    }
-
-    private void Apply(EventEnvelopeAcknowledgedEvent @event)
-    {
-        Status = EventEnvelopeStatus.Acknowledged;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw EventEnvelopeErrors.MissingId();

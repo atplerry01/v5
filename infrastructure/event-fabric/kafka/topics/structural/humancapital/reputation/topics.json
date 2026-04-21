@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.reputation.commands",
+    "whyce.structural.humancapital.reputation.events",
+    "whyce.structural.humancapital.reputation.retry",
+    "whyce.structural.humancapital.reputation.deadletter"
+  ]
+}

@@ -22,11 +22,7 @@ Defines the foundational structure for state projections — derived read models
 
 * StateProjectionAggregate
 
-  * Manages the lifecycle and integrity of a single state projection instance
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for state projections — derived read models
 ## Domain Events
 
 * StateProjectionCreatedEvent — Raised when a new state projection is created
-* StateProjectionUpdatedEvent — Raised when state projection metadata is updated
-* StateProjectionStateChangedEvent — Raised when state projection lifecycle state transitions
 
 ## Specifications
 
-* StateProjectionSpecification — Validates state projection structure and completeness
+* StateProjectionSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* StateProjectionService — Domain operations for state projection management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for state projections — derived read models
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

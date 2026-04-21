@@ -12,11 +12,11 @@ This domain defines structural hierarchy definitions and enforces valid parent-c
 ## Aggregate
 
 * **HierarchyDefinitionAggregate** -- Root aggregate representing a hierarchy definition.
-  * Private constructor; created via `Define(HierarchyDefinitionId, HierarchyDefinitionDescriptor)` factory method.
+  * Inherits canonical `AggregateRoot`; created via `Define(HierarchyDefinitionId, HierarchyDefinitionDescriptor)` factory.
   * State transitions via `Validate()` and `Lock()` methods.
   * Event-sourced: all state derived from applied events.
   * Enforces invariants after every state change, including parent-child structural validity.
-  * Supports optimistic concurrency via `Version` property.
+  * Supports optimistic concurrency via inherited `Version` property.
 
 ## State Model
 
@@ -55,10 +55,12 @@ Define() -> Defined --Validate()--> Validated --Lock()--> Locked (terminal)
 * **MissingDescriptor** -- HierarchyDefinitionDescriptor is required.
 * **InvalidParentChild** -- Self-referencing parent-child relationship detected.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
+* **AlreadyInitialized** -- Factory invoked on an already-initialized aggregate.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **HierarchyDefinitionService** -- Reserved for cross-aggregate coordination within hierarchy-definition context.
+* `entity/` -- Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` -- Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

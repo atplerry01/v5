@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderTier;
 
 public sealed record ProviderTierCreatedEvent(
-    ProviderTierId ProviderTierId,
+    [property: JsonPropertyName("AggregateId")] ProviderTierId ProviderTierId,
     TierCode Code,
     TierName Name,
-    TierRank Rank);
+    TierRank Rank) : DomainEvent;

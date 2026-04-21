@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.Segment;
 
 public readonly record struct SegmentName
@@ -8,12 +10,10 @@ public readonly record struct SegmentName
 
     public SegmentName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("SegmentName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "SegmentName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"SegmentName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"SegmentName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }

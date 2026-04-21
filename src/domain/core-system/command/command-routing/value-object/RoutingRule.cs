@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.CoreSystem.Command.CommandRouting;
 
 public readonly record struct RoutingRule
@@ -7,11 +9,8 @@ public readonly record struct RoutingRule
 
     public RoutingRule(string commandName, string targetHandler)
     {
-        if (string.IsNullOrWhiteSpace(commandName))
-            throw new ArgumentException("Command name must not be empty.", nameof(commandName));
-
-        if (string.IsNullOrWhiteSpace(targetHandler))
-            throw new ArgumentException("Target handler must not be empty.", nameof(targetHandler));
+        Guard.Against(string.IsNullOrWhiteSpace(commandName), "Command name must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(targetHandler), "Target handler must not be empty.");
 
         CommandName = commandName;
         TargetHandler = targetHandler;

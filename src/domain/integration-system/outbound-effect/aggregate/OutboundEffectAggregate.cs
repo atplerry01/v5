@@ -200,7 +200,15 @@ public sealed class OutboundEffectAggregate : AggregateRoot
         }
     }
 
-    protected override void EnsureInvariants() { }
+    protected override void EnsureInvariants()
+    {
+        Guard.Against(Id.Value == Guid.Empty, OutboundEffectDomainErrors.EmptyIdentity);
+        if (_status != OutboundEffectStatus.Scheduled)
+        {
+            Guard.Against(string.IsNullOrWhiteSpace(_providerId), OutboundEffectDomainErrors.ProviderIdRequired);
+            Guard.Against(string.IsNullOrWhiteSpace(_effectType), OutboundEffectDomainErrors.EffectTypeRequired);
+        }
+    }
 
     private Guid ResolveAggregateId(AggregateId aggregateId)
     {

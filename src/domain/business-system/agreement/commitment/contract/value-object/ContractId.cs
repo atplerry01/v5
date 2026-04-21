@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.Commitment.Contract;
 
 public readonly record struct ContractId
@@ -6,9 +8,7 @@ public readonly record struct ContractId
 
     public ContractId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ContractId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ContractId cannot be empty.");
         Value = value;
     }
 }

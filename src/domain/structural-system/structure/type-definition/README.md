@@ -12,11 +12,11 @@ This domain defines structural type definitions and contains no execution or orc
 ## Aggregate
 
 * **TypeDefinitionAggregate** -- Root aggregate representing a structural type definition.
-  * Private constructor; created via `Define(TypeDefinitionId, TypeDefinitionDescriptor)` factory method.
+  * Inherits canonical `AggregateRoot`; created via `Define(TypeDefinitionId, TypeDefinitionDescriptor)` factory.
   * State transitions via `Activate()` and `Retire()` methods.
   * Event-sourced: all state derived from applied events.
   * Enforces invariants after every state change.
-  * Supports optimistic concurrency via `Version` property.
+  * Supports optimistic concurrency via inherited `Version` property.
 
 ## State Model
 
@@ -53,10 +53,12 @@ Define() -> Defined --Activate()--> Active --Retire()--> Retired (terminal)
 * **MissingId** -- TypeDefinitionId is required.
 * **MissingDescriptor** -- TypeDefinitionDescriptor is required.
 * **InvalidStateTransition** -- Guard for illegal status transitions (includes current status and attempted action).
+* **AlreadyInitialized** -- Factory invoked on an already-initialized aggregate.
 
-## Domain Services
+## WHEN-NEEDED folders
 
-* **TypeDefinitionService** -- Reserved for cross-aggregate coordination within type-definition context.
+* `entity/` -- Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` -- Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Status
 

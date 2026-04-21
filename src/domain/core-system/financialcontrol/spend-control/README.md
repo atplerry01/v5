@@ -24,10 +24,6 @@ Defines the foundational structure for spend tracking and control limits. Provid
 
   * Manages the lifecycle and state of a spend control instance
 
-## Entities
-
-* None
-
 ## Value Objects
 
 * SpendControlId — Unique identifier for a spend-control instance
@@ -35,16 +31,10 @@ Defines the foundational structure for spend tracking and control limits. Provid
 ## Domain Events
 
 * SpendControlCreatedEvent — Raised when a new spend-control is created
-* SpendControlUpdatedEvent — Raised when spend-control metadata is updated
-* SpendControlStateChangedEvent — Raised when spend-control lifecycle state transitions
 
 ## Specifications
 
 * SpendControlSpecification — Validates spend-control structure and completeness
-
-## Domain Services
-
-* SpendControlService — Domain operations for spend-control management
 
 ## Invariants
 
@@ -63,6 +53,11 @@ Defines the foundational structure for spend tracking and control limits. Provid
 ## Lifecycle
 
 Created → Active → Updated → Deprecated
+
+## WHEN-NEEDED folders
+
+- no `entity/` — aggregate has no child entities.
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Notes
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.PartyGovernance.Counterparty;
 
 public sealed class CounterpartyProfile
@@ -7,11 +9,8 @@ public sealed class CounterpartyProfile
 
     public CounterpartyProfile(Guid identityReference, string name)
     {
-        if (identityReference == Guid.Empty)
-            throw new ArgumentException("IdentityReference must not be empty.", nameof(identityReference));
-
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Name must not be empty.", nameof(name));
+        Guard.Against(identityReference == Guid.Empty, "IdentityReference must not be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(name), "Name must not be empty.");
 
         IdentityReference = identityReference;
         Name = name;

@@ -48,10 +48,6 @@ Manages usage control for entitlement rights. A usage right tracks the consumpti
 * CanConsumeSpecification — Only InUse rights can be consumed
 * IsAvailableSpecification — Checks if usage right has available units
 
-## Domain Services
-
-* UsageRightService — Domain operations for usage right management
-
 ## Errors
 
 * MissingId — UsageRightId is required
@@ -84,6 +80,10 @@ Manages usage control for entitlement rights. A usage right tracks the consumpti
 * quota (usage may be constrained by quota)
 * limit (usage may be constrained by limit)
 * restriction (restriction may block usage)
+
+## WHEN-NEEDED folders
+
+- no `service/` — aggregate has no cross-aggregate coordination logic.
 
 ## Status
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceConstraint.ServiceWindow;
 
 public readonly record struct ServiceWindowId
@@ -6,9 +8,7 @@ public readonly record struct ServiceWindowId
 
     public ServiceWindowId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ServiceWindowId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ServiceWindowId cannot be empty.");
         Value = value;
     }
 }

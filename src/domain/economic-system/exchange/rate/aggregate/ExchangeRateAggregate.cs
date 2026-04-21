@@ -8,7 +8,7 @@ public sealed class ExchangeRateAggregate : AggregateRoot
     public RateId RateId { get; private set; }
     public Currency BaseCurrency { get; private set; }
     public Currency QuoteCurrency { get; private set; }
-    public decimal RateValue { get; private set; }
+    public ExchangeRate RateValue { get; private set; }
     public Timestamp EffectiveAt { get; private set; }
     public ExchangeRateStatus Status { get; private set; }
     public new int Version { get; private set; }
@@ -21,17 +21,28 @@ public sealed class ExchangeRateAggregate : AggregateRoot
         RateId rateId,
         Currency baseCurrency,
         Currency quoteCurrency,
+        ExchangeRate rateValue,
+        Timestamp effectiveAt,
+        int version)
+    {
+        var aggregate = new ExchangeRateAggregate();
+        aggregate.RaiseDomainEvent(new ExchangeRateDefinedEvent(
+            rateId, baseCurrency, quoteCurrency, rateValue.Value, effectiveAt, version));
+        return aggregate;
+    }
+
+    // D-VO-TYPING-01 dual-path: legacy decimal overload normalizes to typed VO.
+    public static ExchangeRateAggregate DefineRate(
+        RateId rateId,
+        Currency baseCurrency,
+        Currency quoteCurrency,
         decimal rateValue,
         Timestamp effectiveAt,
         int version)
     {
         if (rateValue <= 0m)
             throw ExchangeRateErrors.InvalidRateValue(rateValue);
-
-        var aggregate = new ExchangeRateAggregate();
-        aggregate.RaiseDomainEvent(new ExchangeRateDefinedEvent(
-            rateId, baseCurrency, quoteCurrency, rateValue, effectiveAt, version));
-        return aggregate;
+        return DefineRate(rateId, baseCurrency, quoteCurrency, new ExchangeRate(rateValue), effectiveAt, version);
     }
 
     // ── Activate ─────────────────────────────────────────────────
@@ -75,7 +86,7 @@ public sealed class ExchangeRateAggregate : AggregateRoot
                     : new RateId(AggregateIdentity);
                 BaseCurrency = e.BaseCurrency;
                 QuoteCurrency = e.QuoteCurrency;
-                RateValue = e.RateValue;
+                RateValue = new ExchangeRate(e.RateValue);
                 EffectiveAt = e.EffectiveAt;
                 Version = e.Version;
                 Status = ExchangeRateStatus.Defined;

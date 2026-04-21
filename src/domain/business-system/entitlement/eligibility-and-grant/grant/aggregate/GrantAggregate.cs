@@ -1,18 +1,15 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Entitlement.EligibilityAndGrant.Grant;
 
-public sealed class GrantAggregate
+public sealed class GrantAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public GrantId Id { get; private set; }
     public GrantSubjectRef Subject { get; private set; }
     public GrantTargetRef Target { get; private set; }
     public GrantScope Scope { get; private set; }
     public GrantStatus Status { get; private set; }
     public GrantExpiry? Expiry { get; private set; }
-    public int Version { get; private set; }
-
-    private GrantAggregate() { }
 
     public static GrantAggregate Create(
         GrantId id,
@@ -26,12 +23,10 @@ public sealed class GrantAggregate
             throw GrantErrors.ExpiryInPast();
 
         var aggregate = new GrantAggregate();
+        if (aggregate.Version >= 0)
+            throw GrantErrors.AlreadyInitialized();
 
-        var @event = new GrantCreatedEvent(id, subject, target, scope, expiry);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new GrantCreatedEvent(id, subject, target, scope, expiry));
         return aggregate;
     }
 
@@ -44,10 +39,7 @@ public sealed class GrantAggregate
         if (Expiry.HasValue && Expiry.Value.IsExpiredAt(activatedAt))
             throw GrantErrors.ExpiryInPast();
 
-        var @event = new GrantActivatedEvent(Id, activatedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new GrantActivatedEvent(Id, activatedAt));
     }
 
     public void Revoke(DateTimeOffset revokedAt)
@@ -56,10 +48,7 @@ public sealed class GrantAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw GrantErrors.InvalidStateTransition(Status, nameof(Revoke));
 
-        var @event = new GrantRevokedEvent(Id, revokedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new GrantRevokedEvent(Id, revokedAt));
     }
 
     public void Expire(DateTimeOffset expiredAt)
@@ -74,46 +63,34 @@ public sealed class GrantAggregate
         if (!Expiry.Value.IsExpiredAt(expiredAt))
             throw GrantErrors.InvalidStateTransition(Status, $"{nameof(Expire)}-before-expiry");
 
-        var @event = new GrantExpiredEvent(Id, expiredAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new GrantExpiredEvent(Id, expiredAt));
     }
 
-    private void Apply(GrantCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.GrantId;
-        Subject = @event.Subject;
-        Target = @event.Target;
-        Scope = @event.Scope;
-        Expiry = @event.Expiry;
-        Status = GrantStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case GrantCreatedEvent e:
+                Id = e.GrantId;
+                Subject = e.Subject;
+                Target = e.Target;
+                Scope = e.Scope;
+                Expiry = e.Expiry;
+                Status = GrantStatus.Pending;
+                break;
+            case GrantActivatedEvent:
+                Status = GrantStatus.Active;
+                break;
+            case GrantRevokedEvent:
+                Status = GrantStatus.Revoked;
+                break;
+            case GrantExpiredEvent:
+                Status = GrantStatus.Expired;
+                break;
+        }
     }
 
-    private void Apply(GrantActivatedEvent @event)
-    {
-        Status = GrantStatus.Active;
-        Version++;
-    }
-
-    private void Apply(GrantRevokedEvent @event)
-    {
-        Status = GrantStatus.Revoked;
-        Version++;
-    }
-
-    private void Apply(GrantExpiredEvent @event)
-    {
-        Status = GrantStatus.Expired;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw GrantErrors.MissingId();

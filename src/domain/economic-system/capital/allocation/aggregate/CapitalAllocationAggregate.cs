@@ -1,12 +1,14 @@
+using Whycespace.Domain.EconomicSystem.Capital.Account;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
 
 namespace Whycespace.Domain.EconomicSystem.Capital.Allocation;
 
 public sealed class CapitalAllocationAggregate : AggregateRoot
 {
     public AllocationId AllocationId { get; private set; }
-    public Guid SourceAccountId { get; private set; }
+    public AccountId SourceAccountId { get; private set; }
     public TargetId TargetId { get; private set; }
     public Amount Amount { get; private set; }
     public Currency Currency { get; private set; }
@@ -16,12 +18,12 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
     // ── SPV ownership extension (Phase 2C) ───────────────────────
 
     public TargetType? TargetType { get; private set; }
-    public string? SpvTargetId { get; private set; }
+    public SpvRef? TargetSpv { get; private set; }
     public decimal? OwnershipPercentage { get; private set; }
 
     public void Allocate(
         AllocationId allocationId,
-        Guid sourceAccountId,
+        AccountId sourceAccountId,
         TargetId targetId,
         Amount amount,
         Currency currency,
@@ -30,8 +32,18 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
         if (amount.Value <= 0) throw AllocationErrors.InvalidAmount();
 
         RaiseDomainEvent(new AllocationCreatedEvent(
-            allocationId, sourceAccountId, targetId, amount, currency, allocatedAt));
+            allocationId, sourceAccountId.Value, targetId, amount, currency, allocatedAt));
     }
+
+    // D-ID-REF-01 dual-path: legacy Guid overload normalizes to typed ref.
+    public void Allocate(
+        AllocationId allocationId,
+        Guid sourceAccountId,
+        TargetId targetId,
+        Amount amount,
+        Currency currency,
+        Timestamp allocatedAt)
+        => Allocate(allocationId, new AccountId(sourceAccountId), targetId, amount, currency, allocatedAt);
 
     public void Release(Timestamp releasedAt)
     {
@@ -39,7 +51,7 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
         if (Status == AllocationStatus.Released) throw AllocationErrors.AllocationAlreadyReleased();
 
         RaiseDomainEvent(new AllocationReleasedEvent(
-            AllocationId, SourceAccountId, Amount, releasedAt));
+            AllocationId, SourceAccountId.Value, Amount, releasedAt));
     }
 
     public void Complete(Timestamp completedAt)
@@ -50,12 +62,9 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
         RaiseDomainEvent(new AllocationCompletedEvent(AllocationId, completedAt));
     }
 
-    // Phase 2C: allocation defines ownership in an SPV. Ownership is
-    // declared AFTER the base allocation is created (Allocate has set
-    // AllocationId). No vault access, no totals computed here.
-    public void AllocateToSpv(string targetId, decimal ownershipPercentage)
+    public void AllocateToSpv(SpvRef targetSpv, decimal ownershipPercentage)
     {
-        if (string.IsNullOrWhiteSpace(targetId))
+        if (targetSpv == default)
             throw AllocationErrors.InvalidSpvTargetId();
 
         if (ownershipPercentage <= 0m || ownershipPercentage > 100m)
@@ -63,8 +72,18 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
 
         RaiseDomainEvent(new CapitalAllocatedToSpvEvent(
             AllocationId.Value.ToString(),
-            targetId,
+            targetSpv.Value.ToString(),
             ownershipPercentage));
+    }
+
+    public void AllocateToSpv(string targetId, decimal ownershipPercentage)
+    {
+        if (string.IsNullOrWhiteSpace(targetId) ||
+            !Guid.TryParse(targetId, out var parsed) ||
+            parsed == Guid.Empty)
+            throw AllocationErrors.InvalidSpvTargetId();
+
+        AllocateToSpv(new SpvRef(parsed), ownershipPercentage);
     }
 
     protected override void Apply(object domainEvent)
@@ -73,7 +92,7 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
         {
             case AllocationCreatedEvent e:
                 AllocationId = e.AllocationId;
-                SourceAccountId = e.SourceAccountId;
+                SourceAccountId = new AccountId(e.SourceAccountId);
                 TargetId = e.TargetId;
                 Amount = e.Amount;
                 Currency = e.Currency;
@@ -91,7 +110,7 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
 
             case CapitalAllocatedToSpvEvent e:
                 TargetType = Allocation.TargetType.SPV;
-                SpvTargetId = e.TargetId;
+                TargetSpv = e.TargetSpv;
                 OwnershipPercentage = e.OwnershipPercentage;
                 break;
         }
@@ -108,9 +127,9 @@ public sealed class CapitalAllocationAggregate : AggregateRoot
                 throw new DomainInvariantViolationException(
                     "Invariant violated: SPV allocation OwnershipPercentage must be in (0, 100].");
 
-            if (string.IsNullOrWhiteSpace(SpvTargetId))
+            if (TargetSpv is null)
                 throw new DomainInvariantViolationException(
-                    "Invariant violated: SPV allocation requires a non-empty target id.");
+                    "Invariant violated: SPV allocation requires a valid SpvRef target.");
         }
     }
 }

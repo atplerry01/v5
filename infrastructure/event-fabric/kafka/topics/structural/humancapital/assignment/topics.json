@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.structural.humancapital.assignment.commands",
+    "whyce.structural.humancapital.assignment.events",
+    "whyce.structural.humancapital.assignment.retry",
+    "whyce.structural.humancapital.assignment.deadletter"
+  ]
+}

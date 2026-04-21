@@ -1,21 +1,21 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Agreement.PartyGovernance.Signature;
 
 public static class SignatureErrors
 {
-    public static SignatureDomainException MissingId()
-        => new("SignatureId is required and must not be empty.");
+    public static DomainException MissingId()
+        => new DomainInvariantViolationException("SignatureId is required and must not be empty.");
 
-    public static SignatureDomainException AlreadySigned(SignatureId id)
-        => new($"Signature '{id.Value}' has already been signed.");
+    public static DomainException AlreadySigned(SignatureId id)
+        => new DomainInvariantViolationException($"Signature '{id.Value}' has already been signed.");
 
-    public static SignatureDomainException AlreadyRevoked(SignatureId id)
-        => new($"Signature '{id.Value}' has already been revoked.");
+    public static DomainException AlreadyRevoked(SignatureId id)
+        => new DomainInvariantViolationException($"Signature '{id.Value}' has already been revoked.");
 
-    public static SignatureDomainException InvalidStateTransition(SignatureStatus currentStatus, string attemptedAction)
-        => new($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
-}
+    public static DomainException InvalidStateTransition(SignatureStatus currentStatus, string attemptedAction)
+        => new DomainInvariantViolationException($"Cannot '{attemptedAction}' when current status is '{currentStatus}'.");
 
-public sealed class SignatureDomainException : Exception
-{
-    public SignatureDomainException(string message) : base(message) { }
+    public static DomainException AlreadyInitialized()
+        => new DomainInvariantViolationException("Signature has already been initialized.");
 }

@@ -1,8 +1,8 @@
 # E1 → EX Domain Conformance Audit (Canonical)
 
-**Validates:** [`claude/templates/e1-ex-delivery-pattern/`](../templates/e1-ex-delivery-pattern/) — specifically [01-domain-skeleton.md](../templates/e1-ex-delivery-pattern/01-domain-skeleton.md) and [05-quality-gates.md](../templates/e1-ex-delivery-pattern/05-quality-gates.md) Gate 1.
+**Validates:** [`claude/templates/delivery-pattern/`](../templates/delivery-pattern/) — specifically [01-domain-skeleton.md](../templates/delivery-pattern/01-domain-skeleton.md) and [05-quality-gates.md](../templates/delivery-pattern/05-quality-gates.md) Gate 1.
 **Type:** Pure validation layer — defines NO rules. All rules live in the template and in `domain.guard.md`.
-**Scope:** `src/domain/{classification}-system/**` for every classification declared in [00-section-checklist.md](../templates/e1-ex-delivery-pattern/00-section-checklist.md).
+**Scope:** `src/domain/{classification}-system/**` for every classification declared in [00-section-checklist.md](../templates/delivery-pattern/00-section-checklist.md).
 **Run cadence:** On every prompt execution per CLAUDE.md $1b.
 
 ---
@@ -22,8 +22,8 @@ A BC can pass `domain.audit.md` and still fail this audit if it implements the d
 
 This audit checks the rules declared in:
 
-- [01-domain-skeleton.md](../templates/e1-ex-delivery-pattern/01-domain-skeleton.md) — folder layout, naming, aggregate pattern, VO pattern, event pattern, error pattern, specification pattern.
-- [05-quality-gates.md](../templates/e1-ex-delivery-pattern/05-quality-gates.md) Gate 1 — 10 auditable checks.
+- [01-domain-skeleton.md](../templates/delivery-pattern/01-domain-skeleton.md) — folder layout, naming, aggregate pattern, VO pattern, event pattern, error pattern, specification pattern.
+- [05-quality-gates.md](../templates/delivery-pattern/05-quality-gates.md) Gate 1 — 10 auditable checks.
 
 It cross-references but does not re-declare rules from:
 
@@ -37,7 +37,8 @@ It cross-references but does not re-declare rules from:
 
 | Rule | Severity | Scope | Source |
 |---|---|---|---|
-| E1XD-FOLDER-01 — 7 mandatory artifact subfolders | S1 | per BC | 01-domain-skeleton.md §Mandatory artifact subfolders |
+| E1XD-FOLDER-MUST-01 — MUST subfolders present: `aggregate/`, `error/`, `event/`, `value-object/` | S1 | per BC | 01-domain-skeleton.md §Artifact subfolders |
+| E1XD-FOLDER-OPT-01 — WHEN-NEEDED subfolders (`entity/`, `service/`, `specification/`) present OR justified-as-omitted in BC README | S2 | per BC | 01-domain-skeleton.md §Artifact subfolders |
 | E1XD-NAMING-AGG-01 — aggregate named `{Concept}Aggregate` | S2 | per aggregate file | 01-domain-skeleton.md §Naming rules |
 | E1XD-NAMING-EVT-01 — event named `{Subject}{PastVerb}Event` | S2 | per event file | 01-domain-skeleton.md §Naming rules |
 | E1XD-AGG-INHERIT-01 — aggregate inherits `AggregateRoot` | **S0** | per aggregate | 01-domain-skeleton.md §Aggregate pattern |
@@ -65,14 +66,22 @@ It cross-references but does not re-declare rules from:
 
 ## Check procedures
 
-### Folder + naming (E1XD-FOLDER-01, E1XD-NAMING-AGG-01, E1XD-NAMING-EVT-01, E1XD-NAMESPACE-01)
+### Folder + naming (E1XD-FOLDER-MUST-01, E1XD-FOLDER-OPT-01, E1XD-NAMING-AGG-01, E1XD-NAMING-EVT-01, E1XD-NAMESPACE-01)
 
 For each `src/domain/{cls}-system/{ctx}/{dom}/`:
 
 ```bash
-# 7 mandatory subfolders
-for sub in aggregate entity error event service specification value-object; do
-  [ -d "src/domain/{cls}-system/{ctx}/{dom}/$sub" ] || echo "FAIL E1XD-FOLDER-01 missing $sub in {dom}"
+# MUST subfolders (always required)
+for sub in aggregate error event value-object; do
+  [ -d "src/domain/{cls}-system/{ctx}/{dom}/$sub" ] || echo "FAIL E1XD-FOLDER-MUST-01 missing $sub in {dom}"
+done
+
+# WHEN-NEEDED subfolders: if absent, require a justification line in the BC README
+for sub in entity service specification; do
+  if [ ! -d "src/domain/{cls}-system/{ctx}/{dom}/$sub" ]; then
+    grep -q "no \`$sub/\`" "src/domain/{cls}-system/{ctx}/{dom}/README.md" 2>/dev/null \
+      || echo "FAIL E1XD-FOLDER-OPT-01 {dom} is missing $sub/ and has no justification in README"
+  fi
 done
 
 # Aggregate naming

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Topology;
 
 public readonly record struct TopologyDescriptor
@@ -7,11 +9,8 @@ public readonly record struct TopologyDescriptor
 
     public TopologyDescriptor(Guid clusterReference, string topologyName)
     {
-        if (clusterReference == Guid.Empty)
-            throw TopologyErrors.MissingDescriptor();
-
-        if (string.IsNullOrWhiteSpace(topologyName))
-            throw TopologyErrors.MissingDescriptor();
+        Guard.Against(clusterReference == Guid.Empty, "TopologyDescriptor cluster reference cannot be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(topologyName), "TopologyDescriptor name must not be null or whitespace.");
 
         ClusterReference = clusterReference;
         TopologyName = topologyName;

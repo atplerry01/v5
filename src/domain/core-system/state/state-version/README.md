@@ -22,11 +22,7 @@ Defines the foundational structure for state versioning — tracking the version
 
 * StateVersionAggregate
 
-  * Manages the lifecycle and integrity of a single state version instance
-
-## Entities
-
-* None
+  * Inherits canonical `AggregateRoot`; skeleton factory `Create()` with `AlreadyInitialized()` guard.
 
 ## Value Objects
 
@@ -35,16 +31,14 @@ Defines the foundational structure for state versioning — tracking the version
 ## Domain Events
 
 * StateVersionCreatedEvent — Raised when a new state version is created
-* StateVersionUpdatedEvent — Raised when state version metadata is updated
-* StateVersionStateChangedEvent — Raised when state version lifecycle state transitions
 
 ## Specifications
 
-* StateVersionSpecification — Validates state version structure and completeness
+* StateVersionSpecification — Reserved for future structural validation
 
-## Domain Services
+## Errors
 
-* StateVersionService — Domain operations for state version management
+* AlreadyInitialized — Factory invoked on an already-initialized aggregate.
 
 ## Invariants
 
@@ -62,7 +56,12 @@ Defines the foundational structure for state versioning — tracking the version
 
 ## Lifecycle
 
-Created → Active → Updated → Deprecated
+Created (skeleton — lifecycle transitions reserved for future expansion)
+
+## WHEN-NEEDED folders
+
+* `entity/` — Omitted: this BC has no child entities; state is fully carried by the aggregate and its value objects.
+* `service/` — Omitted: no cross-aggregate coordination is required within this BC.
 
 ## Notes
 

@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Pricing.PricingStructure.FareRule;
 
 public readonly record struct FareRuleCondition
@@ -8,11 +10,8 @@ public readonly record struct FareRuleCondition
 
     public FareRuleCondition(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("FareRuleCondition must not be empty.", nameof(value));
-
-        if (value.Length > MaxLength)
-            throw new ArgumentException($"FareRuleCondition exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "FareRuleCondition must not be empty.");
+        Guard.Against(value!.Length > MaxLength, $"FareRuleCondition exceeds {MaxLength} characters.");
 
         Value = value;
     }

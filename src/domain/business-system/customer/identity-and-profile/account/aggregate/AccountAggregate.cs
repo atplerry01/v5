@@ -1,19 +1,15 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Account;
 
-public sealed class AccountAggregate
+public sealed class AccountAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public AccountId Id { get; private set; }
     public CustomerRef Customer { get; private set; }
     public AccountName Name { get; private set; }
     public AccountType Type { get; private set; }
     public AccountStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private AccountAggregate() { }
 
     public static AccountAggregate Create(
         AccountId id,
@@ -22,23 +18,17 @@ public sealed class AccountAggregate
         AccountType type)
     {
         var aggregate = new AccountAggregate();
+        if (aggregate.Version >= 0)
+            throw AccountErrors.AlreadyInitialized();
 
-        var @event = new AccountCreatedEvent(id, customer, name, type);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new AccountCreatedEvent(id, customer, name, type));
         return aggregate;
     }
 
     public void Rename(AccountName name)
     {
         EnsureNotClosed();
-
-        var @event = new AccountRenamedEvent(Id, name);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AccountRenamedEvent(Id, name));
     }
 
     public void Activate()
@@ -47,10 +37,7 @@ public sealed class AccountAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AccountErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new AccountActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AccountActivatedEvent(Id));
     }
 
     public void Suspend()
@@ -59,10 +46,7 @@ public sealed class AccountAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AccountErrors.InvalidStateTransition(Status, nameof(Suspend));
 
-        var @event = new AccountSuspendedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AccountSuspendedEvent(Id));
     }
 
     public void Close()
@@ -71,44 +55,33 @@ public sealed class AccountAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw AccountErrors.InvalidStateTransition(Status, nameof(Close));
 
-        var @event = new AccountClosedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new AccountClosedEvent(Id));
     }
 
-    private void Apply(AccountCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.AccountId;
-        Customer = @event.Customer;
-        Name = @event.Name;
-        Type = @event.Type;
-        Status = AccountStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(AccountRenamedEvent @event)
-    {
-        Name = @event.Name;
-        Version++;
-    }
-
-    private void Apply(AccountActivatedEvent @event)
-    {
-        Status = AccountStatus.Active;
-        Version++;
-    }
-
-    private void Apply(AccountSuspendedEvent @event)
-    {
-        Status = AccountStatus.Suspended;
-        Version++;
-    }
-
-    private void Apply(AccountClosedEvent @event)
-    {
-        Status = AccountStatus.Closed;
-        Version++;
+        switch (domainEvent)
+        {
+            case AccountCreatedEvent e:
+                Id = e.AccountId;
+                Customer = e.Customer;
+                Name = e.Name;
+                Type = e.Type;
+                Status = AccountStatus.Draft;
+                break;
+            case AccountRenamedEvent e:
+                Name = e.Name;
+                break;
+            case AccountActivatedEvent:
+                Status = AccountStatus.Active;
+                break;
+            case AccountSuspendedEvent:
+                Status = AccountStatus.Suspended;
+                break;
+            case AccountClosedEvent:
+                Status = AccountStatus.Closed;
+                break;
+        }
     }
 
     private void EnsureNotClosed()
@@ -117,11 +90,7 @@ public sealed class AccountAggregate
             throw AccountErrors.ClosedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw AccountErrors.MissingId();

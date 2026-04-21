@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Customer.IdentityAndProfile.Profile;
 
 public readonly record struct ProfileDescriptor
@@ -10,17 +12,10 @@ public readonly record struct ProfileDescriptor
 
     public ProfileDescriptor(string key, string value)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException("ProfileDescriptor key must not be empty.", nameof(key));
-
-        if (key.Trim().Length > KeyMaxLength)
-            throw new ArgumentException($"ProfileDescriptor key exceeds {KeyMaxLength} characters.", nameof(key));
-
-        if (value is null)
-            throw new ArgumentNullException(nameof(value));
-
-        if (value.Length > ValueMaxLength)
-            throw new ArgumentException($"ProfileDescriptor value exceeds {ValueMaxLength} characters.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(key), "ProfileDescriptor key must not be empty.");
+        Guard.Against(key.Trim().Length > KeyMaxLength, $"ProfileDescriptor key exceeds {KeyMaxLength} characters.");
+        Guard.Against(value is null, "ProfileDescriptor value must not be null.");
+        Guard.Against(value!.Length > ValueMaxLength, $"ProfileDescriptor value exceeds {ValueMaxLength} characters.");
 
         Key = key.Trim();
         Value = value;

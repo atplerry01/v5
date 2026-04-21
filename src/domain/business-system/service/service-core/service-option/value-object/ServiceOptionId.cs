@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Service.ServiceCore.ServiceOption;
 
 public readonly record struct ServiceOptionId
@@ -6,9 +8,7 @@ public readonly record struct ServiceOptionId
 
     public ServiceOptionId(Guid value)
     {
-        if (value == Guid.Empty)
-            throw new ArgumentException("ServiceOptionId value must not be empty.", nameof(value));
-
+        Guard.Against(value == Guid.Empty, "ServiceOptionId cannot be empty.");
         Value = value;
     }
 }

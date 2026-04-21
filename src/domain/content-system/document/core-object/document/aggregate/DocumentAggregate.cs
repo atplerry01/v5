@@ -8,6 +8,9 @@ public sealed class DocumentAggregate : AggregateRoot
     public DocumentTitle Title { get; private set; }
     public DocumentType Type { get; private set; }
     public DocumentClassification Classification { get; private set; }
+    public StructuralOwnerRef StructuralOwner { get; private set; }
+    public BusinessOwnerRef BusinessOwner { get; private set; }
+    public CurrentVersionRef? CurrentVersion { get; private set; }
     public DocumentStatus Status { get; private set; }
     public Timestamp CreatedAt { get; private set; }
     public Timestamp LastModifiedAt { get; private set; }
@@ -21,8 +24,13 @@ public sealed class DocumentAggregate : AggregateRoot
         DocumentTitle title,
         DocumentType type,
         DocumentClassification classification,
+        StructuralOwnerRef structuralOwner,
+        BusinessOwnerRef businessOwner,
         Timestamp createdAt)
     {
+        if (structuralOwner.Value == Guid.Empty)
+            throw DocumentErrors.MissingStructuralOwner();
+
         var aggregate = new DocumentAggregate();
 
         aggregate.RaiseDomainEvent(new DocumentCreatedEvent(
@@ -30,6 +38,8 @@ public sealed class DocumentAggregate : AggregateRoot
             title,
             type,
             classification,
+            structuralOwner,
+            businessOwner,
             createdAt));
 
         return aggregate;
@@ -43,8 +53,7 @@ public sealed class DocumentAggregate : AggregateRoot
         DocumentClassification newClassification,
         Timestamp updatedAt)
     {
-        if (Status == DocumentStatus.Archived)
-            throw DocumentErrors.CannotModifyArchivedDocument();
+        EnsureMutable();
 
         if (Title == newTitle && Type == newType && Classification == newClassification)
             return;
@@ -60,10 +69,20 @@ public sealed class DocumentAggregate : AggregateRoot
             updatedAt));
     }
 
+    public void AttachVersion(CurrentVersionRef versionRef, Timestamp attachedAt)
+    {
+        EnsureMutable();
+
+        RaiseDomainEvent(new DocumentVersionAttachedEvent(DocumentId, versionRef, attachedAt));
+    }
+
     public void Activate(Timestamp activatedAt)
     {
         if (Status == DocumentStatus.Archived)
             throw DocumentErrors.CannotModifyArchivedDocument();
+
+        if (Status == DocumentStatus.Superseded)
+            throw DocumentErrors.CannotModifySupersededDocument();
 
         if (Status == DocumentStatus.Active)
             throw DocumentErrors.DocumentAlreadyActive();
@@ -87,6 +106,29 @@ public sealed class DocumentAggregate : AggregateRoot
         RaiseDomainEvent(new DocumentRestoredEvent(DocumentId, restoredAt));
     }
 
+    public void Supersede(DocumentId supersedingDocumentId, Timestamp supersededAt)
+    {
+        if (Status == DocumentStatus.Archived)
+            throw DocumentErrors.CannotSupersedeArchivedDocument();
+
+        if (Status == DocumentStatus.Superseded)
+            throw DocumentErrors.DocumentAlreadySuperseded();
+
+        if (supersedingDocumentId == DocumentId)
+            throw DocumentErrors.CannotSupersedeWithSelf();
+
+        RaiseDomainEvent(new DocumentSupersededEvent(DocumentId, supersedingDocumentId, supersededAt));
+    }
+
+    private void EnsureMutable()
+    {
+        if (Status == DocumentStatus.Archived)
+            throw DocumentErrors.CannotModifyArchivedDocument();
+
+        if (Status == DocumentStatus.Superseded)
+            throw DocumentErrors.CannotModifySupersededDocument();
+    }
+
     // ── Event Sourcing ───────────────────────────────────────────
 
     protected override void Apply(object domainEvent)
@@ -98,6 +140,9 @@ public sealed class DocumentAggregate : AggregateRoot
                 Title = e.Title;
                 Type = e.Type;
                 Classification = e.Classification;
+                StructuralOwner = e.StructuralOwner;
+                BusinessOwner = e.BusinessOwner;
+                CurrentVersion = null;
                 Status = DocumentStatus.Draft;
                 CreatedAt = e.CreatedAt;
                 LastModifiedAt = e.CreatedAt;
@@ -108,6 +153,11 @@ public sealed class DocumentAggregate : AggregateRoot
                 Type = e.NewType;
                 Classification = e.NewClassification;
                 LastModifiedAt = e.UpdatedAt;
+                break;
+
+            case DocumentVersionAttachedEvent e:
+                CurrentVersion = e.VersionRef;
+                LastModifiedAt = e.AttachedAt;
                 break;
 
             case DocumentActivatedEvent e:
@@ -124,6 +174,17 @@ public sealed class DocumentAggregate : AggregateRoot
                 Status = DocumentStatus.Active;
                 LastModifiedAt = e.RestoredAt;
                 break;
+
+            case DocumentSupersededEvent e:
+                Status = DocumentStatus.Superseded;
+                LastModifiedAt = e.SupersededAt;
+                break;
         }
+    }
+
+    protected override void EnsureInvariants()
+    {
+        if (StructuralOwner.Value == Guid.Empty)
+            throw DocumentErrors.MissingStructuralOwner();
     }
 }

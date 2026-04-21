@@ -1,27 +1,23 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Offering.CatalogCore.Bundle;
 
-public sealed class BundleAggregate
+public sealed class BundleAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
     private readonly HashSet<BundleMember> _members = new();
 
     public BundleId Id { get; private set; }
     public BundleName Name { get; private set; }
     public BundleStatus Status { get; private set; }
     public IReadOnlyCollection<BundleMember> Members => _members;
-    public int Version { get; private set; }
-
-    private BundleAggregate() { }
 
     public static BundleAggregate Create(BundleId id, BundleName name)
     {
         var aggregate = new BundleAggregate();
+        if (aggregate.Version >= 0)
+            throw BundleErrors.AlreadyInitialized();
 
-        var @event = new BundleCreatedEvent(id, name);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new BundleCreatedEvent(id, name));
         return aggregate;
     }
 
@@ -32,10 +28,7 @@ public sealed class BundleAggregate
         if (_members.Contains(member))
             throw BundleErrors.MemberAlreadyPresent(member);
 
-        var @event = new BundleMemberAddedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new BundleMemberAddedEvent(Id, member));
     }
 
     public void RemoveMember(BundleMember member)
@@ -45,10 +38,7 @@ public sealed class BundleAggregate
         if (!_members.Contains(member))
             throw BundleErrors.MemberNotPresent(member);
 
-        var @event = new BundleMemberRemovedEvent(Id, member);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new BundleMemberRemovedEvent(Id, member));
     }
 
     public void Activate()
@@ -62,10 +52,7 @@ public sealed class BundleAggregate
             throw BundleErrors.ActivationRequiresMembers();
         }
 
-        var @event = new BundleActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new BundleActivatedEvent(Id));
     }
 
     public void Archive()
@@ -73,42 +60,31 @@ public sealed class BundleAggregate
         if (Status == BundleStatus.Archived)
             throw BundleErrors.InvalidStateTransition(Status, nameof(Archive));
 
-        var @event = new BundleArchivedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new BundleArchivedEvent(Id));
     }
 
-    private void Apply(BundleCreatedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.BundleId;
-        Name = @event.Name;
-        Status = BundleStatus.Draft;
-        Version++;
-    }
-
-    private void Apply(BundleMemberAddedEvent @event)
-    {
-        _members.Add(@event.Member);
-        Version++;
-    }
-
-    private void Apply(BundleMemberRemovedEvent @event)
-    {
-        _members.Remove(@event.Member);
-        Version++;
-    }
-
-    private void Apply(BundleActivatedEvent @event)
-    {
-        Status = BundleStatus.Active;
-        Version++;
-    }
-
-    private void Apply(BundleArchivedEvent @event)
-    {
-        Status = BundleStatus.Archived;
-        Version++;
+        switch (domainEvent)
+        {
+            case BundleCreatedEvent e:
+                Id = e.BundleId;
+                Name = e.Name;
+                Status = BundleStatus.Draft;
+                break;
+            case BundleMemberAddedEvent e:
+                _members.Add(e.Member);
+                break;
+            case BundleMemberRemovedEvent e:
+                _members.Remove(e.Member);
+                break;
+            case BundleActivatedEvent:
+                Status = BundleStatus.Active;
+                break;
+            case BundleArchivedEvent:
+                Status = BundleStatus.Archived;
+                break;
+        }
     }
 
     private void EnsureMutable()
@@ -118,14 +94,13 @@ public sealed class BundleAggregate
             throw BundleErrors.ArchivedImmutable(Id);
     }
 
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw BundleErrors.MissingId();
+
+        if (Name == default)
+            throw BundleErrors.MissingName();
 
         if (!Enum.IsDefined(Status))
             throw BundleErrors.InvalidStateTransition(Status, "validate");

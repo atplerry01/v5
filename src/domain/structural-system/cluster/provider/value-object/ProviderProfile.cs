@@ -1,17 +1,17 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+using Whycespace.Domain.StructuralSystem.Contracts.References;
+
 namespace Whycespace.Domain.StructuralSystem.Cluster.Provider;
 
 public readonly record struct ProviderProfile
 {
-    public Guid ClusterReference { get; }
+    public ClusterRef ClusterReference { get; }
     public string ProviderName { get; }
 
-    public ProviderProfile(Guid clusterReference, string providerName)
+    public ProviderProfile(ClusterRef clusterReference, string providerName)
     {
-        if (clusterReference == Guid.Empty)
-            throw ProviderErrors.MissingProfile();
-
-        if (string.IsNullOrWhiteSpace(providerName))
-            throw ProviderErrors.MissingProfile();
+        Guard.Against(clusterReference == default, "ProviderProfile cluster reference cannot be empty.");
+        Guard.Against(string.IsNullOrWhiteSpace(providerName), "ProviderProfile name must not be null or whitespace.");
 
         ClusterReference = clusterReference;
         ProviderName = providerName;

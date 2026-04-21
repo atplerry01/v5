@@ -1,18 +1,14 @@
 using Whycespace.Domain.BusinessSystem.Shared.Reference;
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.BusinessSystem.Customer.SegmentationAndLifecycle.Lifecycle;
 
-public sealed class LifecycleAggregate
+public sealed class LifecycleAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public LifecycleId Id { get; private set; }
     public CustomerRef Customer { get; private set; }
     public LifecycleStage Stage { get; private set; }
     public LifecycleStatus Status { get; private set; }
-    public int Version { get; private set; }
-
-    private LifecycleAggregate() { }
 
     public static LifecycleAggregate Start(
         LifecycleId id,
@@ -21,12 +17,10 @@ public sealed class LifecycleAggregate
         DateTimeOffset startedAt)
     {
         var aggregate = new LifecycleAggregate();
+        if (aggregate.Version >= 0)
+            throw LifecycleErrors.AlreadyInitialized();
 
-        var @event = new LifecycleStartedEvent(id, customer, initialStage, startedAt);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new LifecycleStartedEvent(id, customer, initialStage, startedAt));
         return aggregate;
     }
 
@@ -40,10 +34,7 @@ public sealed class LifecycleAggregate
             throw LifecycleErrors.InvalidStageTransition(Stage, to);
         }
 
-        var @event = new LifecycleStageChangedEvent(Id, Stage, to, changedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new LifecycleStageChangedEvent(Id, Stage, to, changedAt));
     }
 
     public void Close(DateTimeOffset closedAt)
@@ -52,38 +43,29 @@ public sealed class LifecycleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw LifecycleErrors.ClosedImmutable(Id);
 
-        var @event = new LifecycleClosedEvent(Id, closedAt);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new LifecycleClosedEvent(Id, closedAt));
     }
 
-    private void Apply(LifecycleStartedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.LifecycleId;
-        Customer = @event.Customer;
-        Stage = @event.InitialStage;
-        Status = LifecycleStatus.Tracking;
-        Version++;
+        switch (domainEvent)
+        {
+            case LifecycleStartedEvent e:
+                Id = e.LifecycleId;
+                Customer = e.Customer;
+                Stage = e.InitialStage;
+                Status = LifecycleStatus.Tracking;
+                break;
+            case LifecycleStageChangedEvent e:
+                Stage = e.To;
+                break;
+            case LifecycleClosedEvent:
+                Status = LifecycleStatus.Closed;
+                break;
+        }
     }
 
-    private void Apply(LifecycleStageChangedEvent @event)
-    {
-        Stage = @event.To;
-        Version++;
-    }
-
-    private void Apply(LifecycleClosedEvent @event)
-    {
-        Status = LifecycleStatus.Closed;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw LifecycleErrors.MissingId();

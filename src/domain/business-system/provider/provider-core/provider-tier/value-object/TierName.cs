@@ -1,3 +1,5 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.BusinessSystem.Provider.ProviderCore.ProviderTier;
 
 public readonly record struct TierName
@@ -8,12 +10,10 @@ public readonly record struct TierName
 
     public TierName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("TierName must not be empty.", nameof(value));
+        Guard.Against(string.IsNullOrWhiteSpace(value), "TierName must not be empty.");
 
         var trimmed = value.Trim();
-        if (trimmed.Length > MaxLength)
-            throw new ArgumentException($"TierName exceeds {MaxLength} characters.", nameof(value));
+        Guard.Against(trimmed.Length > MaxLength, $"TierName exceeds {MaxLength} characters.");
 
         Value = trimmed;
     }
