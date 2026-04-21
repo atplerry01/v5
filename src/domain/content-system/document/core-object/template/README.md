@@ -46,3 +46,12 @@ The `template` leaf owns reusable document templates — named, typed, optionall
 - The actual schema definition, template body, or rendering engine — those are outside the domain layer.
 - Documents produced from the template — a document's relationship to its originating template is a downstream concern.
 - Template versioning with lineage — if required, it would be modelled separately (analogous to `document/lifecycle/version`, which moves to `document/lifecycle-change/version` in CS.2).
+
+## Template conformance (E1→EX `01-domain-skeleton`)
+
+- **MUST folders** (`aggregate/`, `error/`, `event/`, `value-object/`) — present and populated.
+- **WHEN-NEEDED folders**:
+  - `entity/` — omitted (aggregate has no child entities with independent identity); `.gitkeep` retained.
+  - `service/` — omitted (no cross-aggregate coordination required at D1); `.gitkeep` retained.
+  - `specification/` — populated (`CanActivateTemplateSpecification`).
+- **Lifecycle-init idempotency** (`DOM-LIFECYCLE-INIT-IDEMPOTENT-01`) — satisfied by construction: `DocumentTemplateAggregate.Create(…)` is a static factory that returns a freshly-constructed instance via the private parameterless constructor. `Version` is therefore always `-1` at init time and a second initialisation cannot be dispatched on an already-loaded aggregate. No instance-method init path exists, so no explicit `Version >= 0` guard is required.

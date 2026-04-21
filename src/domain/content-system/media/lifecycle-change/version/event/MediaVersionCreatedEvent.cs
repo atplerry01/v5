@@ -1,9 +1,10 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Media.LifecycleChange.Version;
 
 public sealed record MediaVersionCreatedEvent(
-    MediaVersionId VersionId,
+    [property: JsonPropertyName("AggregateId")] MediaVersionId VersionId,
     MediaAssetRef AssetRef,
     MediaVersionNumber VersionNumber,
     MediaFileRef FileRef,

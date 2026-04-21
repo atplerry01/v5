@@ -1,7 +1,8 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Document.CoreObject.Document;
 
 public sealed record DocumentRestoredEvent(
-    DocumentId DocumentId,
+    [property: JsonPropertyName("AggregateId")] DocumentId DocumentId,
     Timestamp RestoredAt) : DomainEvent;

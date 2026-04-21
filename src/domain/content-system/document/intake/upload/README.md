@@ -49,3 +49,12 @@ The `upload` leaf owns the transaction truth of a document upload — from reque
 - The document or file produced by the upload — owned by `document/core-object/document` and `document/core-object/file`.
 - The actual transfer mechanism (multipart, resumable, signed-URL) — infrastructure.
 - Retry policy for failures — that belongs to the orchestration/runtime layer.
+
+## Template conformance (E1→EX `01-domain-skeleton`)
+
+- **MUST folders** (`aggregate/`, `error/`, `event/`, `value-object/`) — present and populated.
+- **WHEN-NEEDED folders**:
+  - `entity/` — omitted (aggregate has no child entities with independent identity); `.gitkeep` retained.
+  - `service/` — omitted (no cross-aggregate coordination required at D1); `.gitkeep` retained.
+  - `specification/` — populated (`CanCompleteDocumentUploadSpecification`).
+- **Lifecycle-init idempotency** (`DOM-LIFECYCLE-INIT-IDEMPOTENT-01`) — satisfied by construction: `DocumentUploadAggregate.Request(…)` is a static factory that returns a freshly-constructed instance via the private parameterless constructor. `Version` is therefore always `-1` at init time and a second initialisation cannot be dispatched on an already-loaded aggregate. No instance-method init path exists, so no explicit `Version >= 0` guard is required.

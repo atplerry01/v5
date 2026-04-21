@@ -1,7 +1,8 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Streaming.StreamCore.Stream;
 
 public sealed record StreamPausedEvent(
-    StreamId StreamId,
+    [property: JsonPropertyName("AggregateId")] StreamId StreamId,
     Timestamp PausedAt) : DomainEvent;

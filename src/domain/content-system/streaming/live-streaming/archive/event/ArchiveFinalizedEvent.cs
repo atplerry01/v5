@@ -1,7 +1,8 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Streaming.LiveStreaming.Archive;
 
 public sealed record ArchiveFinalizedEvent(
-    ArchiveId ArchiveId,
+    [property: JsonPropertyName("AggregateId")] ArchiveId ArchiveId,
     Timestamp FinalizedAt) : DomainEvent;

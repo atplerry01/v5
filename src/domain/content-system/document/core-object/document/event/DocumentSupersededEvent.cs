@@ -3,6 +3,7 @@ using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Document.CoreObject.Document;
 
-public sealed record DocumentArchivedEvent(
+public sealed record DocumentSupersededEvent(
     [property: JsonPropertyName("AggregateId")] DocumentId DocumentId,
-    Timestamp ArchivedAt) : DomainEvent;
+    DocumentId SupersedingDocumentId,
+    Timestamp SupersededAt) : DomainEvent;

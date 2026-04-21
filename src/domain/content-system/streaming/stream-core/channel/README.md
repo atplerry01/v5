@@ -48,3 +48,12 @@ The `channel` leaf owns a named channel bound to a stream — identity, stream b
 - Broadcast lifecycle — owned by `stream-core/live-stream`.
 - Any consumer-facing channel catalogue / branding concerns.
 - Channel-level access — handled via `control/access` at the stream level.
+
+## Template conformance (E1→EX `01-domain-skeleton`)
+
+- **MUST folders** (`aggregate/`, `error/`, `event/`, `value-object/`) — present and populated.
+- **WHEN-NEEDED folders**:
+  - `entity/` — omitted (aggregate has no child entities with independent identity); `.gitkeep` retained.
+  - `service/` — omitted (no cross-aggregate coordination required at D1); `.gitkeep` retained.
+  - `specification/` — populated (`CanEnableChannelSpecification`).
+- **Lifecycle-init idempotency** (`DOM-LIFECYCLE-INIT-IDEMPOTENT-01`) — satisfied by construction: `ChannelAggregate.Create(…)` is a static factory that returns a freshly-constructed instance via the private parameterless constructor. `Version` is therefore always `-1` at init time and a second initialisation cannot be dispatched on an already-loaded aggregate. No instance-method init path exists, so no explicit `Version >= 0` guard is required.

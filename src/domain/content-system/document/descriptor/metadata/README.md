@@ -47,3 +47,12 @@ The `metadata` leaf owns descriptive metadata attached to a document. It is an o
 - The document itself.
 - Search indexing, discovery surfaces, facets — those are downstream.
 - Schema validation of `MetadataKey`/`MetadataValue` beyond what the value objects themselves enforce.
+
+## Template conformance (E1→EX `01-domain-skeleton`)
+
+- **MUST folders** (`aggregate/`, `error/`, `event/`, `value-object/`) — present and populated.
+- **WHEN-NEEDED folders**:
+  - `entity/` — omitted (`MetadataEntry` is modelled as a VO inside `value-object/`, not a child entity with independent identity); `.gitkeep` retained.
+  - `service/` — omitted (no cross-aggregate coordination required at D1); `.gitkeep` retained.
+  - `specification/` — populated (`CanModifyMetadataSpecification`).
+- **Lifecycle-init idempotency** (`DOM-LIFECYCLE-INIT-IDEMPOTENT-01`) — satisfied by construction: `DocumentMetadataAggregate.Create(…)` is a static factory that returns a freshly-constructed instance via the private parameterless constructor. `Version` is therefore always `-1` at init time and a second initialisation cannot be dispatched on an already-loaded aggregate. No instance-method init path exists, so no explicit `Version >= 0` guard is required.

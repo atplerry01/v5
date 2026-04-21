@@ -1,7 +1,8 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Streaming.DeliveryGovernance.Observability;
 
 public sealed record ObservabilityArchivedEvent(
-    ObservabilityId ObservabilityId,
+    [property: JsonPropertyName("AggregateId")] ObservabilityId ObservabilityId,
     Timestamp ArchivedAt) : DomainEvent;

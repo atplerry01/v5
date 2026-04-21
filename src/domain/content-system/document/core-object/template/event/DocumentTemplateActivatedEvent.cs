@@ -1,7 +1,8 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Document.CoreObject.Template;
 
 public sealed record DocumentTemplateActivatedEvent(
-    DocumentTemplateId TemplateId,
+    [property: JsonPropertyName("AggregateId")] DocumentTemplateId TemplateId,
     Timestamp ActivatedAt) : DomainEvent;

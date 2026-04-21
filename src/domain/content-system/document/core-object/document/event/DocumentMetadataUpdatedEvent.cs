@@ -1,9 +1,10 @@
+using System.Text.Json.Serialization;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Document.CoreObject.Document;
 
 public sealed record DocumentMetadataUpdatedEvent(
-    DocumentId DocumentId,
+    [property: JsonPropertyName("AggregateId")] DocumentId DocumentId,
     DocumentTitle PreviousTitle,
     DocumentTitle NewTitle,
     DocumentType PreviousType,

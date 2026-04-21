@@ -3,6 +3,7 @@ using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 
 namespace Whycespace.Domain.ContentSystem.Document.CoreObject.Document;
 
-public sealed record DocumentArchivedEvent(
+public sealed record DocumentVersionAttachedEvent(
     [property: JsonPropertyName("AggregateId")] DocumentId DocumentId,
-    Timestamp ArchivedAt) : DomainEvent;
+    CurrentVersionRef VersionRef,
+    Timestamp AttachedAt) : DomainEvent;
