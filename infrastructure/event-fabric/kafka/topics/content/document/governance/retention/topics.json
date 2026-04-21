@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.document.governance.retention.commands",
+    "whyce.content.document.governance.retention.events",
+    "whyce.content.document.governance.retention.retry",
+    "whyce.content.document.governance.retention.deadletter"
+  ]
+}

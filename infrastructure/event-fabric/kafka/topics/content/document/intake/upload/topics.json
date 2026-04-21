@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.document.intake.upload.commands",
+    "whyce.content.document.intake.upload.events",
+    "whyce.content.document.intake.upload.retry",
+    "whyce.content.document.intake.upload.deadletter"
+  ]
+}

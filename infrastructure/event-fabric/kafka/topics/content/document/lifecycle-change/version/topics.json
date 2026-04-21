@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.document.lifecycle_change.version.commands",
+    "whyce.content.document.lifecycle_change.version.events",
+    "whyce.content.document.lifecycle_change.version.retry",
+    "whyce.content.document.lifecycle_change.version.deadletter"
+  ]
+}

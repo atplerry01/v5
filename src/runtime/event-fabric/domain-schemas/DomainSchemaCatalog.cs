@@ -37,9 +37,43 @@ public static class DomainSchemaCatalog
         => new OutboundEffectSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
-    /// Content-system vertical — document/core-object/document BC schema bindings.
-    /// Exemplar delivery (2026-04-21); one method per BC as full vertical expands.
+    /// Content-system vertical — document context BC schema bindings.
+    /// Full E1→EX delivery across 10 populated BCs (2026-04-21).
     /// </summary>
     public static void RegisterContentDocumentCoreObjectDocument(EventSchemaRegistry registry)
         => new ContentDocumentCoreObjectDocumentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentCoreObjectBundle(EventSchemaRegistry registry)
+        => new ContentDocumentCoreObjectBundleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentCoreObjectFile(EventSchemaRegistry registry)
+        => new ContentDocumentCoreObjectFileSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentCoreObjectRecord(EventSchemaRegistry registry)
+        => new ContentDocumentCoreObjectRecordSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentCoreObjectTemplate(EventSchemaRegistry registry)
+        => new ContentDocumentCoreObjectTemplateSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentDescriptorMetadata(EventSchemaRegistry registry)
+        => new ContentDocumentDescriptorMetadataSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentGovernanceRetention(EventSchemaRegistry registry)
+        => new ContentDocumentGovernanceRetentionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentIntakeUpload(EventSchemaRegistry registry)
+        => new ContentDocumentIntakeUploadSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentLifecycleChangeProcessing(EventSchemaRegistry registry)
+        => new ContentDocumentLifecycleChangeProcessingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentDocumentLifecycleChangeVersion(EventSchemaRegistry registry)
+        => new ContentDocumentLifecycleChangeVersionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — agreement/commitment/contract BC schema bindings.
+    /// Ex pilot: first full E1→Ex delivery for the business classification.
+    /// </summary>
+    public static void RegisterBusinessAgreementCommitmentContract(EventSchemaRegistry registry)
+        => new BusinessAgreementCommitmentContractSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }
