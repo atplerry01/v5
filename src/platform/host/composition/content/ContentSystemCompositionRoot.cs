@@ -11,6 +11,13 @@ using Whycespace.Platform.Host.Composition.Content.Document.Governance.Retention
 using Whycespace.Platform.Host.Composition.Content.Document.Intake.Upload.Application;
 using Whycespace.Platform.Host.Composition.Content.Document.LifecycleChange.Processing.Application;
 using Whycespace.Platform.Host.Composition.Content.Document.LifecycleChange.Version.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.CoreObject.Asset.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.CoreObject.Subtitle.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.CoreObject.Transcript.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.Descriptor.Metadata.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.Intake.Ingest.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.LifecycleChange.Version.Application;
+using Whycespace.Platform.Host.Composition.Content.Media.TechnicalProcessing.Processing.Application;
 using Whycespace.Projections.Content.Document.CoreObject.Bundle;
 using Whycespace.Projections.Content.Document.CoreObject.Document;
 using Whycespace.Projections.Content.Document.CoreObject.File;
@@ -21,6 +28,13 @@ using Whycespace.Projections.Content.Document.Governance.Retention;
 using Whycespace.Projections.Content.Document.Intake.Upload;
 using Whycespace.Projections.Content.Document.LifecycleChange.Processing;
 using Whycespace.Projections.Content.Document.LifecycleChange.Version;
+using Whycespace.Projections.Content.Media.CoreObject.Asset;
+using Whycespace.Projections.Content.Media.CoreObject.Subtitle;
+using Whycespace.Projections.Content.Media.CoreObject.Transcript;
+using Whycespace.Projections.Content.Media.Descriptor.Metadata;
+using Whycespace.Projections.Content.Media.Intake.Ingest;
+using Whycespace.Projections.Content.Media.LifecycleChange.Version;
+using Whycespace.Projections.Content.Media.TechnicalProcessing.Processing;
 using Whycespace.Projections.Shared;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.EventFabric.DomainSchemas;
@@ -35,6 +49,13 @@ using Whycespace.Shared.Contracts.Content.Document.Governance.Retention;
 using Whycespace.Shared.Contracts.Content.Document.Intake.Upload;
 using Whycespace.Shared.Contracts.Content.Document.LifecycleChange.Processing;
 using Whycespace.Shared.Contracts.Content.Document.LifecycleChange.Version;
+using Whycespace.Shared.Contracts.Content.Media.CoreObject.Asset;
+using Whycespace.Shared.Contracts.Content.Media.CoreObject.Subtitle;
+using Whycespace.Shared.Contracts.Content.Media.CoreObject.Transcript;
+using Whycespace.Shared.Contracts.Content.Media.Descriptor.Metadata;
+using Whycespace.Shared.Contracts.Content.Media.Intake.Ingest;
+using Whycespace.Shared.Contracts.Content.Media.LifecycleChange.Version;
+using Whycespace.Shared.Contracts.Content.Media.TechnicalProcessing.Processing;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.EventFabric;
 using Whycespace.Shared.Contracts.Runtime;
@@ -66,6 +87,15 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         services.AddDocumentUploadApplication();
         services.AddDocumentProcessingApplication();
         services.AddDocumentVersionApplication();
+
+        // media-context application modules
+        services.AddAssetApplication();
+        services.AddSubtitleApplication();
+        services.AddTranscriptApplication();
+        services.AddMediaMetadataApplication();
+        services.AddMediaIngestApplication();
+        services.AddMediaVersionApplication();
+        services.AddMediaProcessingApplication();
 
         // ── Projection stores ────────────────────────────────────
         services.AddSingleton(sp =>
@@ -99,6 +129,29 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
             sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<DocumentVersionReadModel>("projection_content_document_lifecycle_change_version", "document_version_read_model", "DocumentVersion"));
 
+        // media context projection stores
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<AssetReadModel>("projection_content_media_core_object_asset", "asset_read_model", "Asset"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<SubtitleReadModel>("projection_content_media_core_object_subtitle", "subtitle_read_model", "Subtitle"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<TranscriptReadModel>("projection_content_media_core_object_transcript", "transcript_read_model", "Transcript"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<MediaMetadataReadModel>("projection_content_media_descriptor_metadata", "media_metadata_read_model", "MediaMetadata"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<MediaIngestReadModel>("projection_content_media_intake_ingest", "media_ingest_read_model", "MediaIngest"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<MediaVersionReadModel>("projection_content_media_lifecycle_change_version", "media_version_read_model", "MediaVersion"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<MediaProcessingReadModel>("projection_content_media_technical_processing_processing", "media_processing_read_model", "MediaProcessing"));
+
         // ── Projection handlers ──────────────────────────────────
         services.AddSingleton(sp => new DocumentProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<DocumentReadModel>>()));
@@ -120,6 +173,22 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
             sp.GetRequiredService<PostgresProjectionStore<DocumentProcessingReadModel>>()));
         services.AddSingleton(sp => new DocumentVersionProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<DocumentVersionReadModel>>()));
+
+        // media context projection handlers
+        services.AddSingleton(sp => new AssetProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<AssetReadModel>>()));
+        services.AddSingleton(sp => new SubtitleProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<SubtitleReadModel>>()));
+        services.AddSingleton(sp => new TranscriptProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<TranscriptReadModel>>()));
+        services.AddSingleton(sp => new MediaMetadataProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<MediaMetadataReadModel>>()));
+        services.AddSingleton(sp => new MediaIngestProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<MediaIngestReadModel>>()));
+        services.AddSingleton(sp => new MediaVersionProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<MediaVersionReadModel>>()));
+        services.AddSingleton(sp => new MediaProcessingProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<MediaProcessingReadModel>>()));
     }
 
     public void RegisterSchema(EventSchemaRegistry schema)
@@ -134,6 +203,13 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         DomainSchemaCatalog.RegisterContentDocumentIntakeUpload(schema);
         DomainSchemaCatalog.RegisterContentDocumentLifecycleChangeProcessing(schema);
         DomainSchemaCatalog.RegisterContentDocumentLifecycleChangeVersion(schema);
+        DomainSchemaCatalog.RegisterContentMediaCoreObjectAsset(schema);
+        DomainSchemaCatalog.RegisterContentMediaCoreObjectSubtitle(schema);
+        DomainSchemaCatalog.RegisterContentMediaCoreObjectTranscript(schema);
+        DomainSchemaCatalog.RegisterContentMediaDescriptorMetadata(schema);
+        DomainSchemaCatalog.RegisterContentMediaIntakeIngest(schema);
+        DomainSchemaCatalog.RegisterContentMediaLifecycleChangeVersion(schema);
+        DomainSchemaCatalog.RegisterContentMediaTechnicalProcessingProcessing(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
@@ -210,6 +286,54 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         projection.Register("DocumentVersionActivatedEvent", versionHandler);
         projection.Register("DocumentVersionSupersededEvent", versionHandler);
         projection.Register("DocumentVersionWithdrawnEvent", versionHandler);
+
+        var assetHandler = provider.GetRequiredService<AssetProjectionHandler>();
+        projection.Register("AssetCreatedEvent", assetHandler);
+        projection.Register("AssetRenamedEvent", assetHandler);
+        projection.Register("AssetReclassifiedEvent", assetHandler);
+        projection.Register("AssetActivatedEvent", assetHandler);
+        projection.Register("AssetRetiredEvent", assetHandler);
+        projection.Register("AssetKindAssignedEvent", assetHandler);
+
+        var subtitleHandler = provider.GetRequiredService<SubtitleProjectionHandler>();
+        projection.Register("SubtitleCreatedEvent", subtitleHandler);
+        projection.Register("SubtitleUpdatedEvent", subtitleHandler);
+        projection.Register("SubtitleFinalizedEvent", subtitleHandler);
+        projection.Register("SubtitleArchivedEvent", subtitleHandler);
+
+        var transcriptHandler = provider.GetRequiredService<TranscriptProjectionHandler>();
+        projection.Register("TranscriptCreatedEvent", transcriptHandler);
+        projection.Register("TranscriptUpdatedEvent", transcriptHandler);
+        projection.Register("TranscriptFinalizedEvent", transcriptHandler);
+        projection.Register("TranscriptArchivedEvent", transcriptHandler);
+
+        var mediaMetadataHandler = provider.GetRequiredService<MediaMetadataProjectionHandler>();
+        projection.Register("MediaMetadataCreatedEvent", mediaMetadataHandler);
+        projection.Register("MediaMetadataEntryAddedEvent", mediaMetadataHandler);
+        projection.Register("MediaMetadataEntryUpdatedEvent", mediaMetadataHandler);
+        projection.Register("MediaMetadataEntryRemovedEvent", mediaMetadataHandler);
+        projection.Register("MediaMetadataFinalizedEvent", mediaMetadataHandler);
+
+        var mediaIngestHandler = provider.GetRequiredService<MediaIngestProjectionHandler>();
+        projection.Register("MediaIngestRequestedEvent", mediaIngestHandler);
+        projection.Register("MediaIngestAcceptedEvent", mediaIngestHandler);
+        projection.Register("MediaIngestProcessingStartedEvent", mediaIngestHandler);
+        projection.Register("MediaIngestCompletedEvent", mediaIngestHandler);
+        projection.Register("MediaIngestFailedEvent", mediaIngestHandler);
+        projection.Register("MediaIngestCancelledEvent", mediaIngestHandler);
+
+        var mediaVersionHandler = provider.GetRequiredService<MediaVersionProjectionHandler>();
+        projection.Register("MediaVersionCreatedEvent", mediaVersionHandler);
+        projection.Register("MediaVersionActivatedEvent", mediaVersionHandler);
+        projection.Register("MediaVersionSupersededEvent", mediaVersionHandler);
+        projection.Register("MediaVersionWithdrawnEvent", mediaVersionHandler);
+
+        var mediaProcessingHandler = provider.GetRequiredService<MediaProcessingProjectionHandler>();
+        projection.Register("MediaProcessingRequestedEvent", mediaProcessingHandler);
+        projection.Register("MediaProcessingStartedEvent", mediaProcessingHandler);
+        projection.Register("MediaProcessingCompletedEvent", mediaProcessingHandler);
+        projection.Register("MediaProcessingFailedEvent", mediaProcessingHandler);
+        projection.Register("MediaProcessingCancelledEvent", mediaProcessingHandler);
     }
 
     public void RegisterEngines(IEngineRegistry engine)
@@ -224,6 +348,13 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         DocumentUploadApplicationModule.RegisterEngines(engine);
         DocumentProcessingApplicationModule.RegisterEngines(engine);
         DocumentVersionApplicationModule.RegisterEngines(engine);
+        AssetApplicationModule.RegisterEngines(engine);
+        SubtitleApplicationModule.RegisterEngines(engine);
+        TranscriptApplicationModule.RegisterEngines(engine);
+        MediaMetadataApplicationModule.RegisterEngines(engine);
+        MediaIngestApplicationModule.RegisterEngines(engine);
+        MediaVersionApplicationModule.RegisterEngines(engine);
+        MediaProcessingApplicationModule.RegisterEngines(engine);
     }
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)

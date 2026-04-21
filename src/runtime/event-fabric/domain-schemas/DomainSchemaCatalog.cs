@@ -71,9 +71,60 @@ public static class DomainSchemaCatalog
         => new ContentDocumentLifecycleChangeVersionSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
-    /// Business-system vertical — agreement/commitment/contract BC schema bindings.
-    /// Ex pilot: first full E1→Ex delivery for the business classification.
+    /// Content-system vertical — media context BC schema bindings.
+    /// Full E1→EX delivery across 7 populated media BCs (2026-04-21).
+    /// </summary>
+    public static void RegisterContentMediaCoreObjectAsset(EventSchemaRegistry registry)
+        => new ContentMediaCoreObjectAssetSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaCoreObjectSubtitle(EventSchemaRegistry registry)
+        => new ContentMediaCoreObjectSubtitleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaCoreObjectTranscript(EventSchemaRegistry registry)
+        => new ContentMediaCoreObjectTranscriptSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaDescriptorMetadata(EventSchemaRegistry registry)
+        => new ContentMediaDescriptorMetadataSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaIntakeIngest(EventSchemaRegistry registry)
+        => new ContentMediaIntakeIngestSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaLifecycleChangeVersion(EventSchemaRegistry registry)
+        => new ContentMediaLifecycleChangeVersionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentMediaTechnicalProcessingProcessing(EventSchemaRegistry registry)
+        => new ContentMediaTechnicalProcessingProcessingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Business-system vertical — agreement context E1→Ex delivery (10 BCs across 3 groups).
     /// </summary>
     public static void RegisterBusinessAgreementCommitmentContract(EventSchemaRegistry registry)
         => new BusinessAgreementCommitmentContractSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementCommitmentAcceptance(EventSchemaRegistry registry)
+        => new BusinessAgreementCommitmentAcceptanceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementCommitmentObligation(EventSchemaRegistry registry)
+        => new BusinessAgreementCommitmentObligationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementCommitmentValidity(EventSchemaRegistry registry)
+        => new BusinessAgreementCommitmentValiditySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementChangeControlAmendment(EventSchemaRegistry registry)
+        => new BusinessAgreementChangeControlAmendmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementChangeControlApproval(EventSchemaRegistry registry)
+        => new BusinessAgreementChangeControlApprovalSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementChangeControlClause(EventSchemaRegistry registry)
+        => new BusinessAgreementChangeControlClauseSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementChangeControlRenewal(EventSchemaRegistry registry)
+        => new BusinessAgreementChangeControlRenewalSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementPartyGovernanceCounterparty(EventSchemaRegistry registry)
+        => new BusinessAgreementPartyGovernanceCounterpartySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterBusinessAgreementPartyGovernanceSignature(EventSchemaRegistry registry)
+        => new BusinessAgreementPartyGovernanceSignatureSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

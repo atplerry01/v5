@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.media.technical_processing.processing.commands",
+    "whyce.content.media.technical_processing.processing.events",
+    "whyce.content.media.technical_processing.processing.retry",
+    "whyce.content.media.technical_processing.processing.deadletter"
+  ]
+}

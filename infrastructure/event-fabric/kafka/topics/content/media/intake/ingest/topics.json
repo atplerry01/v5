@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.media.intake.ingest.commands",
+    "whyce.content.media.intake.ingest.events",
+    "whyce.content.media.intake.ingest.retry",
+    "whyce.content.media.intake.ingest.deadletter"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.media.core_object.asset.commands",
+    "whyce.content.media.core_object.asset.events",
+    "whyce.content.media.core_object.asset.retry",
+    "whyce.content.media.core_object.asset.deadletter"
+  ]
+}
