@@ -245,3 +245,8 @@ event
 envelopes
 routing
 schemas
+
+
+using @cluade/project-topics/v3/core-system.md
+fix any pending issues, gaps, implement pending topics in the reference path
+and implement the full flow E1-EX

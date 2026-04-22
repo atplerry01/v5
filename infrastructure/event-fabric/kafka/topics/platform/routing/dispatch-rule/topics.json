@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.routing.dispatch-rule.commands",
+    "whyce.platform.routing.dispatch-rule.events",
+    "whyce.platform.routing.dispatch-rule.retry",
+    "whyce.platform.routing.dispatch-rule.deadletter"
+  ]
+}

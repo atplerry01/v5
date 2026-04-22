@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.schema.schema-definition.commands",
+    "whyce.platform.schema.schema-definition.events",
+    "whyce.platform.schema.schema-definition.retry",
+    "whyce.platform.schema.schema-definition.deadletter"
+  ]
+}

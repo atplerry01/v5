@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.command.command-definition.commands",
+    "whyce.platform.command.command-definition.events",
+    "whyce.platform.command.command-definition.retry",
+    "whyce.platform.command.command-definition.deadletter"
+  ]
+}

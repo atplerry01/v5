@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.routing.route-definition.commands",
+    "whyce.platform.routing.route-definition.events",
+    "whyce.platform.routing.route-definition.retry",
+    "whyce.platform.routing.route-definition.deadletter"
+  ]
+}

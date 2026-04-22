@@ -6,7 +6,7 @@ public sealed class EventSchemaAggregate : AggregateRoot
 {
     public EventSchemaId EventSchemaId { get; private set; }
     public EventSchemaName Name { get; private set; }
-    public EventSchemaVersion Version { get; private set; }
+    public new EventSchemaVersion Version { get; private set; }
     public CompatibilityMode CompatibilityMode { get; private set; }
     public bool IsDeprecated { get; private set; }
 
@@ -20,7 +20,7 @@ public sealed class EventSchemaAggregate : AggregateRoot
         Timestamp registeredAt)
     {
         var aggregate = new EventSchemaAggregate();
-        if (aggregate.Version >= 0)
+        if (((AggregateRoot)aggregate).Version >= 0)
             throw EventSchemaErrors.AlreadyInitialized();
 
         aggregate.RaiseDomainEvent(new EventSchemaRegisteredEvent(

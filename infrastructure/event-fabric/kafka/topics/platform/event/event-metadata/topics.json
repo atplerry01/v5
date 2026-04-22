@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.event.event-metadata.commands",
+    "whyce.platform.event.event-metadata.events",
+    "whyce.platform.event.event-metadata.retry",
+    "whyce.platform.event.event-metadata.deadletter"
+  ]
+}

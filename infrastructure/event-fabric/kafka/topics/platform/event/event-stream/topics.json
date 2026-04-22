@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.event.event-stream.commands",
+    "whyce.platform.event.event-stream.events",
+    "whyce.platform.event.event-stream.retry",
+    "whyce.platform.event.event-stream.deadletter"
+  ]
+}

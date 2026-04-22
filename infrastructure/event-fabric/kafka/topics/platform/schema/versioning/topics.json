@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.schema.versioning.commands",
+    "whyce.platform.schema.versioning.events",
+    "whyce.platform.schema.versioning.retry",
+    "whyce.platform.schema.versioning.deadletter"
+  ]
+}

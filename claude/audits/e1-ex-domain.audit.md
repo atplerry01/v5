@@ -7,9 +7,22 @@
 
 ---
 
+## Classification Execution Tiers (LOCKED 2026-04-22)
+
+Not all classifications require the full E1→EX stage set. Classifications are partitioned as:
+
+| Tier | Label | E1→EX scope | Classifications |
+|---|---|---|---|
+| **Tier 1** | Non-executable system | E1 + E7 (serialization) + E12 (tests). E2/E4/E5/E6/E8/E9/E10/E11 = N/A by design. | `core-system` |
+| **Tier 2** | Executable system | Full E1→EX (all stages where applicable per context) | All other classifications |
+
+**Tier 1 rationale:** `core-system` owns only immutable value-object primitives (temporal, ordering, identifier). It has no commands, events, engines, policies, projections, or APIs by design (topic file topics 6, 10, 12). E1→EX completion means: structural compliance + serialization integrity + determinism guarantees + test coverage. User confirmed 2026-04-22: `core-system` = **"Non-executable system (E1-only with extended validation)"**. Rule captured in `claude/new-rules/20260422-120000-core-system-classification.md`.
+
+---
+
 ## Purpose
 
-Verify that each bounded context in every declared vertical classification (`economic-system`, `structural-system`, `content-system`, `trust-system`, `constitutional-system`, `business-system`, `core-system`, `decision-system`, `intelligence-system`, `operational-system`, `orchestration-system`) conforms to the **E1 → EX Delivery Pattern v1.0** at the domain layer (sections 1–6).
+Verify that each bounded context in every declared vertical classification (`economic-system`, `structural-system`, `content-system`, `trust-system`, `constitutional-system`, `business-system`, `core-system`, `decision-system`, `intelligence-system`, `operational-system`, `orchestration-system`) conforms to the **E1 → EX Delivery Pattern v1.0** at the domain layer (sections 1–6), respecting the Tier 1/Tier 2 stage restrictions above.
 
 This audit complements but does not replace [`domain.audit.md`](domain.audit.md):
 

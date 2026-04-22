@@ -6,7 +6,7 @@ public sealed class EventDefinitionAggregate : AggregateRoot
 {
     public EventDefinitionId EventDefinitionId { get; private set; }
     public EventTypeName TypeName { get; private set; }
-    public EventVersion Version { get; private set; }
+    public new EventVersion Version { get; private set; }
     public string SchemaId { get; private set; } = string.Empty;
     public DomainRoute SourceRoute { get; private set; } = null!;
     public EventDefinitionStatus Status { get; private set; }
@@ -22,7 +22,7 @@ public sealed class EventDefinitionAggregate : AggregateRoot
         Timestamp definedAt)
     {
         var aggregate = new EventDefinitionAggregate();
-        if (aggregate.Version >= 0)
+        if (((AggregateRoot)aggregate).Version >= 0)
             throw EventDefinitionErrors.AlreadyInitialized();
 
         if (string.IsNullOrWhiteSpace(schemaId))

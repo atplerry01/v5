@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.command.command-routing.commands",
+    "whyce.platform.command.command-routing.events",
+    "whyce.platform.command.command-routing.retry",
+    "whyce.platform.command.command-routing.deadletter"
+  ]
+}

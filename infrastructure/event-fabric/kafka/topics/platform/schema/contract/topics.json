@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.schema.contract.commands",
+    "whyce.platform.schema.contract.events",
+    "whyce.platform.schema.contract.retry",
+    "whyce.platform.schema.contract.deadletter"
+  ]
+}

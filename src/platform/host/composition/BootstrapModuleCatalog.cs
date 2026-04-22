@@ -2,9 +2,11 @@ using Whycespace.Platform.Host.Composition.Business;
 using Whycespace.Platform.Host.Composition.Constitutional.Chain;
 using Whycespace.Platform.Host.Composition.Constitutional.Policy;
 using Whycespace.Platform.Host.Composition.Content;
+using Whycespace.Platform.Host.Composition.Control;
 using Whycespace.Platform.Host.Composition.Economic;
 using Whycespace.Platform.Host.Composition.Integration.OutboundEffect;
 using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
+using Whycespace.Platform.Host.Composition.Platform;
 using Whycespace.Platform.Host.Composition.Structural;
 using Whycespace.Platform.Host.Composition.Trust;
 
@@ -25,9 +27,11 @@ public static class BootstrapModuleCatalog
         new ConstitutionalChainBootstrap(),
         new EconomicCompositionRoot(),
         new ContentSystemCompositionRoot(),
+        new ControlSystemCompositionRoot(),
         new BusinessSystemCompositionRoot(),
         new StructuralSystemCompositionRoot(),
         new TrustSystemCompositionRoot(),
+        new PlatformSystemCompositionRoot(),
         new WorkflowExecutionBootstrap(),
         new OutboundEffectsBootstrap()
     ];

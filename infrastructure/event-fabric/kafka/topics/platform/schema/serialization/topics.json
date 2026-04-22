@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.platform.schema.serialization.commands",
+    "whyce.platform.schema.serialization.events",
+    "whyce.platform.schema.serialization.retry",
+    "whyce.platform.schema.serialization.deadletter"
+  ]
+}

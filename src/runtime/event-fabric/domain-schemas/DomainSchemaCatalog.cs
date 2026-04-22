@@ -370,6 +370,132 @@ public static class DomainSchemaCatalog
         => new BusinessProviderProviderScopeProviderCoverageSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
+    /// Control-system vertical — system-policy context (6 BCs).
+    /// </summary>
+    public static void RegisterControlSystemPolicyPolicyDefinition(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemPolicyPolicyPackage(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyPackageSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemPolicyPolicyEvaluation(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyEvaluationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemPolicyPolicyEnforcement(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyEnforcementSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemPolicyPolicyDecision(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyDecisionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemPolicyPolicyAudit(EventSchemaRegistry registry)
+        => new ControlSystemPolicyPolicyAuditSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — access-control context (6 BCs).
+    /// </summary>
+    public static void RegisterControlAccessControlAccessPolicy(EventSchemaRegistry registry)
+        => new ControlAccessControlAccessPolicySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAccessControlAuthorization(EventSchemaRegistry registry)
+        => new ControlAccessControlAuthorizationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAccessControlIdentity(EventSchemaRegistry registry)
+        => new ControlAccessControlIdentitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAccessControlPermission(EventSchemaRegistry registry)
+        => new ControlAccessControlPermissionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAccessControlPrincipal(EventSchemaRegistry registry)
+        => new ControlAccessControlPrincipalSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAccessControlRole(EventSchemaRegistry registry)
+        => new ControlAccessControlRoleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — configuration context (5 BCs).
+    /// </summary>
+    public static void RegisterControlConfigurationConfigurationAssignment(EventSchemaRegistry registry)
+        => new ControlConfigurationConfigurationAssignmentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlConfigurationConfigurationDefinition(EventSchemaRegistry registry)
+        => new ControlConfigurationConfigurationDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlConfigurationConfigurationResolution(EventSchemaRegistry registry)
+        => new ControlConfigurationConfigurationResolutionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlConfigurationConfigurationScope(EventSchemaRegistry registry)
+        => new ControlConfigurationConfigurationScopeSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlConfigurationConfigurationState(EventSchemaRegistry registry)
+        => new ControlConfigurationConfigurationStateSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — audit context (5 BCs).
+    /// </summary>
+    public static void RegisterControlAuditAuditEvent(EventSchemaRegistry registry)
+        => new ControlAuditAuditEventSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAuditAuditLog(EventSchemaRegistry registry)
+        => new ControlAuditAuditLogSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAuditAuditQuery(EventSchemaRegistry registry)
+        => new ControlAuditAuditQuerySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAuditAuditRecord(EventSchemaRegistry registry)
+        => new ControlAuditAuditRecordSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlAuditAuditTrace(EventSchemaRegistry registry)
+        => new ControlAuditAuditTraceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — observability context (5 BCs).
+    /// </summary>
+    public static void RegisterControlObservabilitySystemAlert(EventSchemaRegistry registry)
+        => new ControlObservabilitySystemAlertSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlObservabilitySystemHealth(EventSchemaRegistry registry)
+        => new ControlObservabilitySystemHealthSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlObservabilitySystemMetric(EventSchemaRegistry registry)
+        => new ControlObservabilitySystemMetricSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlObservabilitySystemSignal(EventSchemaRegistry registry)
+        => new ControlObservabilitySystemSignalSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlObservabilitySystemTrace(EventSchemaRegistry registry)
+        => new ControlObservabilitySystemTraceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — scheduling context (3 BCs).
+    /// </summary>
+    public static void RegisterControlSchedulingExecutionControl(EventSchemaRegistry registry)
+        => new ControlSchedulingExecutionControlSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSchedulingScheduleControl(EventSchemaRegistry registry)
+        => new ControlSchedulingScheduleControlSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSchedulingSystemJob(EventSchemaRegistry registry)
+        => new ControlSchedulingSystemJobSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Control-system vertical — system-reconciliation context (5 BCs).
+    /// </summary>
+    public static void RegisterControlSystemReconciliationConsistencyCheck(EventSchemaRegistry registry)
+        => new ControlSystemReconciliationConsistencyCheckSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemReconciliationDiscrepancyDetection(EventSchemaRegistry registry)
+        => new ControlSystemReconciliationDiscrepancyDetectionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemReconciliationDiscrepancyResolution(EventSchemaRegistry registry)
+        => new ControlSystemReconciliationDiscrepancyResolutionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemReconciliationReconciliationRun(EventSchemaRegistry registry)
+        => new ControlSystemReconciliationReconciliationRunSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterControlSystemReconciliationSystemVerification(EventSchemaRegistry registry)
+        => new ControlSystemReconciliationSystemVerificationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
     /// Trust-system vertical — identity context E1→Ex delivery (11 BCs).
     /// Phase 2.8 — all trust-system aggregates D2-promoted and schema-registered.
     /// </summary>
@@ -450,4 +576,78 @@ public static class DomainSchemaCatalog
 
     public static void RegisterBusinessOfferingCommercialShapePlan(EventSchemaRegistry registry)
         => new BusinessOfferingCommercialShapePlanSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Platform-system vertical — command context schema bindings (3 event-bearing BCs).
+    /// command-envelope is a pure structural VO domain and has no events.
+    /// </summary>
+    public static void RegisterPlatformCommandCommandDefinition(EventSchemaRegistry registry)
+        => new PlatformCommandDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformCommandCommandMetadata(EventSchemaRegistry registry)
+        => new PlatformCommandMetadataSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformCommandCommandRouting(EventSchemaRegistry registry)
+        => new PlatformCommandRoutingSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Platform-system vertical — event context schema bindings (4 event-bearing BCs).
+    /// event-envelope is a pure structural VO domain and has no events.
+    /// </summary>
+    public static void RegisterPlatformEventEventDefinition(EventSchemaRegistry registry)
+        => new PlatformEventDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEventEventMetadata(EventSchemaRegistry registry)
+        => new PlatformEventMetadataSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEventEventSchema(EventSchemaRegistry registry)
+        => new PlatformEventSchemaSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEventEventStream(EventSchemaRegistry registry)
+        => new PlatformEventStreamSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Platform-system vertical — envelope context schema bindings (4 BCs).
+    /// </summary>
+    public static void RegisterPlatformEnvelopeHeader(EventSchemaRegistry registry)
+        => new PlatformEnvelopeHeaderSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEnvelopeMessageEnvelope(EventSchemaRegistry registry)
+        => new PlatformMessageEnvelopeSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEnvelopeMetadata(EventSchemaRegistry registry)
+        => new PlatformEnvelopeMetadataSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformEnvelopePayload(EventSchemaRegistry registry)
+        => new PlatformPayloadSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Platform-system vertical — routing context schema bindings (4 BCs).
+    /// </summary>
+    public static void RegisterPlatformRoutingDispatchRule(EventSchemaRegistry registry)
+        => new PlatformDispatchRuleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformRoutingRouteDefinition(EventSchemaRegistry registry)
+        => new PlatformRouteDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformRoutingRouteDescriptor(EventSchemaRegistry registry)
+        => new PlatformRouteDescriptorSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformRoutingRouteResolution(EventSchemaRegistry registry)
+        => new PlatformRouteResolutionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Platform-system vertical — schema context schema bindings (4 BCs).
+    /// </summary>
+    public static void RegisterPlatformSchemaContract(EventSchemaRegistry registry)
+        => new PlatformContractSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformSchemaSchemaDefinition(EventSchemaRegistry registry)
+        => new PlatformSchemaDefinitionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformSchemaSerializationFormat(EventSchemaRegistry registry)
+        => new PlatformSerializationFormatSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterPlatformSchemaVersioningRule(EventSchemaRegistry registry)
+        => new PlatformVersioningRuleSchemaModule().Register(new EventSchemaRegistrySink(registry));
 }

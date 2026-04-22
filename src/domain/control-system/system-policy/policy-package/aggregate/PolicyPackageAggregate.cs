@@ -6,7 +6,7 @@ public sealed class PolicyPackageAggregate : AggregateRoot
 {
     public PolicyPackageId Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
-    public PackageVersion Version { get; private set; }
+    public new PackageVersion Version { get; private set; }
     public IReadOnlySet<string> PolicyDefinitionIds { get; private set; } = new HashSet<string>();
     public PolicyPackageStatus Status { get; private set; }
 
