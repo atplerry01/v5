@@ -1,5 +1,5 @@
 using Whycespace.Shared.Contracts.Events.Structural.Humancapital.Workforce;
-using DomainEvents = Whycespace.Domain.StructuralSystem.Humancapital.Workforce;
+using DomainEvents = Whycespace.Domain.BusinessSystem.Workforce.Workforce;
 
 namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 

@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Incentive;
+using Whycespace.Domain.BusinessSystem.Workforce.Incentive;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Incentive;
 

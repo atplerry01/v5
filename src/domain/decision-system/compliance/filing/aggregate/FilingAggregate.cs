@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Compliance.Filing;
 
-public sealed class FilingAggregate
+public sealed class FilingAggregate : AggregateRoot
 {
     public static FilingAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class FilingAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

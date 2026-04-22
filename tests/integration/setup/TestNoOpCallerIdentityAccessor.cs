@@ -16,4 +16,6 @@ internal sealed class TestNoOpCallerIdentityAccessor : ICallerIdentityAccessor
     public string[] GetRoles() => Array.Empty<string>();
     public IReadOnlyDictionary<string, object> GetSubjectAttributes() =>
         new Dictionary<string, object>(StringComparer.Ordinal);
+    public string? GetSessionId() => null;
+    public string? GetTokenFingerprint() => null;
 }

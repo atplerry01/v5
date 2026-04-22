@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Cost.CostModel;
 
-public sealed class CostModelAggregate
+public sealed class CostModelAggregate : AggregateRoot
 {
     public static CostModelAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class CostModelAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

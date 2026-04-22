@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.observability.system-signal.commands",
+    "whyce.control.observability.system-signal.events",
+    "whyce.control.observability.system-signal.retry",
+    "whyce.control.observability.system-signal.deadletter"
+  ]
+}

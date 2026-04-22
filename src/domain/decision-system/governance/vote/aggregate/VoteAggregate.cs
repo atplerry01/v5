@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Governance.Vote;
 
-public sealed class VoteAggregate
+public sealed class VoteAggregate : AggregateRoot
 {
     public static VoteAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class VoteAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

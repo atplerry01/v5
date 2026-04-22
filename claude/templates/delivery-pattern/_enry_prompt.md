@@ -5,8 +5,8 @@ Execute E1–Ex template against an existing domain context.
 
 ## INPUT
 
-Classification: business-system
-Context: agreement
+Classification: core-system
+Context: {{all context}}
 Phases: {{PHASES_IN_SCOPE}}
 
 ---

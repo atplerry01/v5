@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Assignment;
 
-public sealed class AssignmentAggregate
+public sealed class AssignmentAggregate : AggregateRoot
 {
     public static AssignmentAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AssignmentAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

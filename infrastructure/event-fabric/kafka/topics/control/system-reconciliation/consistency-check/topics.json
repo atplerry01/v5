@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-reconciliation.consistency-check.commands",
+    "whyce.control.system-reconciliation.consistency-check.events",
+    "whyce.control.system-reconciliation.consistency-check.retry",
+    "whyce.control.system-reconciliation.consistency-check.deadletter"
+  ]
+}

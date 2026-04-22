@@ -1,0 +1,261 @@
+{
+  "$schema": "https://whycespace.internal/schemas/guard-registry/v1",
+  "version": "1.1.0",
+  "lockedDate": "2026-04-22",
+  "authority": "WBSM v3 | GUARD-LAYER-MODEL-01",
+
+  "guardLayers": [
+    {
+      "id": "constitutional",
+      "file": "claude/guards/constitutional.guard.md",
+      "severity": "blocking",
+      "concerns": [
+        "WHYCEPOLICY authority",
+        "determinism",
+        "deterministic identifiers (HSID v2.1)",
+        "hash determinism",
+        "replay determinism"
+      ],
+      "supersedes": [
+        "policy.guard.md",
+        "policy-binding.guard.md",
+        "determinism.guard.md",
+        "deterministic-id.guard.md",
+        "hash-determinism.guard.md",
+        "replay-determinism.guard.md"
+      ]
+    },
+    {
+      "id": "runtime",
+      "file": "claude/guards/runtime.guard.md",
+      "severity": "blocking",
+      "concerns": [
+        "execution pipeline & ordering",
+        "engine layer",
+        "projection layer",
+        "prompt container",
+        "dependency graph & layer boundaries",
+        "contracts boundary",
+        "code quality enforcement (clean-code, no-dead-code, stub-detection)",
+        "test & E2E validation"
+      ],
+      "supersedes": [
+        "engine.guard.md",
+        "runtime-order.guard.md",
+        "projection.guard.md",
+        "clean-code.guard.md",
+        "dead-code.guard.md",
+        "dependency-graph.guard.md"
+      ]
+    },
+    {
+      "id": "domain",
+      "file": "claude/guards/domain.guard.md",
+      "severity": "blocking",
+      "concerns": [
+        "domain layer purity",
+        "classification-suffix",
+        "DTO naming",
+        "behavioral invariants",
+        "structural rules",
+        "domain-aligned guards (economic, governance, identity, observability, workflow)"
+      ],
+      "supersedes": [
+        "domain-structure.guard.md",
+        "behavioral.guard.md",
+        "structural.guard.md",
+        "domain-aligned/economic.guard.md",
+        "domain-aligned/governance.guard.md",
+        "domain-aligned/identity.guard.md",
+        "domain-aligned/observability.guard.md",
+        "domain-aligned/workflow.guard.md"
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "file": "claude/guards/infrastructure.guard.md",
+      "severity": "blocking",
+      "concerns": [
+        "platform",
+        "systems integrations",
+        "kafka",
+        "config safety",
+        "composition loader",
+        "program composition"
+      ],
+      "supersedes": [
+        "platform.guard.md",
+        "program-composition.guard.md",
+        "composition-loader.guard.md"
+      ]
+    }
+  ],
+
+  "domainClassifications": [
+    {
+      "system": "business-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": [
+        "agreement",
+        "customer",
+        "entitlement",
+        "invariant",
+        "offering",
+        "order",
+        "pricing",
+        "provider",
+        "service",
+        "shared"
+      ],
+      "guardCoverage": ["domain", "runtime", "constitutional"]
+    },
+    {
+      "system": "constitutional-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["chain", "policy"],
+      "guardCoverage": ["constitutional", "domain", "runtime"]
+    },
+    {
+      "system": "content-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["document", "invariant", "media", "shared", "streaming"],
+      "guardCoverage": ["domain", "runtime", "constitutional"],
+      "notes": "D2 promotion completed 2026-04-22 (commits fcf58b75, aa88496f). Test coverage pending (S1-TEST-002)."
+    },
+    {
+      "system": "core-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": [
+        "command",
+        "event",
+        "financialcontrol",
+        "reconciliation",
+        "state",
+        "temporal"
+      ],
+      "guardCoverage": ["domain", "runtime", "constitutional"]
+    },
+    {
+      "system": "decision-system",
+      "status": "PLANNED",
+      "activationLevel": "D0",
+      "contexts": ["audit", "compliance", "governance", "risk"],
+      "guardCoverage": ["domain"],
+      "notes": "Deferred to Phase 4+. No engine consumption permitted until promoted to D2."
+    },
+    {
+      "system": "economic-system",
+      "status": "ACTIVE",
+      "activationLevel": "D1_PARTIAL",
+      "contexts": [
+        "capital",
+        "compliance",
+        "enforcement",
+        "exchange",
+        "invariant",
+        "ledger",
+        "reconciliation",
+        "revenue",
+        "risk",
+        "routing",
+        "subject",
+        "transaction",
+        "vault"
+      ],
+      "guardCoverage": ["domain", "runtime", "constitutional"],
+      "notes": "exchange, vault, routing, risk, reconciliation contexts require D2 promotion (Workstream 3). Double-entry invariant (INV-101) mandatory for all ledger-affecting BCs."
+    },
+    {
+      "system": "integration-system",
+      "status": "ACTIVE",
+      "activationLevel": "D1",
+      "contexts": ["outbound-effect"],
+      "guardCoverage": ["domain", "infrastructure"],
+      "notes": "API layer intent pending validation (Workstream 6). Currently event-driven-only until decision is documented."
+    },
+    {
+      "system": "intelligence-system",
+      "status": "PLANNED",
+      "activationLevel": "D0",
+      "contexts": [
+        "capacity",
+        "cost",
+        "economic",
+        "estimation",
+        "experiment",
+        "geo",
+        "identity",
+        "index",
+        "knowledge",
+        "observability",
+        "planning",
+        "relationship",
+        "search",
+        "simulation"
+      ],
+      "guardCoverage": ["domain"],
+      "notes": "Deferred to Phase 4+. No engine consumption permitted until promoted to D2."
+    },
+    {
+      "system": "operational-system",
+      "status": "IN_PROGRESS",
+      "activationLevel": "D0_D1_MIXED",
+      "contexts": ["activation", "deployment", "incident", "incident-response", "invariant", "sandbox"],
+      "guardCoverage": ["domain", "runtime"],
+      "notes": "Triage required (Workstream 5). Each BC must be labeled ACTIVE/IN_PROGRESS/PLANNED/DEPRECATED."
+    },
+    {
+      "system": "orchestration-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["workflow"],
+      "guardCoverage": ["domain", "runtime", "constitutional"]
+    },
+    {
+      "system": "shared-kernel",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["primitives", "kernel", "domain"],
+      "guardCoverage": ["domain", "constitutional"],
+      "notes": "Pure shared kernel. No aggregates or business logic. Cross-domain primitives only."
+    },
+    {
+      "system": "structural-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["cluster", "contracts", "humancapital", "invariant", "structure"],
+      "guardCoverage": ["domain", "runtime", "constitutional"],
+      "notes": "Test coverage pending (S1-TEST-001). Unit + replay tests required."
+    },
+    {
+      "system": "trust-system",
+      "status": "ACTIVE",
+      "activationLevel": "D2",
+      "contexts": ["access", "identity"],
+      "guardCoverage": ["domain", "runtime", "constitutional"]
+    }
+  ],
+
+  "invariants": {
+    "noEngineConsumptionBelowD2": true,
+    "doubleEntryMandatoryForLedgerBCs": true,
+    "crossSystemViaEventOrPolicyOnly": true,
+    "domainPurityZeroExternalDependencies": true
+  },
+
+  "driftCapture": {
+    "lastAuditDate": "2026-04-22",
+    "openFindings": [
+      "S0-DET-001: content-system streaming handlers — RESOLVED 2026-04-22",
+      "S0-GUARD-001: guard.registry.json missing — RESOLVED 2026-04-22 (this file)",
+      "S1-TEST-001: structural-system unit+replay tests missing — OPEN",
+      "S1-TEST-002: content-system unit+replay+e2e tests missing — OPEN",
+      "S1-ECO-D1: exchange/vault/routing/risk/reconciliation require D2 promotion — OPEN",
+      "S1-OPS-TRIAGE: operational-system BC classification pending — OPEN"
+    ]
+  }
+}

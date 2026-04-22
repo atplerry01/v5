@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Lock;
+using Whycespace.Domain.ControlSystem.Enforcement.Lock;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Lock;
 using Whycespace.Shared.Contracts.Engine;

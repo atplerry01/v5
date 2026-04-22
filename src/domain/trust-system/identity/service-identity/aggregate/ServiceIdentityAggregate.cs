@@ -1,23 +1,58 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.TrustSystem.Identity.ServiceIdentity;
 
-public sealed class ServiceIdentityAggregate
+public sealed class ServiceIdentityAggregate : AggregateRoot
 {
-    public static ServiceIdentityAggregate Create()
+    public ServiceIdentityId ServiceIdentityId { get; private set; }
+    public ServiceIdentityDescriptor Descriptor { get; private set; }
+    public ServiceIdentityStatus Status { get; private set; }
+
+    private ServiceIdentityAggregate() { }
+
+    public static ServiceIdentityAggregate Register(ServiceIdentityId id, ServiceIdentityDescriptor descriptor, Timestamp registeredAt)
     {
         var aggregate = new ServiceIdentityAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        aggregate.RaiseDomainEvent(new ServiceIdentityRegisteredEvent(id, descriptor, registeredAt));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    public void Suspend()
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        if (Status != ServiceIdentityStatus.Active)
+            throw new DomainInvariantViolationException("Service identity can only be suspended from Active status.");
+        RaiseDomainEvent(new ServiceIdentitySuspendedEvent(ServiceIdentityId));
     }
 
-    private void ValidateBeforeChange()
+    public void Decommission()
     {
-        // Pre-change validation gate
+        if (Status == ServiceIdentityStatus.Decommissioned)
+            throw new DomainInvariantViolationException("Service identity is already decommissioned.");
+        RaiseDomainEvent(new ServiceIdentityDecommissionedEvent(ServiceIdentityId));
+    }
+
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case ServiceIdentityRegisteredEvent e:
+                ServiceIdentityId = e.ServiceIdentityId;
+                Descriptor = e.Descriptor;
+                Status = ServiceIdentityStatus.Active;
+                break;
+            case ServiceIdentitySuspendedEvent:
+                Status = ServiceIdentityStatus.Suspended;
+                break;
+            case ServiceIdentityDecommissionedEvent:
+                Status = ServiceIdentityStatus.Decommissioned;
+                break;
+        }
+    }
+
+    protected override void EnsureInvariants()
+    {
+        Guard.Against(ServiceIdentityId == default, "Service identity must be established.");
+        Guard.Against(Descriptor == default, "Service identity descriptor must be present.");
+        Guard.Against(!Enum.IsDefined(Status), "Service identity status is not a defined enum value.");
     }
 }

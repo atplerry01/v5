@@ -1,5 +1,5 @@
 using Whycespace.Shared.Contracts.Events.Structural.Humancapital.Sanction;
-using DomainEvents = Whycespace.Domain.StructuralSystem.Humancapital.Sanction;
+using DomainEvents = Whycespace.Domain.ControlSystem.Enforcement.HumancapitalSanction;
 
 namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 

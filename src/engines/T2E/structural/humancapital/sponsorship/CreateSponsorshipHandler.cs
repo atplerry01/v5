@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Sponsorship;
+using Whycespace.Domain.BusinessSystem.Workforce.Sponsorship;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Sponsorship;
 

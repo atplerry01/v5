@@ -1,0 +1,1 @@
+namespace Whycespace.Domain.ControlSystem.Configuration.ConfigurationScope;

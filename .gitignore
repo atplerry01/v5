@@ -29,6 +29,12 @@ Thumbs.db
 *.log
 *.tmp
 *.cache
+tmp/
+
+# ------------------------------
+# BUILD PUBLISH OUTPUT
+# ------------------------------
+artifacts/
 
 # ------------------------------
 # ENV / SECRETS

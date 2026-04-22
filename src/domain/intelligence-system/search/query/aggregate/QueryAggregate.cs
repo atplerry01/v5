@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Search.Query;
 
-public sealed class QueryAggregate
+public sealed class QueryAggregate : AggregateRoot
 {
     public static QueryAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class QueryAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

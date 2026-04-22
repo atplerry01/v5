@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.access-control.role.commands",
+    "whyce.control.access-control.role.events",
+    "whyce.control.access-control.role.retry",
+    "whyce.control.access-control.role.deadletter"
+  ]
+}

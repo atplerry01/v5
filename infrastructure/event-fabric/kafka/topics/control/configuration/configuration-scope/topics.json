@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.configuration.configuration-scope.commands",
+    "whyce.control.configuration.configuration-scope.events",
+    "whyce.control.configuration.configuration-scope.retry",
+    "whyce.control.configuration.configuration-scope.deadletter"
+  ]
+}

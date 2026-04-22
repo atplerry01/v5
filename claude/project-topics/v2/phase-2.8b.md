@@ -51,6 +51,82 @@ Completion proof:
 * replay-safe rehydration
 * canonical read model accuracy
 
+**2.8.1a Registration and Onboarding Workflow Layer**
+Purpose:
+
+* govern the full lifecycle from first registration intent to a fully activated, onboarded identity across all actor types
+* this is a distinct workflow layer — registration is not the same as identity creation; it is the multi-step process that precedes and drives identity creation
+
+Implementation topics — registration model:
+
+* registration intent aggregate/state model
+* registration type classification: person, organization, operator, workforce, service
+* invitation-based registration model (invite token, inviter linkage, expiry)
+* self-registration model (unauthenticated inbound)
+* registration initiation flow
+* registration data collection model (what is required per actor type)
+* registration duplicate-check invariant (ties to uniqueness in Identity Engine)
+* registration failure handling
+
+Implementation topics — verification during registration:
+
+* contact verification step (email/phone OTP during registration — distinct from Verification Engine flows)
+* registration-time document verification trigger (where required by actor type)
+* verification gating rules (what must pass before registration proceeds)
+* verification failure and retry model
+
+Implementation topics — activation:
+
+* account activation model (separate state from identity creation)
+* activation token issuance and expiry
+* activation confirmation flow
+* activation failure/retry rules
+* post-activation state transitions
+
+Implementation topics — initial credential setup:
+
+* initial credential issuance (first-time password/passkey setup post-activation)
+* credential setup enforced before session issuance
+* credential setup failure and retry rules
+* initial MFA enrollment (required vs optional per actor type)
+
+Implementation topics — onboarding workflow:
+
+* onboarding workflow state machine model
+* onboarding track routing (which onboarding track applies per actor type and context)
+* multi-step onboarding step model
+* onboarding completion markers
+* onboarding skippable vs required steps
+* onboarding progress persistence
+* onboarding timeout and re-entry rules
+
+Implementation topics — actor-type-specific onboarding:
+
+* person/user onboarding track
+* organization onboarding track (legal entity setup, admin designation)
+* operator onboarding track (admin/platform-operator being added by another operator)
+* workforce onboarding track (employees/contractors being assigned to a structure)
+
+Implementation topics — registration events, commands, queries, API:
+
+* registration events: `RegistrationInitiatedEvent`, `RegistrationVerifiedEvent`, `AccountActivatedEvent`, `OnboardingStartedEvent`, `OnboardingCompletedEvent`
+* registration commands
+* registration queries
+* registration persistence model (separate from identity aggregate — registration state is pre-identity)
+* registration projections
+* registration API endpoints (self-register, invite-accept, activation, onboarding steps)
+
+Completion proof:
+
+* end-to-end person registration → activation → credential setup → onboarding
+* organization registration path completeness
+* operator invite-based onboarding path completeness
+* duplicate registration rejection
+* expired activation token handling
+* onboarding progress survives restart (replay-safe)
+
+---
+
 **2.8.2 Authentication Engine**
 Purpose:
 
@@ -61,6 +137,7 @@ Implementation topics:
 * authentication aggregate/state model
 * credential model
 * credential issuance/update/revoke flows
+* initial credential setup (first-time, post-registration — links back to 2.8.1a)
 * login flow
 * challenge flow
 * multi-factor flow
@@ -69,6 +146,9 @@ Implementation topics:
 * failed authentication handling
 * lockout/throttle rules
 * privileged authentication rules
+* forgot-password / credential reset flow (initiated without an active session)
+* account recovery flow (when all credentials and MFA are lost — escalated identity recovery path)
+* magic-link / passwordless authentication model (if in scope)
 * authentication events
 * authentication commands
 * authentication queries
@@ -82,6 +162,8 @@ Completion proof:
 * MFA path correctness
 * replay-safe auth events
 * session handoff correctness
+* forgot-password reset round-trip correctness
+* account recovery path correctness
 
 **2.8.3 Authorization Engine**
 Purpose:
@@ -431,6 +513,17 @@ Completion proof:
 * no-cross-domain identity duplication rules
 * full project actor continuity checks
 
+Registration propagation topics (new — triggered at registration/activation):
+
+* identity registration → structural-system placement event (actor positioned in cluster topology)
+* identity registration → economic-system account/wallet initialization event (actor gets economic standing)
+* identity registration → content-system default-profile initialization (actor content ownership anchor)
+* organization registration → structural-system org-node creation
+* operator registration → structural-system operator-role assignment
+* propagation ordering: identity MUST be fully activated before cross-domain events fire
+* propagation failure containment: registration does not roll back if downstream domain propagation fails (eventual consistency with explicit reconciliation)
+* propagation audit: every cross-domain init event is evidence-linked to the originating registration event
+
 **2.8.19 Security and hardening layer**
 
 * secret handling rules
@@ -500,15 +593,43 @@ Completion proof:
 **2.8.24 Phase 2.8 completion criteria**
 
 * all WhyceID engines implemented canonically
+* registration and onboarding workflow layer complete (2.8.1a)
+* authentication including credential reset and account recovery complete (2.8.2)
 * runtime integration complete
 * policy integration complete
 * persistence/messaging/projections complete
 * platform API complete
-* cross-domain integration complete
+* cross-domain integration complete including registration propagation
 * audit and evidence complete
-* regression pack passing
+* regression pack passing (including full registration-to-onboarding E2E)
 * resilience validation passing
 * completion evidence produced
+
+---
+
+**2.8.25 Platform bootstrapping and initialization**
+Purpose:
+
+* govern the identity state of the platform itself at first startup
+* ensure the first operator identity is created safely and is not a security gap
+
+Implementation topics:
+
+* super-admin / first-operator initialization model
+* platform seed identity: deterministic, policy-bound, no anonymous bootstrap
+* first-operator credential bootstrap (how is the first operator set up without an existing operator to authorize it)
+* platform initialization event: `PlatformIdentityBootstrappedEvent`
+* bootstrapping policy: single-use, time-bounded, audited
+* post-bootstrap state: platform-level service identities for background workers, replay runners, and scheduled agents
+* bootstrapping audit trail (WhyceChain anchored)
+* no-re-bootstrap invariant (once bootstrapped, cannot be re-run without explicit operator-authorized reset)
+
+Completion proof:
+
+* platform can start from zero and bootstrap first identity correctly
+* bootstrap is idempotent (repeat attempt is rejected)
+* all background service identities are declared and provisioned at startup
+* no anonymous system-level operations remain after bootstrap
 
 The best execution order is:
 
@@ -551,20 +672,22 @@ The best execution order is:
 
 The strongest way to track it is with this condensed implementation sequence:
 
-1. Identity
-2. Authentication
-3. Session
-4. Authorization
-5. Device
-6. ServiceIdentity
-7. TrustScore
-8. Verification
-9. Consent
-10. IdentityGraph
-11. Audit
-12. Policy + Runtime + API + Persistence + Messaging + Projections
-13. Cross-domain proof
-14. Certification
+1. Identity (2.8.1) + Platform Bootstrap (2.8.25)
+2. Registration and Onboarding Workflow (2.8.1a) ← new, fills the registration/onboarding gap
+3. Authentication including credential reset + account recovery (2.8.2)
+4. Session (2.8.7)
+5. Authorization (2.8.3)
+6. Device (2.8.8)
+7. ServiceIdentity (2.8.10)
+8. TrustScore (2.8.4)
+9. Verification (2.8.5)
+10. Consent (2.8.6)
+11. IdentityGraph (2.8.9)
+12. Audit (2.8.11)
+13. Policy + Runtime + API + Persistence + Messaging + Projections (2.8.12–2.8.17)
+14. Cross-domain integration including registration propagation (2.8.18)
+15. Security, Observability, Resilience, Testing (2.8.19–2.8.22)
+16. Documentation + Certification (2.8.23–2.8.24)
 
 A good canonical one-line statement for this phase is:
 

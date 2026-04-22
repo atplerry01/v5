@@ -140,14 +140,16 @@ Its distinct contribution: it **extends the determinism block list to the platfo
 
 - For identity: `IIdGenerator.Generate(seed)` from `src/shared/kernel/domain/IIdGenerator.cs`. The seed MUST be derived deterministically from the operation's coordinates — for example `$"{aggregateId}:{version}"` for an event store row id, or `$"{commandId}:{handlerName}"` for a command-derived child id. Random or wall-clock seeds defeat the purpose.
 - For time: `IClock.UtcNow` from `src/shared/kernel/domain/IClock.cs`.
+- For randomness: `IRandomProvider.NextDouble/NextInt/NextLong` seeded from operation coordinates (e.g. `$"{correlationId}:retry:{attempt}"`) from `src/shared/kernel/domain/IRandomProvider.cs`. Seed MUST be composed of deterministic operation coordinates only — never wall-clock, never `Guid.NewGuid()`. (DET-RAND-01)
 
-Both seams are DI-registered as singletons in `src/platform/host/Program.cs` (`SystemClock` -> `IClock`, `DeterministicIdGenerator` -> `IIdGenerator`). There is no excuse for a constructor to be missing them.
+All three seams are DI-registered as singletons in `src/platform/host/Program.cs` (`SystemClock` -> `IClock`, `DeterministicIdGenerator` -> `IIdGenerator`, `DeterministicRandomProvider` -> `IRandomProvider`). There is no excuse for a constructor to be missing them.
 
 ### Exceptions (the only permitted boundary readers)
 
 1. **The `IClock` implementation itself.** `SystemClock.UtcNow` in `src/platform/host/Program.cs` is the single permitted reader of `DateTimeOffset.UtcNow`. No other class.
 2. **The `IIdGenerator` implementation itself.** Currently `DeterministicIdGenerator` in `src/platform/host/Program.cs`, which derives ids via `SHA256(seed)` and never reads the system clock or RNG. If a future implementation needs randomness, it must be confined to this single class.
-3. **Stopwatch for observability instrumentation** (DET-STOPWATCH-OBSERVABILITY-01, S2). `Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()` are PERMITTED solely for observability instrumentation (latency histograms, counters, traces). The resulting value MUST NOT flow into `ExecutionHash`, deterministic IDs, sequence seeds, chain block IDs, or any persisted event payload. Lint: any data flow from `Stopwatch` to a hash/id constructor is a DET violation.
+3. **The `IRandomProvider` implementation itself.** `DeterministicRandomProvider` in `src/platform/host/Program.cs` is the single permitted reader of any RNG source (seeded from operation coordinates). No other class may read `Random`, `Random.Shared`, or `RandomNumberGenerator` for non-cryptographic purposes. (DET-RAND-01)
+4. **Stopwatch for observability instrumentation** (DET-STOPWATCH-OBSERVABILITY-01, S2). `Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()` are PERMITTED solely for observability instrumentation (latency histograms, counters, traces). The resulting value MUST NOT flow into `ExecutionHash`, deterministic IDs, sequence seeds, chain block IDs, or any persisted event payload. Lint: any data flow from `Stopwatch` to a hash/id constructor is a DET violation.
 
 ### SQL Clock Exception (DET-SQL-NOW-ADDENDUM-01, S3)
 
@@ -1592,3 +1594,53 @@ References:
 - R-K-11 (partition key)
 - R-K-26 (aggregate-id header non-empty)
 - Source: `claude/new-rules/20260418-214500-audits.md`
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-19)
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-19. Rule IDs are indexed in `claude/audits/constitutional.audit.md`.
+
+### DET-RAND-01 — Deterministic Randomness Seam
+
+Definition:
+`IRandomProvider` is the single permitted seam for all non-cryptographic randomness needs (retry jitter, partition-rebalance tiebreaks, circuit-breaker half-open probes, load-shedding victim selection) across all in-scope paths (`src/domain/**`, `src/engines/**`, `src/runtime/**`, `src/systems/**`, `src/platform/host/adapters/**`). The contract lives at `src/shared/kernel/domain/IRandomProvider.cs` with seed-driven methods: `NextDouble(seed)`, `NextInt(seed, min, max)`, `NextLong(seed)`. Seed MUST be composed exclusively of deterministic operation coordinates — for example `$"{correlationId}:retry:{attempt}"`.
+
+`Random` / `Random.Shared` / `RandomNumberGenerator.GetBytes` for non-cryptographic identity or sequence generation remain forbidden outside `DeterministicRandomProvider`. Cryptographic key-material generation in `src/systems/**` security adapters is exempt.
+
+Enforcement:
+Static scan of all in-scope paths for `\bnew Random\b|\bRandom\.Shared\b` outside `DeterministicRandomProvider.cs`. Architecture test `WbsmArchitectureTests.No_direct_Random_usage_outside_DeterministicRandomProvider`. `DeterministicRandomProvider` is DI-registered as the sole `IRandomProvider` singleton in `src/platform/host/Program.cs`.
+
+Severity:
+S0 — breaks replay determinism and makes chaos-test reproducibility impossible without this seam.
+
+References:
+- GE-01 (Deterministic Execution)
+- DET-SEED-DERIVATION-01 (seed composition discipline)
+- Source: `claude/new-rules/20260419-010000-guards.md`
+
+---
+
+### POL-FAIL-CLASS-01 — Policy-Failure Classification Invariant
+
+Definition:
+Every policy evaluation outcome that does not return an `Allow` result MUST resolve to exactly one of three categories, encoded as `PolicyFailureMode` under `src/runtime/contracts/`:
+
+- `FAIL_CLOSED` — reject the command; emit `PolicyEvaluationFailedEvent`; no retry. Default for all production environments.
+- `FAIL_OPEN` — permit the command under an explicit, audited `DegradedPosture.PolicyFailOpen` flag; emit `PolicyBypassedEvent` with reason. Only permitted if WHYCEPOLICY itself declares this policy as fail-open-eligible. Default is never fail-open.
+- `DEFER` — enqueue the command for bounded retry (finite attempt cap + backoff); emit `PolicyEvaluationDeferredEvent`. Used when policy-engine health is DEGRADED but recoverable.
+
+`IPolicyEvaluator` contract MUST return the classification as a first-class field, not embed it in an error string. The retry executor (R2) MUST consult `FailureCategory == PolicyDenied` (terminal — no retry) vs `FailureCategory == PolicyEvaluationDeferred` (retry with finite cap). No code path may catch a policy-unavailable exception and proceed without emitting one of the three events.
+
+Enforcement:
+Unit test: policy evaluator returns `DEFER` under injected OPA-503; retry executor honours cap; final attempt produces `FAIL_CLOSED` rejection. Integration test: kill OPA mid-command; verify `FAIL_CLOSED` event lands in event store; no mutation applied. Audit probe: any `catch` block in `src/runtime/**` or `src/systems/opa-adapter/**` that proceeds without emitting one of the three events = S0.
+
+Severity:
+S0 — silent bypass under "policy unavailable" violates POL-02 (no unauthorized domain actions) and PB-09 (policy → chain link required). Infinite retry loop on a down policy engine is a DoS amplifier.
+
+References:
+- POL-02 (no unauthorized domain actions)
+- POL-03 (policy enforcement through runtime)
+- POL-AUDIT-14 (policy evaluation emits event)
+- PB-09 (policy → chain link required)
+- Source: `claude/new-rules/20260419-010000-guards.md`

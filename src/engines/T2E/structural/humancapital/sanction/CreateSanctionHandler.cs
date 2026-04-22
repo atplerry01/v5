@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Sanction;
+using Whycespace.Domain.ControlSystem.Enforcement.HumancapitalSanction;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Sanction;
 

@@ -1,5 +1,5 @@
 using Whycespace.Shared.Contracts.Events.Structural.Humancapital.Performance;
-using DomainEvents = Whycespace.Domain.StructuralSystem.Humancapital.Performance;
+using DomainEvents = Whycespace.Domain.DecisionSystem.Evaluation.Performance;
 
 namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 

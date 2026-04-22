@@ -68,6 +68,7 @@ This audit checks rules defined in [`claude/guards/constitutional.guard.md`](../
 - [ ] **DET-IDCHECK-COVERAGE-01** — deterministic-id-check scans tests/** and scripts/validation/** in addition to src/**
 - [ ] **DET-DUAL-SEAM-01** — two deterministic identity seams non-overlapping
 - [ ] **DET-HSID-CALLSITE-01** — `IDeterministicIdEngine.Generate(...)` called only from runtime control-plane and T0U determinism engine
+- [ ] **DET-RAND-01** — `IRandomProvider` exists at `src/shared/kernel/domain/IRandomProvider.cs`; `DeterministicRandomProvider` is the sole registered implementation; `Random`/`Random.Shared`/`RandomNumberGenerator.GetBytes` absent from `src/runtime/**`, `src/engines/**`, `src/domain/**`, `src/platform/host/adapters/**` outside `DeterministicRandomProvider.cs`. Static scan: `grep -rn "\bnew Random\b\|\bRandom\.Shared\b" src/ --include="*.cs"` excluding `DeterministicRandomProvider.cs` returns zero hits.
 
 ### Section 4 — Deterministic Identifiers (HSID v2.1)
 
@@ -141,6 +142,10 @@ This audit checks rules defined in [`claude/guards/constitutional.guard.md`](../
 
 - [ ] **OPS-VAL-003** — outbox row determinism on duplicate command (HSID invocation-unique salt OR duplicate short-circuit before outbox insert)
 
+### Section 10 — Rules Promoted from new-rules/ (2026-04-19)
+
+- [ ] **POL-FAIL-CLASS-01** — policy-failure classification invariant: every non-Allow evaluation MUST produce exactly one of `FAIL_CLOSED` / `FAIL_OPEN` / `DEFER`; `IPolicyEvaluator` returns classification as first-class field; no silent bypass; retry cap is finite. Probe: unit test OPA-503 → `DEFER` → exhaust cap → `FAIL_CLOSED`. Integration: kill OPA mid-command → `FAIL_CLOSED` event in store, no mutation.
+
 ---
 
 ## Check Procedure
@@ -162,8 +167,8 @@ This audit checks rules defined in [`claude/guards/constitutional.guard.md`](../
 AUDIT:           constitutional
 GUARD:           claude/guards/constitutional.guard.md
 EXECUTED:        <ISO-8601>
-RULES_CHECKED:   ~70
-SECTIONS:        9
+RULES_CHECKED:   ~72
+SECTIONS:        10
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

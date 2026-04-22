@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Index.CostIndex;
 
-public sealed class CostIndexAggregate
+public sealed class CostIndexAggregate : AggregateRoot
 {
     public static CostIndexAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class CostIndexAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Planning.Target;
 
-public sealed class TargetAggregate
+public sealed class TargetAggregate : AggregateRoot
 {
     public static TargetAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class TargetAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

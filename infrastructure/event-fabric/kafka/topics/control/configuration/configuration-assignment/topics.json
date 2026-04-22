@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.configuration.configuration-assignment.commands",
+    "whyce.control.configuration.configuration-assignment.events",
+    "whyce.control.configuration.configuration-assignment.retry",
+    "whyce.control.configuration.configuration-assignment.deadletter"
+  ]
+}

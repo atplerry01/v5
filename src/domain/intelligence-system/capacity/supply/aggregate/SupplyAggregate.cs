@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Capacity.Supply;
 
-public sealed class SupplyAggregate
+public sealed class SupplyAggregate : AggregateRoot
 {
     public static SupplyAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class SupplyAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

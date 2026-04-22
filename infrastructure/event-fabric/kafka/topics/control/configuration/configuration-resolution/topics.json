@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.configuration.configuration-resolution.commands",
+    "whyce.control.configuration.configuration-resolution.events",
+    "whyce.control.configuration.configuration-resolution.retry",
+    "whyce.control.configuration.configuration-resolution.deadletter"
+  ]
+}

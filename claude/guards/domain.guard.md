@@ -17,21 +17,45 @@ All files and folders under `src/domain/`. Cross-layer structural rules also cov
 
 ### Canonical Super-Classification Systems
 
-The domain layer is organized into exactly **11 root systems** plus `shared-kernel`:
+The domain layer is organized into exactly **14 root systems** plus `shared-kernel`:
 
 | System | Concern |
 |--------|---------|
-| `business-system` | Business logic: agreements, billing, documents, entitlements, execution, integration, inventory, localization, logistics, marketplace, notification, portfolio, resource, scheduler, subscription |
-| `constitutional-system` | Policy, chain (immutable ledger) |
-| `core-system` | Command/event/state framework primitives, financial control, reconciliation, temporal |
-| `decision-system` | Governance, audit, compliance, risk |
-| `economic-system` | Financial execution: asset, binding, capital, charge, distribution, enforcement, ledger, limit, payout, pricing, reserve, revenue, settlement, transaction, treasury, vault, wallet |
-| `intelligence-system` | Analysis, simulation, forecasting, observability, geo, search, knowledge, estimation, planning |
-| `operational-system` | Runtime operations: global incident response, sandbox |
-| `orchestration-system` | Workflow: definition, execution, compensation, routing, stages |
-| `structural-system` | Clusters (authority, classification, topology, lifecycle) and human capital |
-| `trust-system` | Identity (13 sub-domains) and access (6 sub-domains: authorization, grant, permission, request, role, session) |
+| `business-system` | Business logic: agreements, customers, entitlements, offerings, orders, pricing, providers, services, workforce (behavioral) |
+| `constitutional-system` | Meta-governance: policy definitions, chain (immutable ledger) |
+| `content-system` | Content artifact lifecycle: documents, media, streaming |
+| `control-system` | System governance and administration: access-control, audit, configuration, enforcement (constraint application), observability, scheduling (administrative), system-policy |
+| `core-system` | Universal primitives only: temporal, ordering, identifier — no aggregates with lifecycle, no state transitions, no behavior beyond validation |
+| `decision-system` | Evaluation and decision truth: audit evaluation, compliance assessment, governance decisions, risk evaluation, performance/reputation evaluation |
+| `economic-system` | Financial execution only: capital, exchange, ledger, reconciliation, revenue, subject, transaction, vault — no compliance, no risk, no enforcement, no routing |
+| `integration-system` | External boundary: outbound effects, integration contracts |
+| `intelligence-system` | Derived/analytical truth: analysis, simulation, forecasting, observability, geo, search, knowledge, estimation, planning, relationship |
+| `operational-system` | Operational use-case execution: activation, fulfillment, incident-response, onboarding, operator-workflow, provisioning, routing (transaction), service-activation |
+| `orchestration-system` | Canonical execution coordination: workflow definition, execution, compensation, routing, stages, steps, transitions |
+| `platform-system` | Communication and messaging contracts: command, event, envelope, routing, schema — no business semantics, no policy logic, no domain-specific naming |
+| `structural-system` | Structural/topology/reference truth: cluster topology, structure definitions (classification, hierarchy, master-data, topology, type), humancapital binding (participant, operator, assignment, eligibility, governance only) |
+| `trust-system` | Identity, trust, authority semantics: identity (consent, credential, device, federation, profile, registry, service-identity, trust, verification) and access (authorization, grant, permission, request, role, session) |
 | `shared-kernel` | Kernel base classes, primitives (identity, money, time), jurisdiction, location, measurement |
+
+> **Updated 2026-04-22:** Corrected from 12 to 14 root systems. Added `content-system` and `integration-system`. Updated system concern descriptions to reflect doctrinal remediation (new-rules: 20260422-152716-domain-doctrine-remediation.md FINDING-01). Economic-system purged of enforcement/compliance/risk/routing. Control-system gains enforcement and scheduling (renamed from orchestration). Operational-system gains provisioning/onboarding/fulfillment/service-activation/operator-workflow; removes sandbox/demo/deployment.
+
+### Triad Classification Dependency Rules (LOCKED)
+
+The three Triad systems have a mandatory, one-direction dependency graph:
+
+| System | May depend on |
+|---|---|
+| `core-system` | Nothing — zero dependencies |
+| `platform-system` | `core-system` only |
+| `control-system` | `core-system` and `platform-system` only |
+
+**Classification content constraints (LOCKED):**
+
+- `core-system`: immutable primitives only — temporal, ordering, identifier. No aggregates with lifecycle, no state transitions, no services, no business logic.
+- `platform-system`: messaging contracts only — command model, event model, envelope model, routing model, schema model. No business semantics, no policy logic, no authorization, no domain-specific naming.
+- `control-system`: system governance only — access-control, audit, configuration, enforcement (constraint application), observability, scheduling (renamed from orchestration — administrative job/schedule control only), system-policy. No business workflows, no domain-specific aggregates, no messaging constructs, no business workflow orchestration (that belongs in `orchestration-system`).
+
+Any code under these three systems that violates the content constraints or dependency direction is an **S1** structural violation.
 
 ### Forbidden Legacy Folders
 
@@ -504,8 +528,9 @@ BEHAVIORAL_GUARD_VIOLATION:
 
   **Scan:** grep `src/domain/**` for `throw new (ArgumentException|ArgumentNullException|ArgumentOutOfRangeException|InvalidOperationException|NotSupportedException|NotImplementedException|Exception)\b`. **Rationale:** Domain exceptions carry business meaning. Framework exceptions bleed technical/infrastructural semantics across the layer boundary and break behavioral rule 12 (Exception Boundary Enforcement). Clarifies the intent of Core Purity rule 7.
 
-- **DOM-LIFECYCLE-INIT-IDEMPOTENT-01 — Lifecycle-Init Idempotency (S2)**: Every aggregate's lifecycle-init action (`Open*`, `Create*`, `Initialize*`, factory-style first event) MUST refuse to emit a second initialization event on an already-loaded aggregate. Canonical guard:
+- **DOM-LIFECYCLE-INIT-IDEMPOTENT-01 — Lifecycle-Init Idempotency (S2)**: Every aggregate's lifecycle-init action MUST prevent a second initialization event from being raised on an already-initialized aggregate. Two conformant patterns are recognised (amended 2026-04-21 per `claude/new-rules/20260421-105349-domain-static-factory-idempotency.md`):
 
+  **Pattern A — Instance-method init** (economic exemplar: `CapitalAccountAggregate.Open(...)`). The init method is called on an instance that may have had history rehydrated into it. MUST guard with:
   ```csharp
   public void OpenOrCreate(...)
   {
@@ -513,10 +538,14 @@ BEHAVIORAL_GUARD_VIOLATION:
       RaiseDomainEvent(new <Aggregate>InitializedEvent(...));
   }
   ```
+  A specification class encoding the check (e.g. `AlreadyOpenSpecification`, `AlreadyCreatedSpecification`) is the canonical form and goes under `<aggregate>/specification/`. `AggregateRoot.Version` starts at `-1` and increments on `LoadFromHistory`; `Version >= 0` is an authoritative "already loaded" discriminator.
 
-  A specification class encoding the check (e.g., `AlreadyOpenSpecification`, `AlreadyCreatedSpecification`) is the canonical form and goes alongside other specs under `<aggregate>/specification/`. `AggregateRoot.Version` starts at `-1` and increments on `LoadFromHistory`; `Version >= 0` is an authoritative "already loaded" discriminator that does not require domain-specific state shape.
+  **Pattern B — Static-factory init** (content-system exemplar: `DocumentAggregate.Create(...)`, `MediaIngestAggregate.Request(...)`). The factory always returns a freshly-constructed instance via the private parameterless constructor; `Version` is invariably `-1` at factory entry, so a `Version >= 0` guard is structurally dead code and MUST NOT be added for mechanical uniformity. Idempotency is satisfied by construction — no second-initialisation path exists because static factories cannot be invoked on a rehydrated instance. Pattern B adopters MUST document the choice in the BC README under a "Template conformance" section so audits can distinguish "deliberate static-factory pattern" from "missing guard".
 
-  **Scan:** enumerate aggregates under `src/domain/**/aggregate/` and verify each method that raises a "first event" (event-type matches `*Opened|*Created|*Initialized`) checks `Version >= 0` (or equivalent). **Rationale:** Without this guard, re-issuing the same lifecycle-init command produces duplicate seed events in the write-side stream even when projection-layer idempotency masks the symptom. Complements INV-001 (Command Outcome Totality) and INV-303 (Replay-Safe). Paired with the constitutional `INV-IDEMPOTENT-LIFECYCLE-INIT-01` (engine-handler shape for static-factory aggregates).
+  **Scan (Pattern A):** enumerate `src/domain/**/aggregate/` instance-method init paths and verify `Version >= 0` guard or equivalent specification is present.
+  **Scan (Pattern B):** enumerate `src/domain/**/aggregate/` static-factory init paths and verify the BC README carries a `static-factory` conformance declaration.
+
+  **Rationale:** Without Pattern A guard, re-issuing the same lifecycle-init command produces duplicate seed events. Pattern B is structurally protected: the factory cannot be called on a rehydrated instance. Both satisfy the replay-safety invariant via different mechanisms. Complements INV-001 and INV-303. Paired with constitutional `INV-IDEMPOTENT-LIFECYCLE-INIT-01`.
 
 ---
 
@@ -567,12 +596,14 @@ Enforce repository partition boundaries and layer purity across the WBSM v3 arch
     |---|---|---|
     | Business | `business-system` | `BusinessSystem` |
     | Constitutional | `constitutional-system` | `ConstitutionalSystem` |
+    | Control | `control-system` | `ControlSystem` |
     | Core | `core-system` | `CoreSystem` |
     | Decision | `decision-system` | `DecisionSystem` |
     | Economic | `economic-system` | `EconomicSystem` |
     | Intelligence | `intelligence-system` | `IntelligenceSystem` |
     | Operational | `operational-system` | `OperationalSystem` |
     | Orchestration | `orchestration-system` | `OrchestrationSystem` |
+    | Platform | `platform-system` | `PlatformSystem` |
     | Structural | `structural-system` | `StructuralSystem` |
     | Trust | `trust-system` | `TrustSystem` |
 
@@ -1417,7 +1448,7 @@ The following WBSM v3 global enforcement rules apply uniformly to the domain lay
 
 The following procedure covers the full domain purity + structure + behavior surface. Per-subsection procedures above (Transaction, Revenue, Exposure, Reconciliation, Enforcement & Compliance, Exchange, DTO, Structural, Behavioral) remain authoritative for their respective scopes and MUST also be run.
 
-1. Verify only the 11 canonical systems + `shared-kernel` exist at root level. No legacy folders.
+1. Verify only the 12 canonical systems + `shared-kernel` exist at root level. No legacy folders.
 2. Enumerate all folders under `src/domain/` and verify three-level topology: `{system}/{context}/{domain}/`.
 3. Verify NO domain sits directly under a system (must have context layer).
 4. For each domain folder, verify presence of all seven mandatory subfolders.
@@ -1440,7 +1471,7 @@ The following procedure covers the full domain purity + structure + behavior sur
 
 ## Unified Pass Criteria
 
-- Only canonical 11 systems + shared-kernel at root level.
+- Only canonical 12 systems + shared-kernel at root level.
 - All BCs follow CLASSIFICATION > CONTEXT > DOMAIN topology (3-level minimum).
 - All mandatory artifact folders present in every BC.
 - All aggregates named `{Name}Aggregate`.
@@ -2062,3 +2093,407 @@ References:
 - `OrderAggregate.Description` (business-system) already uses the canonical `ContentRef` externalisation pattern — conforms by external reference.
 - Complement to D-ID-REF-01 (typed inter-aggregate references) and D-INV-NON-EMPTY-01 (non-empty invariants).
 - Source: Content-System Extraction pass (Phase 1 inventory + Path A enforcement).
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-21) — Domain Aggregate Inheritance + Business-System + Content-System + Structural-System
+
+Rules below were captured in `claude/new-rules/` per CLAUDE.md $1c and promoted into this guard on 2026-04-21. Rule IDs are indexed in `claude/audits/domain.audit.md`.
+
+---
+
+### [S0] E1XD-AGG-INHERIT-01 — Every aggregate MUST inherit AggregateRoot
+
+Definition:
+Every file under `src/domain/**` matching `*Aggregate.cs` MUST inherit from `AggregateRoot` (the canonical base from `src/shared/kernel/domain/`). No aggregate may:
+- Declare its own `_uncommittedEvents` list or `List<object> _events` field.
+- Expose a `GetUncommittedEvents()` or `UncommittedEvents` public surface that duplicates `AggregateRoot.GetDomainEvents()`.
+- Declare its own `Version` field (shadowing the base `AggregateRoot.Version`).
+- Provide its own `LoadFromHistory` implementation.
+
+Aggregates not inheriting `AggregateRoot` cannot participate in `LoadFromHistory` replay, do not expose the canonical `Version` property via the base class, and cannot use `RaiseDomainEvent` from the base — breaking replay-safety (INV-REPLAY-LOSSLESS-VALUEOBJECT-01) and event-sourcing correctness (GE-04).
+
+Enforcement:
+Static check: `find src/domain -name "*Aggregate.cs" | xargs grep -L ": AggregateRoot"` must return zero results. ArchTest `StructuralEnforcementArchTests.Every_aggregate_root_inherits_AggregateRoot` enforces at CI.
+
+Severity:
+S0 (breaks event-sourcing replay, projection rebuild, and INV-REPLAY-LOSSLESS-VALUEOBJECT-01).
+
+References:
+- Outstanding backlog: 167 aggregates across intelligence-system (78), decision-system (45), trust-system (16), orchestration-system (11), constitutional-system (10), operational-system (6), shared-kernel (1) as of 2026-04-21 audit.
+- Source: `claude/new-rules/20260421-000000-domain.md` (Finding 1 — E1XD-AGG-INHERIT-01).
+
+---
+
+### [S1] E1XD-AGG-RAISE-01 — Aggregates MUST NOT manage their own uncommitted events
+
+Definition:
+No aggregate under `src/domain/**` may manage its own mutable `_uncommittedEvents` / `_events` list, expose `GetUncommittedEvents()` / `UncommittedEvents` as a public surface, or declare its own event-accumulation pattern. All domain event raising MUST use `RaiseDomainEvent(...)` from `AggregateRoot`.
+
+This rule is a subset of E1XD-AGG-INHERIT-01. The 7 known violators (as of 2026-04-21) are:
+- `src/domain/constitutional-system/policy/enforcement/aggregate/EnforcementAggregate.cs`
+- `src/domain/constitutional-system/policy/rule/aggregate/RuleAggregate.cs`
+- `src/domain/operational-system/incident-response/incident/aggregate/IncidentAggregate.cs`
+- `src/domain/trust-system/access/authorization/aggregate/AuthorizationAggregate.cs`
+- `src/domain/trust-system/access/permission/aggregate/PermissionAggregate.cs`
+- `src/domain/trust-system/identity/credential/aggregate/CredentialAggregate.cs`
+- `src/domain/trust-system/identity/identity/aggregate/IdentityAggregate.cs`
+
+Enforcement:
+Static check: `grep -rn "_uncommittedEvents\|GetUncommittedEvents\|UncommittedEvents" src/domain/` must return zero results. Migrate in same batch as E1XD-AGG-INHERIT-01.
+
+Severity:
+S1 (diverges from canonical `AggregateRoot.GetDomainEvents()` pattern; breaks replay discipline).
+
+References:
+- Source: `claude/new-rules/20260421-000000-domain.md` (Finding 2 — E1XD-AGG-RAISE-01).
+
+---
+
+## Domain-Aligned: Business-System Enforcement Lock
+
+Rules below were captured in `claude/new-rules/20260421-005614-business-system.md` and enforced by `tests/unit/domain/BusinessSystemEnforcementLockTests.cs`.
+
+### [S0] BS-POLICY-PURITY-01 — Business-system policy files MUST NOT perform I/O
+
+Definition:
+Files matching `*Policy.cs` under `src/domain/business-system/**` MUST NOT reference any of: `Repository`, `DbContext`, `IEventStore`, `IProducer`, `IConsumer`, `.SaveAsync`, `.SaveChanges`. Policies receive aggregate state as value inputs and return pure decisions — no I/O, no persistence, no messaging.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_POLICY_PURITY_01_policies_do_not_perform_io` fails on any match of the forbidden symbols in business-system `*Policy.cs` files.
+
+Severity:
+S0 (policies doing I/O break the entire write path and WHYCEPOLICY authority invariant).
+
+### [S1] BS-INV-PRESENT-01 — Every business-system aggregate MUST declare EnsureInvariants
+
+Definition:
+Every aggregate under `src/domain/business-system/**` MUST declare `private void EnsureInvariants()`. Static check: pattern `private\s+void\s+EnsureInvariants\s*\(\s*\)` on `*Aggregate.cs` under the business-system root. Missing match = violation.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_INV_PRESENT_01_every_aggregate_declares_EnsureInvariants`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S2] BS-INV-NON-TRIVIAL-01 — Business-system EnsureInvariants must contain at least two throw statements
+
+Definition:
+Every `EnsureInvariants()` body under `src/domain/business-system/**` MUST contain at least two `throw` statements. Identity-only validation is insufficient — every aggregate must additionally assert required relationships, lifecycle state, or state-transition preconditions.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_INV_NON_TRIVIAL_01_EnsureInvariants_has_at_least_two_throws`.
+
+Severity:
+S2 (warn; must resolve within sprint).
+
+### [S1] BS-AGG-PURITY-01 — Business-system aggregates MUST NOT import other aggregate namespaces
+
+Definition:
+Aggregate files under `src/domain/business-system/**` MUST NOT import other aggregate namespaces. Only the shared kernel (`Whycespace.Domain.BusinessSystem.Shared.*`) is permitted as a cross-folder business-system import. Cross-aggregate rules belong in DomainPolicy classes under `policy/`, not inside aggregates. Static check: in `*Aggregate.cs` under business-system, any `using Whycespace.Domain.BusinessSystem.<X>;` where `<X>` does not start with `Shared.` = violation.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S2] BS-EVENT-NAMING-01 — Business-system event files must follow naming conventions
+
+Definition:
+Every file in `*/event/*.cs` under business-system MUST end with `Event.cs` and contain exactly one `public sealed record <FileNameWithoutExtension>(...)` declaration matching the filename.
+
+Severity:
+S2 (warn; must resolve within sprint).
+
+### [S1] BS-EVENT-PAYLOAD-01 — Business-system event payloads MUST NOT carry primitive relationship IDs
+
+Definition:
+Event record parameter lists under `src/domain/business-system/**` MUST NOT contain `Guid *Id` or `string *Id` primitive relationship fields. Typed canonical IDs (`AggregateId`, `*Ref`) only.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_EVENT_PAYLOAD_01_events_use_typed_ids`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] BS-POLICY-DECISION-01 — Business-system policy classes MUST NOT expose void methods
+
+Definition:
+`*Policy` classes under `*/policy/*.cs` in `src/domain/business-system/**` MUST NOT expose any `public void` methods. Every public method returns a decision object — policies do not mutate state.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_POLICY_DECISION_01_policies_return_decisions_not_void`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] BS-PRIM-ID-PROP-01 — No primitive ID properties in business-system
+
+Definition:
+No file under `src/domain/business-system/**` may declare a `public (Guid|string) *Id` property. Every identifier is a typed VO.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_PRIM_ID_PROP_01_no_primitive_id_properties`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] BS-PRIM-ID-PARAM-01 — No primitive ID method/constructor parameters in business-system
+
+Definition:
+No file under `src/domain/business-system/**` may declare a `(Guid|string) *Id` method or constructor parameter. Primitive IDs are forbidden on the wire as well as at rest.
+
+Enforcement:
+ArchTest `BusinessSystemEnforcementLockTests.BS_PRIM_ID_PARAM_01_no_primitive_id_parameters`.
+
+Severity:
+S1 (block merge, fail CI).
+
+---
+
+## Domain-Aligned: Content-System Externalisation Lock
+
+Rules below were captured in `claude/new-rules/20260421-010348-content-system.md` and `claude/new-rules/20260421-011500-content-system-correction.md`, enforced by `tests/unit/domain/ContentSystemEnforcementLockTests.cs`.
+
+### [S0] CS-STRUCTURAL-OWNER-01 — DocumentAggregate.Create MUST reject empty StructuralOwnerRef
+
+Definition:
+`DocumentAggregate.Create` MUST reject an empty `StructuralOwnerRef`. Content cannot exist without a structural parent (cluster / sub-cluster). Business aggregates may only reference content via typed `ContentRef` — they never act as structural owners.
+
+Enforcement:
+Test `DocumentAggregate_Create_rejects_empty_StructuralOwnerRef` in `ContentSystemEnforcementLockTests`.
+
+Severity:
+S0 (content-without-structural-parent is an ownership-model regression).
+
+### [S1] CS-LIFECYCLE-CANONICAL-01 — DocumentStatus must declare all four canonical lifecycle states
+
+Definition:
+`DocumentStatus` MUST declare all four canonical lifecycle states: `Draft`, `Active`, `Archived`, `Superseded`. Removing any is a lifecycle-model regression.
+
+Enforcement:
+Test `DocumentStatus_enum_declares_the_four_canonical_lifecycle_states`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-EVENT-MODEL-01 — Canonical content event set must be present
+
+Definition:
+The canonical content event set MUST be present in the `Whycespace.Domain.ContentSystem.Document.CoreObject.Document` namespace: `DocumentCreatedEvent`, `DocumentVersionAttachedEvent`, `DocumentSupersededEvent`, `DocumentActivatedEvent`, `DocumentArchivedEvent` (plus existing `DocumentRestoredEvent`, `DocumentMetadataUpdatedEvent`).
+
+Enforcement:
+Test `Canonical_content_events_are_declared`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-DECOUPLE-ORDER-01 — OrderAggregate MUST NOT embed prose string properties
+
+Definition:
+`OrderAggregate` MUST NOT declare any embedded `string Description|Body|Notes|Comment` property. Description prose is externalised to a `DocumentAggregate`; `OrderAggregate` exposes a typed `ContentRef` property.
+
+Enforcement:
+Test `OrderAggregate_references_content_via_ContentRef_not_prose_string`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-DOC-PROSE-LOCK-01 — DocumentAggregate MUST NOT declare embedded prose content fields
+
+Definition:
+`DocumentAggregate` (the content-aggregate root) MUST NOT declare a `string Body|Content|Payload|Description|Notes|Comment|Html|Markdown|Abstract|Blurb` property. The root owns identity, metadata, and refs; the content bytes live on the version / file artifact.
+
+Enforcement:
+Test `DocumentAggregate_declares_no_embedded_prose_content_fields`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-ORDER-NO-PROSE-01 — OrderAggregate MUST NOT declare raw-string prose property
+
+Definition:
+`OrderAggregate` MUST NOT declare a raw-string prose property (`OrderDescription|Description|Body|Notes|Comment`). `OrderAggregate.Description` MUST be a typed `OrderDescription` VO — not a raw `string` and not a `DocumentRef`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S2] CS-ORDER-NOT-EXTERNALISED-01 — OrderAggregate.Description MUST remain a typed VO
+
+Definition:
+`OrderAggregate.Description` MUST remain a typed `OrderDescription` VO, NOT a `DocumentRef`. Externalisation is reserved for true evolving content; order descriptions are non-evolving structural descriptors.
+
+Severity:
+S2 (advisory; flag if a PR changes `OrderDescription` to `DocumentRef`).
+
+### [S1] CS-DECOUPLE-RULE-01 — EnforcementRuleAggregate.Description MUST be DocumentRef
+
+Definition:
+`EnforcementRuleAggregate.Description` MUST be `DocumentRef`, not `string` and not `RuleDescription`. Rule descriptions are evolving content externalised to the content-system.
+
+Enforcement:
+Test in `ContentSystemEnforcementLockTests`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-DECOUPLE-EVIDENCE-01 — AuditRecordAggregate.EvidenceSummary MUST be DocumentRef
+
+Definition:
+`AuditRecordAggregate.EvidenceSummary` MUST be `DocumentRef`, not the legacy `EvidenceSummary` VO.
+
+Enforcement:
+Test in `ContentSystemEnforcementLockTests`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-DECOUPLE-KANBAN-01 — KanbanCard description MUST be DocumentRef
+
+Definition:
+`KanbanCard.Description` MUST be `DocumentRef`, not raw `string`. Externalised content only. `KanbanCard.Title` remains a typed `KanbanCardTitle` VO (see CS-KANBAN-TITLE-TYPED-01).
+
+Enforcement:
+Test `KanbanCard_Title_is_typed_VO_and_Description_is_DocumentRef`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S2] CS-NO-OVER-EXTERNALISE-01 — Structural and identity fields MUST NOT be externalised to DocumentRef
+
+Definition:
+The following structural / identity / audit fields MUST NOT be externalised to `DocumentRef`:
+`ViolationAggregate.Reason`, `SettlementAggregate.FailureReason`, `CounterpartyProfile.Name`, `KanbanAggregate.Name`. These are audit narratives or structural labels, not evolving content.
+
+Enforcement:
+Test `Structural_labels_remain_typed_VOs_and_do_not_externalise_to_DocumentRef`.
+
+Severity:
+S2 (advisory; flag PRs that move these fields to `DocumentRef`).
+
+---
+
+## Domain-Aligned: Content-System Identity
+
+Rules below were captured in `claude/new-rules/20260421-011800-content-system-tightening.md`, enforced by `tests/unit/domain/ContentSystemEnforcementLockTests.cs`.
+
+### [S1] CS-DOCREF-WRAPS-CONTENTID-01 — Every local DocumentRef MUST wrap canonical ContentId
+
+Definition:
+Every local `DocumentRef` VO MUST wrap the canonical shared-kernel `ContentId` (`src/domain/shared-kernel/primitive/identity/ContentId.cs`), not a raw `Guid`. A `public Guid Value` inside a `DocumentRef.cs` file is a violation.
+
+Enforcement:
+Test `Every_local_DocumentRef_wraps_ContentId_not_raw_Guid`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-DOCREF-MISUSE-01 — DocumentRef MUST NOT back identity / label fields
+
+Definition:
+`DocumentRef` MUST NOT back any `*Name`, `*Label`, `*Code`, `*Identifier`, or `*Id` property. Those are structural identity — use a typed VO instead. `DocumentRef` is reserved for true evolving content.
+
+Enforcement:
+Test `DocumentRef_is_not_used_for_name_label_code_or_identifier_fields`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] CS-KANBAN-TITLE-TYPED-01 — KanbanCard.Title MUST be a typed KanbanCardTitle VO
+
+Definition:
+`KanbanCard.Title` MUST be a typed `KanbanCardTitle` VO — not `string` and not `DocumentRef`. Titles are structural identity, not content.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S2] CS-KANBAN-TITLE-NOT-EXTERNALISED-01 — KanbanCard.Title MUST NOT be externalised to DocumentRef
+
+Definition:
+`KanbanCard.Title` MUST NOT be externalised to `DocumentRef` even if tempted by its prose-like surface. Title remains a typed `KanbanCardTitle` VO.
+
+Severity:
+S2 (advisory; flag any PR that changes `KanbanCardTitle` to `DocumentRef`).
+
+---
+
+## Domain-Aligned: Structural-System E1 Completion
+
+Rules below were captured in `claude/new-rules/20260421-130000-structural-e1-completion.md`. They extend `domain.audit.md` Section 22 (Structural Central-Spine rules). All rules reflect implemented code on `dev_wip`.
+
+### [S1] R-STRUCT-RELATIONSHIP-RULES-LOCATION-01 — Declarative interaction constraints live in relationship-rules/
+
+Definition:
+All declarative interaction / compatibility / scope constraints between structural nodes MUST live under `src/domain/structural-system/structure/relationship-rules/`. The folder holds pure immutable classes — no aggregates, no lifecycle, no services, no events, no persistence. A relationship-rule class is a data holder answering `IsAllowed(...)` / `AllowsUnderSubcluster(...)` queries against a frozen definition. Canonical members: `AuthorityProviderMatrix`, `AuthoritySubclusterConstraint`, `SpvScopeConstraint`. Each MUST expose a static `Permissive` (or equivalent) factory. New structural relationship rules MUST land here, not in a sibling subsystem.
+
+Static check:
+- `find src/domain/structural-system/structure/relationship-rules -type f -name "*.cs"` — all files declare a single public class; no aggregate/event/service patterns; no mutable state.
+- `grep -rE "(AuthorityProviderMatrix|AuthoritySubclusterConstraint|SpvScopeConstraint)" src/` — no shadow declarations outside `structural-system/structure/relationship-rules/`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] R-STRUCT-RELATIONSHIP-POLICY-CONTRACT-01 — IStructuralRelationshipPolicy is the single port for relationship evaluation
+
+Definition:
+Relationship rule access from structural specs MUST flow through `Whycespace.Domain.StructuralSystem.Contracts.References.IStructuralRelationshipPolicy`. Mirrors `IStructuralParentLookup` — a narrow interface in `contracts/references/` that the runtime wires with a concrete implementation. Specs consuming relationship rules MUST take `IStructuralRelationshipPolicy` as a constructor parameter (primary-constructor form acceptable). Specs MUST NOT reach for static `.Permissive` defaults at evaluation time — the permissive default is a composition-root concern. `IStructuralRelationshipPolicy` stays in `contracts/references/` regardless of where its concrete types reside.
+
+Static check:
+- `grep -nE "interface IStructuralRelationshipPolicy" src/domain/structural-system/` — exactly one match in `contracts/references/IStructuralRelationshipPolicy.cs`.
+- `grep -rE "class Can(Bind|Report)[A-Za-z]+To[A-Za-z]+Specification|class SpvScopeSpecification" src/domain/structural-system/cluster/` — every spec takes `IStructuralRelationshipPolicy` via primary ctor; no field-level `= new ...Permissive` fallbacks.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] R-STRUCT-ATTACHMENT-PROOF-01 — Attach-time factories MUST persist an AttachedUnder proof event
+
+Definition:
+Each cluster-child aggregate (`AuthorityAggregate`, `ProviderAggregate`, `AdministrationAggregate`, `SubclusterAggregate`, `SpvAggregate`) MUST expose an `AttachedUnder?` property populated from a dedicated `{Name}BindingValidatedEvent` during the attach-time factory overload that takes `IStructuralParentLookup`. The proof VO `public readonly record struct AttachedUnder(ClusterRef Parent, StructuralParentState ParentState, DateTimeOffset EffectiveAt)` lives in the aggregate's own `value-object/` folder.
+
+`{Name}BindingValidatedEvent` MUST carry `(Id, ClusterRef Parent, StructuralParentState ParentState, DateTimeOffset EffectiveAt)`. The factory overload with lookup MUST: (1) call `CanAttachUnderParentSpecification.IsSatisfiedBy(parent)` and throw `{Name}Errors.InvalidParent()` on false; (2) invoke the non-lookup overload to raise canonical domain events; (3) append the proof event.
+
+Static check:
+- `grep -nE "AttachedUnder\?\s+AttachedUnder\s*\{ get; private set; \}" src/domain/structural-system/cluster/` — exactly five matches.
+- `grep -rnE "record [A-Z][A-Za-z]+BindingValidatedEvent\(" src/domain/structural-system/cluster/` — five matches; every record includes `StructuralParentState ParentState`.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] R-STRUCT-CLUSTER-CARDINALITY-01 — ClusterAggregate tracks active authority + administration bindings
+
+Definition:
+`ClusterAggregate` MUST expose `IReadOnlyCollection<ClusterAuthorityRef> ActiveAuthorities` and `IReadOnlyCollection<ClusterAdministrationRef> ActiveAdministrations`. Four canonical events: `ClusterAuthorityBoundEvent`, `ClusterAuthorityReleasedEvent`, `ClusterAdministrationBoundEvent`, `ClusterAdministrationReleasedEvent` in `cluster/cluster/event/`. Two uniqueness specs under `cluster/cluster/specification/`: `UniqueActiveAuthoritySpecification` and `UniqueAdministrationSpecification`. Attach methods MUST consult uniqueness specs and throw `ClusterErrors.DuplicateAuthority()` / `ClusterErrors.DuplicateAdministration()` on violation.
+
+Static check:
+- `grep -nE "RecordAuthorityAttached|RecordAdministrationAttached|RecordAuthorityReleased|RecordAdministrationReleased" src/domain/structural-system/cluster/cluster/aggregate/ClusterAggregate.cs` — all four methods present.
+- `grep -nE "UniqueActiveAuthoritySpecification|UniqueAdministrationSpecification" src/domain/structural-system/cluster/cluster/specification/` — two spec files present.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] R-STRUCT-DESCRIPTOR-REF-DISCIPLINE-01 — Cluster-child descriptors MUST carry typed ClusterRef
+
+Definition:
+`AuthorityDescriptor`, `ProviderProfile`, `SubclusterDescriptor`, `SpvDescriptor`, and `AdministrationDescriptor` MUST expose their parent-cluster reference as `ClusterRef` — never `Guid`. Constructors accept `ClusterRef` positionally; null-check uses `== default`. A grep for `new ClusterRef\(descriptor\.` under `structural-system/cluster/` MUST return zero matches (factories simplified after this rule lands).
+
+Static check:
+- `grep -nE "public Guid (Cluster|Parent|Authority|Provider|Subcluster|Spv|Administration)" src/domain/structural-system/cluster/**/value-object/*Descriptor.cs src/domain/structural-system/cluster/**/value-object/*Profile.cs` — zero matches.
+- `grep -nE "new ClusterRef\(descriptor\.|new ClusterRef\(profile\." src/domain/structural-system/cluster/` — zero matches.
+
+Severity:
+S1 (block merge, fail CI).
+
+### [S1] R-ECON-CAPITAL-ALLOCATION-SPVREF-01 — CapitalAllocationAggregate.TargetSpv MUST be typed SpvRef
+
+Definition:
+`CapitalAllocationAggregate.TargetSpv` MUST be typed `SpvRef?`. The prior `string? SpvTargetId` property is removed. Wire surfaces (`CapitalAllocatedToSpvEvent`, `CapitalAllocatedToSpvEventSchema`, `AllocateCapitalToSpvCommand`, `CapitalAllocationReadModel`) keep `string SpvTargetId` for backward compatibility — `CapitalAllocatedToSpvEvent.TargetSpv` is the `[JsonIgnore] SpvRef?` accessor mediating the typed/wire boundary. Both factory overloads MUST exist: primary `AllocateToSpv(SpvRef, decimal)` and string-accepting `AllocateToSpv(string, decimal)` that normalises via `Guid.TryParse`. `EnsureInvariants` MUST assert `TargetSpv is not null` (not `string.IsNullOrWhiteSpace`) when `TargetType == SPV`.
+
+Static check:
+- `grep -nE "public string\? SpvTargetId" src/domain/economic-system/capital/allocation/aggregate/CapitalAllocationAggregate.cs` — zero matches.
+- `grep -nE "public SpvRef\? TargetSpv" src/domain/economic-system/capital/allocation/aggregate/CapitalAllocationAggregate.cs` — exactly one match.
+- `grep -nE "public void AllocateToSpv\(" src/domain/economic-system/capital/allocation/aggregate/CapitalAllocationAggregate.cs` — two matches.
+
+Severity:
+S1 (block merge, fail CI).
+
+References:
+- Extends DG-ECON-SPV-REF-ACCESS-01 (S2 advisory on wire types) with a stronger S1 rule on aggregate state.
+- Source: `claude/new-rules/20260421-130000-structural-e1-completion.md`.

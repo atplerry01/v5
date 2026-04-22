@@ -492,14 +492,19 @@ Formal checklist for R1 exit. Each item is a concrete audit probe; the R1 audit-
 - [ ] **R-WF-APPROVAL-07** — Authoritative approver from `CommandContext.ActorId`; carrier actor segment is non-authoritative observability. Probe: `ApprovalDecisionPayload` has no approver field; dispatcher sources `context.ActorId`; replay-service composes carrier from caller-supplied approver parameter — no trust of event-side actor on re-read.
 - [ ] **R-WF-APPROVAL-PROJ-01** — Projection preserves canonical `Status` (`Suspended`, `Cancelled`, `Running`, …); approval semantics surfaced on derived `ApprovalState` / `ApprovalSignal` / `ApprovalDecision`. Probe: `WorkflowApprovalProjectionTests.Canonical_Lifecycle_Status_Never_Overloaded_By_Approval_Semantics`, `Suspended_With_Human_Approval_Sets_AwaitingApproval_And_Parses_Signal`, `Cancelled_With_Human_Approval_Rejected_Sets_Rejected_And_Parses_Decision`, `Resumed_With_Approval_Granted_Sets_Granted_And_Clears_Decision`. All PASS.
 
+### Section 15 — Rules Promoted from new-rules/ (2026-04-19) — Test Coverage + Audit Hygiene
+
+- [ ] **TESTS-UNIT-RUNTIME-DISABLED-01** — `tests/unit/Whycespace.Tests.Unit.csproj` MUST NOT carry a `<Compile Remove="runtime\**\*.cs" />` exclusion (or any blanket exclusion over the `runtime/` test subtree) whose underlying reason has been resolved. Periodic check: enumerate all `<Compile Remove>` directives in `tests/**/*.csproj`; verify each is still load-bearing; remove stale exclusions. Runtime unit test dll MUST contain types in the `Whycespace.Tests.Unit.Runtime` namespace and all pre-existing tests under `tests/unit/runtime/**` MUST be CI-reachable. Severity: S1 (silently removed functional coverage).
+- [ ] **AUDIT-PROBE-COMMENT-STRIP-01** — every grep-based probe in `runtime.audit.md` (and peer audit files) that scans source files for forbidden tokens (e.g. `DateTime.UtcNow`, `Guid.NewGuid`, `Random`) MUST either (a) pipe through a comment-stripping filter (`sed 's|//.*$||'` before grep) or (b) reference an architecture test that performs the stripping. Grep probes that match comment-only references produce false positives and MUST be refined before reporting FAIL. Prefer architecture-test references over raw grep where a test already exists. Severity: S3 (probe hygiene — raise to S2 when any new audit probe is written without comment-stripping).
+
 ## Output Format
 
 ```
 AUDIT:           runtime
 GUARD:           claude/guards/runtime.guard.md
 EXECUTED:        <ISO-8601>
-RULES_CHECKED:   ~180
-SECTIONS:        11
+RULES_CHECKED:   ~182
+SECTIONS:        15
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

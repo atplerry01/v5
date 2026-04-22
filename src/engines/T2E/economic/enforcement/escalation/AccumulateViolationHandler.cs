@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Escalation;
+using Whycespace.Domain.ControlSystem.Enforcement.Escalation;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Escalation;
 using Whycespace.Shared.Contracts.Engine;

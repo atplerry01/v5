@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-reconciliation.system-verification.commands",
+    "whyce.control.system-reconciliation.system-verification.events",
+    "whyce.control.system-reconciliation.system-verification.retry",
+    "whyce.control.system-reconciliation.system-verification.deadletter"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.delivery_governance.entitlement_hook.commands",
+    "whyce.content.streaming.delivery_governance.entitlement_hook.events",
+    "whyce.content.streaming.delivery_governance.entitlement_hook.retry",
+    "whyce.content.streaming.delivery_governance.entitlement_hook.deadletter"
+  ]
+}

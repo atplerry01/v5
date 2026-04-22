@@ -1,12 +1,12 @@
 using Whycespace.Platform.Host.Composition.Business;
+using Whycespace.Platform.Host.Composition.Constitutional.Chain;
 using Whycespace.Platform.Host.Composition.Constitutional.Policy;
 using Whycespace.Platform.Host.Composition.Content;
 using Whycespace.Platform.Host.Composition.Economic;
 using Whycespace.Platform.Host.Composition.Integration.OutboundEffect;
-using Whycespace.Platform.Host.Composition.Operational.Sandbox.Kanban;
-using Whycespace.Platform.Host.Composition.Operational.Sandbox.Todo;
 using Whycespace.Platform.Host.Composition.Orchestration.Workflow;
 using Whycespace.Platform.Host.Composition.Structural;
+using Whycespace.Platform.Host.Composition.Trust;
 
 namespace Whycespace.Platform.Host.Composition;
 
@@ -22,12 +22,12 @@ public static class BootstrapModuleCatalog
     public static IReadOnlyList<IDomainBootstrapModule> All { get; } =
     [
         new ConstitutionalPolicyBootstrap(),
-        new TodoCompositionRoot(),
-        new KanbanCompositionRoot(),
+        new ConstitutionalChainBootstrap(),
         new EconomicCompositionRoot(),
         new ContentSystemCompositionRoot(),
         new BusinessSystemCompositionRoot(),
         new StructuralSystemCompositionRoot(),
+        new TrustSystemCompositionRoot(),
         new WorkflowExecutionBootstrap(),
         new OutboundEffectsBootstrap()
     ];

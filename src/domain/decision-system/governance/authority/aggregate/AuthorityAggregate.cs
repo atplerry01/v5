@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Governance.Authority;
 
-public sealed class AuthorityAggregate
+public sealed class AuthorityAggregate : AggregateRoot
 {
     public static AuthorityAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AuthorityAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

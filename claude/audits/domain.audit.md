@@ -234,6 +234,49 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 - [ ] **DG-ECON-SPV-REF-ACCESS-01** — economic surfaces carrying string SPV IDs expose `[JsonIgnore] SpvRef?` typed accessor; new factory overloads accept `SpvRef`.
   Static check: per `.cs` in `economic-system/**` with `public string SpvId`/`TargetId`: verify sibling `[JsonIgnore] public SpvRef?` property exists. Missing = advisory flag.
 
+### Section 23 — Rules Promoted from new-rules/ (2026-04-21) — Domain Aggregate Inheritance + Business-System + Content-System + Structural-System
+
+**S0 — Correctness-critical**
+
+- [ ] **E1XD-AGG-INHERIT-01** — every `*Aggregate.cs` under `src/domain/**` inherits `AggregateRoot`. Static check: `find src/domain -name "*Aggregate.cs" | xargs grep -L ": AggregateRoot"` returns zero results. Outstanding backlog: 167 aggregates across 7 classifications (intelligence, decision, trust, orchestration, constitutional, operational, shared-kernel).
+- [ ] **BS-POLICY-PURITY-01** — `*Policy.cs` under `src/domain/business-system/**` contains none of: `Repository`, `DbContext`, `IEventStore`, `IProducer`, `IConsumer`, `.SaveAsync`, `.SaveChanges`. ArchTest `BusinessSystemEnforcementLockTests.BS_POLICY_PURITY_01_policies_do_not_perform_io`.
+- [ ] **CS-STRUCTURAL-OWNER-01** — `DocumentAggregate.Create` rejects empty `StructuralOwnerRef`. Test `DocumentAggregate_Create_rejects_empty_StructuralOwnerRef`.
+
+**S1 — Structural integrity**
+
+- [ ] **E1XD-AGG-RAISE-01** — no `_uncommittedEvents` / `GetUncommittedEvents` / `UncommittedEvents` declarations under `src/domain/**`. Static check: `grep -rn "_uncommittedEvents\|GetUncommittedEvents\|UncommittedEvents" src/domain/` returns zero results.
+- [ ] **BS-INV-PRESENT-01** — every `*Aggregate.cs` under `src/domain/business-system/**` declares `private void EnsureInvariants()`. ArchTest `BS_INV_PRESENT_01_every_aggregate_declares_EnsureInvariants`.
+- [ ] **BS-AGG-PURITY-01** — business-system `*Aggregate.cs` does not import non-`Shared.*` business-system namespaces. ArchTest `BS_AGG_PURITY_01_aggregates_do_not_import_sibling_namespaces`.
+- [ ] **BS-EVENT-PAYLOAD-01** — business-system event records carry no `Guid *Id` / `string *Id` primitive params. ArchTest `BS_EVENT_PAYLOAD_01_events_use_typed_ids`.
+- [ ] **BS-POLICY-DECISION-01** — business-system `*Policy` classes have no `public void` methods. ArchTest `BS_POLICY_DECISION_01_policies_return_decisions_not_void`.
+- [ ] **BS-PRIM-ID-PROP-01** — no `public (Guid|string) *Id` properties under `src/domain/business-system/**`. ArchTest `BS_PRIM_ID_PROP_01_no_primitive_id_properties`.
+- [ ] **BS-PRIM-ID-PARAM-01** — no `(Guid|string) *Id` method/ctor parameters under `src/domain/business-system/**`. ArchTest `BS_PRIM_ID_PARAM_01_no_primitive_id_parameters`.
+- [ ] **CS-LIFECYCLE-CANONICAL-01** — `DocumentStatus` declares all four: `Draft`, `Active`, `Archived`, `Superseded`. Test `DocumentStatus_enum_declares_the_four_canonical_lifecycle_states`.
+- [ ] **CS-EVENT-MODEL-01** — canonical content event set present in `Whycespace.Domain.ContentSystem.Document.CoreObject.Document` namespace. Test `Canonical_content_events_are_declared`.
+- [ ] **CS-DECOUPLE-ORDER-01** — `OrderAggregate` has no embedded `string Description|Body|Notes|Comment`. Test `OrderAggregate_references_content_via_ContentRef_not_prose_string`.
+- [ ] **CS-DOC-PROSE-LOCK-01** — `DocumentAggregate` has no `string Body|Content|Payload|Description|Notes|Comment|Html|Markdown|Abstract|Blurb`. Test `DocumentAggregate_declares_no_embedded_prose_content_fields`.
+- [ ] **CS-ORDER-NO-PROSE-01** — `OrderAggregate.Description` is typed `OrderDescription` VO, not raw string or `DocumentRef`.
+- [ ] **CS-DECOUPLE-RULE-01** — `EnforcementRuleAggregate.Description` is `DocumentRef`, not `string`/`RuleDescription`.
+- [ ] **CS-DECOUPLE-EVIDENCE-01** — `AuditRecordAggregate.EvidenceSummary` is `DocumentRef`, not legacy `EvidenceSummary` VO.
+- [ ] **CS-DECOUPLE-KANBAN-01** — `KanbanCard.Description` is `DocumentRef`, not raw `string`.
+- [ ] **CS-DOCREF-WRAPS-CONTENTID-01** — every local `DocumentRef` wraps `ContentId`, not raw `Guid`. Test `Every_local_DocumentRef_wraps_ContentId_not_raw_Guid`.
+- [ ] **CS-DOCREF-MISUSE-01** — `DocumentRef` not used for `*Name`, `*Label`, `*Code`, `*Identifier`, `*Id` properties. Test `DocumentRef_is_not_used_for_name_label_code_or_identifier_fields`.
+- [ ] **CS-KANBAN-TITLE-TYPED-01** — `KanbanCard.Title` is typed `KanbanCardTitle` VO.
+- [ ] **R-STRUCT-RELATIONSHIP-RULES-LOCATION-01** — all declarative structural interaction constraints live under `structural-system/structure/relationship-rules/`; no shadow declarations elsewhere. Static check: `grep -rE "(AuthorityProviderMatrix|AuthoritySubclusterConstraint|SpvScopeConstraint)" src/` returns hits only within `relationship-rules/`.
+- [ ] **R-STRUCT-RELATIONSHIP-POLICY-CONTRACT-01** — `IStructuralRelationshipPolicy` exists exactly once in `contracts/references/`; every `CanBind*/CanReport*` spec takes it via primary ctor. Static checks: single interface declaration; no `.Permissive` defaults in spec body.
+- [ ] **R-STRUCT-ATTACHMENT-PROOF-01** — each cluster-child aggregate has `AttachedUnder?` property and a `{Name}BindingValidatedEvent` carrying `StructuralParentState`. Static check: five matches each.
+- [ ] **R-STRUCT-CLUSTER-CARDINALITY-01** — `ClusterAggregate` exposes `ActiveAuthorities` + `ActiveAdministrations` with the four canonical events and two uniqueness specs present.
+- [ ] **R-STRUCT-DESCRIPTOR-REF-DISCIPLINE-01** — cluster-child descriptor VOs carry `ClusterRef` not `Guid`; no `new ClusterRef(descriptor.*)` patterns remaining. Static checks both zero.
+- [ ] **R-ECON-CAPITAL-ALLOCATION-SPVREF-01** — `CapitalAllocationAggregate.TargetSpv` is `SpvRef?`; both factory overloads present; `EnsureInvariants` asserts typed ref.
+
+**S2 — Advisory / audit**
+
+- [ ] **BS-INV-NON-TRIVIAL-01** — every `EnsureInvariants()` in business-system has at least two `throw` statements. ArchTest `BS_INV_NON_TRIVIAL_01_EnsureInvariants_has_at_least_two_throws`.
+- [ ] **BS-EVENT-NAMING-01** — event files in business-system end with `Event.cs`; one matching record per file.
+- [ ] **CS-ORDER-NOT-EXTERNALISED-01** — `OrderAggregate.Description` remains `OrderDescription` VO; not externalised to `DocumentRef`.
+- [ ] **CS-NO-OVER-EXTERNALISE-01** — structural / audit fields (`ViolationAggregate.Reason`, `SettlementAggregate.FailureReason`, `CounterpartyProfile.Name`, `KanbanAggregate.Name`) remain typed VOs. Test `Structural_labels_remain_typed_VOs_and_do_not_externalise_to_DocumentRef`.
+- [ ] **CS-KANBAN-TITLE-NOT-EXTERNALISED-01** — `KanbanCard.Title` not externalised to `DocumentRef`.
+
 ---
 
 ## Check Procedure
@@ -256,8 +299,8 @@ This audit checks the rules defined in [`claude/guards/domain.guard.md`](../../g
 AUDIT:           domain
 GUARD:           claude/guards/domain.guard.md
 EXECUTED:        <ISO-8601>
-RULES_CHECKED:   ~171
-SECTIONS:        22
+RULES_CHECKED:   ~205
+SECTIONS:        23
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

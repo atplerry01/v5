@@ -1,13 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.TrustSystem.Identity.Credential;
 
-public sealed class CredentialAggregate
+public sealed class CredentialAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public CredentialId Id { get; private set; }
     public CredentialDescriptor Descriptor { get; private set; }
     public CredentialStatus Status { get; private set; }
-    public int Version { get; private set; }
 
     private CredentialAggregate() { }
 
@@ -19,13 +18,7 @@ public sealed class CredentialAggregate
             throw CredentialErrors.MissingDescriptor();
 
         var aggregate = new CredentialAggregate();
-        aggregate.ValidateBeforeChange();
-
-        var @event = new CredentialIssuedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new CredentialIssuedEvent(id, descriptor));
         return aggregate;
     }
 
@@ -35,13 +28,7 @@ public sealed class CredentialAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CredentialErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        ValidateBeforeChange();
-
-        var @event = new CredentialActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-
-        EnsureInvariants();
+        RaiseDomainEvent(new CredentialActivatedEvent(Id));
     }
 
     public void Revoke()
@@ -50,39 +37,28 @@ public sealed class CredentialAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw CredentialErrors.InvalidStateTransition(Status, nameof(Revoke));
 
-        ValidateBeforeChange();
-
-        var @event = new CredentialRevokedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-
-        EnsureInvariants();
+        RaiseDomainEvent(new CredentialRevokedEvent(Id));
     }
 
-    private void Apply(CredentialIssuedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.CredentialId;
-        Descriptor = @event.Descriptor;
-        Status = CredentialStatus.Issued;
-        Version++;
+        switch (domainEvent)
+        {
+            case CredentialIssuedEvent e:
+                Id = e.CredentialId;
+                Descriptor = e.Descriptor;
+                Status = CredentialStatus.Issued;
+                break;
+            case CredentialActivatedEvent:
+                Status = CredentialStatus.Active;
+                break;
+            case CredentialRevokedEvent:
+                Status = CredentialStatus.Revoked;
+                break;
+        }
     }
 
-    private void Apply(CredentialActivatedEvent @event)
-    {
-        Status = CredentialStatus.Active;
-        Version++;
-    }
-
-    private void Apply(CredentialRevokedEvent @event)
-    {
-        Status = CredentialStatus.Revoked;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw CredentialErrors.MissingId();
@@ -92,10 +68,5 @@ public sealed class CredentialAggregate
 
         if (!Enum.IsDefined(Status))
             throw new InvalidOperationException("CredentialStatus is not a defined enum value.");
-    }
-
-    private void ValidateBeforeChange()
-    {
-        // Pre-condition gate: reserved for cross-cutting pre-change validation.
     }
 }

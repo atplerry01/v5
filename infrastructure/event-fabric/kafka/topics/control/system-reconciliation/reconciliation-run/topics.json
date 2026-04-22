@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-reconciliation.reconciliation-run.commands",
+    "whyce.control.system-reconciliation.reconciliation-run.events",
+    "whyce.control.system-reconciliation.reconciliation-run.retry",
+    "whyce.control.system-reconciliation.reconciliation-run.deadletter"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.scheduling.system-job.commands",
+    "whyce.control.scheduling.system-job.events",
+    "whyce.control.scheduling.system-job.retry",
+    "whyce.control.scheduling.system-job.deadletter"
+  ]
+}

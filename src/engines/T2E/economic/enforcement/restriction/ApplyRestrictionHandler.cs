@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Restriction;
+using Whycespace.Domain.ControlSystem.Enforcement.Restriction;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Restriction;
 using Whycespace.Shared.Contracts.Enforcement;

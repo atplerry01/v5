@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.audit.audit-record.commands",
+    "whyce.control.audit.audit-record.events",
+    "whyce.control.audit.audit-record.retry",
+    "whyce.control.audit.audit-record.deadletter"
+  ]
+}

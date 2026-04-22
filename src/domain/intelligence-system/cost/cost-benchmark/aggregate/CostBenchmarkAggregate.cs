@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Cost.CostBenchmark;
 
-public sealed class CostBenchmarkAggregate
+public sealed class CostBenchmarkAggregate : AggregateRoot
 {
     public static CostBenchmarkAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class CostBenchmarkAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

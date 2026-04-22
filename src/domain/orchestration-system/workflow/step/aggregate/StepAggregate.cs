@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Step;
 
-public sealed class StepAggregate
+public sealed class StepAggregate : AggregateRoot
 {
     public static StepAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class StepAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

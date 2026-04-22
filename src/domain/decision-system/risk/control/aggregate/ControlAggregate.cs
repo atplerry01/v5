@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Risk.Control;
 
-public sealed class ControlAggregate
+public sealed class ControlAggregate : AggregateRoot
 {
     public static ControlAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class ControlAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

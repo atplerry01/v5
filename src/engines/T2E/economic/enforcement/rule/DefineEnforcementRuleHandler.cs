@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Rule;
+using Whycespace.Domain.ControlSystem.Enforcement.Rule;
 using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Rule;

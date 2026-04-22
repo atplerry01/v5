@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Performance;
+using Whycespace.Domain.DecisionSystem.Evaluation.Performance;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Performance;
 

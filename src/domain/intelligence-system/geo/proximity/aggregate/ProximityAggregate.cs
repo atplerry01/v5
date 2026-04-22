@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Geo.Proximity;
 
-public sealed class ProximityAggregate
+public sealed class ProximityAggregate : AggregateRoot
 {
     public static ProximityAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class ProximityAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

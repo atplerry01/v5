@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Routing.Path;
+using Whycespace.Domain.OperationalSystem.Routing.Path;
 using Whycespace.Shared.Contracts.Economic.Routing.Path;
 using Whycespace.Shared.Contracts.Engine;
 

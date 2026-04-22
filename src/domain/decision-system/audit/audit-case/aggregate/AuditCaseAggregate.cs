@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Audit.AuditCase;
 
-public sealed class AuditCaseAggregate
+public sealed class AuditCaseAggregate : AggregateRoot
 {
     public static AuditCaseAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AuditCaseAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

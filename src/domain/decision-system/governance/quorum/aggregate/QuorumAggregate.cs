@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Governance.Quorum;
 
-public sealed class QuorumAggregate
+public sealed class QuorumAggregate : AggregateRoot
 {
     public static QuorumAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class QuorumAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

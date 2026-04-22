@@ -135,6 +135,11 @@ This audit checks the rules defined in [`claude/guards/infrastructure.guard.md`]
 - [ ] **OPS-VAL-002** — controller parse/conversion errors return `400 BadRequest`, never unhandled `500`
 - [ ] **OPS-VAL-004** — OpenAPI schema endpoint operational or alternate documented
 
+### Section 9 — Config Safety Violation Backlog (2026-04-21)
+
+- [ ] **R-CFG-R1 violation (S0)** — `src/platform/host/appsettings.Development.json` MUST NOT contain `Password=` literals. Static check: `grep -n "Password=" src/platform/host/appsettings.Development.json` returns zero hits. Pending remediation: replace with empty string or `${POSTGRES_PASSWORD}` env-var references; document `.env.local` pattern; CI scan must cover `appsettings.Development.json`.
+- [ ] **R-CFG-R2 violation (S1)** — `src/platform/host/appsettings.Development.json` MUST NOT contain hardcoded `localhost` endpoints or port literals for infrastructure dependencies (Kafka, Redis, OPA, MinIO, Postgres). Static check: `grep -n "localhost" src/platform/host/appsettings.Development.json` returns zero hits. Pending remediation: strip all literal values; supply via `.env.local` and `docker-compose.override.yml`; committed file holds key stubs with empty/null values only.
+
 ---
 
 ## Check Procedure
@@ -157,8 +162,8 @@ This audit checks the rules defined in [`claude/guards/infrastructure.guard.md`]
 AUDIT:           infrastructure
 GUARD:           claude/guards/infrastructure.guard.md
 EXECUTED:        <ISO-8601>
-RULES_CHECKED:   ~65
-SECTIONS:        8
+RULES_CHECKED:   ~67
+SECTIONS:        9
 PASS:            <count>
 FAIL:            <count>
 N/A:             <count>

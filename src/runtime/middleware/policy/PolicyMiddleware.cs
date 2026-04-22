@@ -1,5 +1,8 @@
 using Whycespace.Engines.T0U.WhyceId.Command;
+using Whycespace.Engines.T0U.WhyceId.Consent;
 using Whycespace.Engines.T0U.WhyceId.Engine;
+using Whycespace.Engines.T0U.WhyceId.Model;
+using Whycespace.Engines.T0U.WhyceId.Verification;
 using Whycespace.Engines.T0U.WhycePolicy.Command;
 using Whycespace.Engines.T0U.WhycePolicy.Engine;
 using Whycespace.Runtime.Deterministic;
@@ -131,6 +134,24 @@ public sealed class PolicyMiddleware : IMiddleware
         context.Roles = authResult.Identity.Roles;
         context.TrustScore = authResult.Identity.TrustScore;
 
+        // Step 2b: Build full authorization context (Phase 2.8 Batch D).
+        // Resolves ContextHash and ActiveConsentScopes for constitutional policy enrichment.
+        // aggregateId resolved here so it is shared with the OPA resource-state loader below.
+        var aggregateId = PolicyInputBuilder.TryResolveAggregateId(command);
+        var buildAuthCtxCmd = new BuildAuthorizationContextCommand(
+            IdentityId: authResult.Identity.IdentityId,
+            Roles: authResult.Identity.Roles,
+            Attributes: authResult.Identity.Attributes,
+            TrustScore: authResult.Identity.TrustScore,
+            VerificationStatus: authResult.Identity.VerificationStatus,
+            SessionId: context.SessionId ?? authResult.SessionId,
+            DeviceId: authenticateCommand.DeviceId,
+            Consents: authResult.Identity.Consents,
+            TenantId: context.TenantId,
+            ResourceId: aggregateId?.ToString());
+
+        var authCtxResult = await _whyceIdEngine.BuildAuthorizationContext(buildAuthCtxCmd);
+
         // Step 3: Evaluate external policy via OPA (IPolicyEvaluator).
         //
         // Phase 8 B6 — input enrichment. Every evaluation carries:
@@ -152,7 +173,6 @@ public sealed class PolicyMiddleware : IMiddleware
         var now = _clock.UtcNow;
 
         object? resourceState = null;
-        var aggregateId = PolicyInputBuilder.TryResolveAggregateId(command);
         if (aggregateId is { } aid)
         {
             // The loader is responsible for hydrating from the same
@@ -225,15 +245,19 @@ public sealed class PolicyMiddleware : IMiddleware
                 };
         }
 
-        // Step 4: Evaluate constitutional policy via WhycePolicyEngine (T0U)
+        // Step 4: Evaluate constitutional policy via WhycePolicyEngine (T0U).
+        // TrustScore from authorization context (engine-refined); consent scopes and
+        // context hash flow through for future constitutional rule consumption.
         var evaluateCommand = new EvaluatePolicyCommand(
             PolicyName: context.PolicyId,
             IdentityId: authResult.Identity.IdentityId,
             Roles: authResult.Identity.Roles,
-            TrustScore: authResult.Identity.TrustScore,
+            TrustScore: authCtxResult.Context.TrustScore,
             CommandType: command.GetType().Name,
             TenantId: context.TenantId,
-            ResourceId: null);
+            ResourceId: null,
+            ActiveConsentScopes: authCtxResult.Context.ActiveConsentScopes,
+            ContextHash: authCtxResult.Context.ContextHash);
 
         var policyResult = await _whycePolicyEngine.Evaluate(evaluateCommand);
 

@@ -14,17 +14,20 @@ namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 /// </summary>
 public static class DomainSchemaCatalog
 {
-    public static void RegisterOperationalSandboxTodo(EventSchemaRegistry registry)
-        => new TodoSchemaModule().Register(new EventSchemaRegistrySink(registry));
-
     public static void RegisterConstitutionalPolicyDecision(EventSchemaRegistry registry)
         => new PolicyDecisionSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
+    public static void RegisterConstitutionalChainAnchorRecord(EventSchemaRegistry registry)
+        => new ConstitutionalChainAnchorRecordSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterConstitutionalChainEvidenceRecord(EventSchemaRegistry registry)
+        => new ConstitutionalChainEvidenceRecordSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterConstitutionalChainLedger(EventSchemaRegistry registry)
+        => new ConstitutionalChainLedgerSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
     public static void RegisterOrchestrationWorkflowExecution(EventSchemaRegistry registry)
         => new WorkflowExecutionSchemaModule().Register(new EventSchemaRegistrySink(registry));
-
-    public static void RegisterOperationalSandboxKanban(EventSchemaRegistry registry)
-        => new KanbanSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     public static void RegisterEconomic(EventSchemaRegistry registry)
         => new EconomicSchemaModule().Register(new EventSchemaRegistrySink(registry));
@@ -128,6 +131,21 @@ public static class DomainSchemaCatalog
 
     public static void RegisterContentStreamingDeliveryGovernanceObservability(EventSchemaRegistry registry)
         => new ContentStreamingDeliveryGovernanceObservabilitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingDeliveryGovernanceEntitlementHook(EventSchemaRegistry registry)
+        => new ContentStreamingDeliveryGovernanceEntitlementHookSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingDeliveryGovernanceModeration(EventSchemaRegistry registry)
+        => new ContentStreamingDeliveryGovernanceModerationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingLiveStreamingIngestSession(EventSchemaRegistry registry)
+        => new ContentStreamingLiveStreamingIngestSessionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingPlaybackConsumptionProgress(EventSchemaRegistry registry)
+        => new ContentStreamingPlaybackConsumptionProgressSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterContentStreamingPlaybackConsumptionReplay(EventSchemaRegistry registry)
+        => new ContentStreamingPlaybackConsumptionReplaySchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
     /// Structural-system vertical — structure context E1→Ex delivery (phase 1).
@@ -350,6 +368,64 @@ public static class DomainSchemaCatalog
 
     public static void RegisterBusinessProviderProviderScopeProviderCoverage(EventSchemaRegistry registry)
         => new BusinessProviderProviderScopeProviderCoverageSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Trust-system vertical — identity context E1→Ex delivery (11 BCs).
+    /// Phase 2.8 — all trust-system aggregates D2-promoted and schema-registered.
+    /// </summary>
+    public static void RegisterTrustIdentityIdentity(EventSchemaRegistry registry)
+        => new TrustIdentityIdentitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityCredential(EventSchemaRegistry registry)
+        => new TrustIdentityCredentialSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityVerification(EventSchemaRegistry registry)
+        => new TrustIdentityVerificationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityProfile(EventSchemaRegistry registry)
+        => new TrustIdentityProfileSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityRegistry(EventSchemaRegistry registry)
+        => new TrustIdentityRegistrySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityTrust(EventSchemaRegistry registry)
+        => new TrustIdentityTrustSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityServiceIdentity(EventSchemaRegistry registry)
+        => new TrustIdentityServiceIdentitySchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityConsent(EventSchemaRegistry registry)
+        => new TrustIdentityConsentSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityDevice(EventSchemaRegistry registry)
+        => new TrustIdentityDeviceSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityIdentityGraph(EventSchemaRegistry registry)
+        => new TrustIdentityIdentityGraphSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustIdentityFederation(EventSchemaRegistry registry)
+        => new TrustIdentityFederationSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    /// <summary>
+    /// Trust-system vertical — access context E1→Ex delivery (6 BCs).
+    /// </summary>
+    public static void RegisterTrustAccessSession(EventSchemaRegistry registry)
+        => new TrustAccessSessionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustAccessRole(EventSchemaRegistry registry)
+        => new TrustAccessRoleSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustAccessGrant(EventSchemaRegistry registry)
+        => new TrustAccessGrantSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustAccessRequest(EventSchemaRegistry registry)
+        => new TrustAccessRequestSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustAccessPermission(EventSchemaRegistry registry)
+        => new TrustAccessPermissionSchemaModule().Register(new EventSchemaRegistrySink(registry));
+
+    public static void RegisterTrustAccessAuthorization(EventSchemaRegistry registry)
+        => new TrustAccessAuthorizationSchemaModule().Register(new EventSchemaRegistrySink(registry));
 
     /// <summary>
     /// Business-system vertical — offering context E1→Ex delivery (7 BCs across 2 groups).

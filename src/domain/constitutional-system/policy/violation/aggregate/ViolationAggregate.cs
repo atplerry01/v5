@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.ConstitutionalSystem.Policy.Violation;
 
-public sealed class ViolationAggregate
+public sealed class ViolationAggregate : AggregateRoot
 {
     public static ViolationAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class ViolationAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

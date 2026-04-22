@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Governance.Sanction;
 
-public sealed class SanctionAggregate
+public sealed class SanctionAggregate : AggregateRoot
 {
     public static SanctionAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class SanctionAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

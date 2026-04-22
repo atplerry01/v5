@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Governance.GovernanceCycle;
 
-public sealed class GovernanceCycleAggregate
+public sealed class GovernanceCycleAggregate : AggregateRoot
 {
     public static GovernanceCycleAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class GovernanceCycleAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

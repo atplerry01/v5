@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Index.PerformanceIndex;
 
-public sealed class PerformanceIndexAggregate
+public sealed class PerformanceIndexAggregate : AggregateRoot
 {
     public static PerformanceIndexAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class PerformanceIndexAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

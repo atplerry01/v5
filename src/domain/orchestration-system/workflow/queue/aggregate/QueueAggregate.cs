@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Queue;
 
-public sealed class QueueAggregate
+public sealed class QueueAggregate : AggregateRoot
 {
     public static QueueAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class QueueAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

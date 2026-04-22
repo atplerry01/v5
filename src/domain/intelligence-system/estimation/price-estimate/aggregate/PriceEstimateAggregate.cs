@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Estimation.PriceEstimate;
 
-public sealed class PriceEstimateAggregate
+public sealed class PriceEstimateAggregate : AggregateRoot
 {
     public static PriceEstimateAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class PriceEstimateAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

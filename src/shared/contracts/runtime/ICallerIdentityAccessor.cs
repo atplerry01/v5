@@ -60,4 +60,22 @@ public interface ICallerIdentityAccessor
     /// request scope, matching <see cref="GetActorId"/> semantics.
     /// </summary>
     IReadOnlyDictionary<string, object> GetSubjectAttributes();
+
+    /// <summary>
+    /// R1 §7 — returns the opaque session identifier from the current request,
+    /// extracted from the JWT <c>sid</c> claim (preferred) or <c>jti</c> claim
+    /// (fallback). Returns <c>null</c> when invoked from a background worker
+    /// (<see cref="SystemIdentityScope"/> active) or when neither claim is present.
+    /// Never throws — session ID is optional context.
+    /// </summary>
+    string? GetSessionId();
+
+    /// <summary>
+    /// R1 §7 — returns a deterministic fingerprint of the bearer token used to
+    /// authorize the current request. Computed as the first 16 hex characters of
+    /// the SHA256 hash of the raw token string. Used for audit correlation only —
+    /// the raw token is never stored. Returns <c>null</c> for background workers
+    /// or when no <c>Authorization: Bearer</c> header is present. Never throws.
+    /// </summary>
+    string? GetTokenFingerprint();
 }

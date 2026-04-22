@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-reconciliation.discrepancy-detection.commands",
+    "whyce.control.system-reconciliation.discrepancy-detection.events",
+    "whyce.control.system-reconciliation.discrepancy-detection.retry",
+    "whyce.control.system-reconciliation.discrepancy-detection.deadletter"
+  ]
+}

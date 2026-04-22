@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.playback_consumption.progress.commands",
+    "whyce.content.streaming.playback_consumption.progress.events",
+    "whyce.content.streaming.playback_consumption.progress.retry",
+    "whyce.content.streaming.playback_consumption.progress.deadletter"
+  ]
+}

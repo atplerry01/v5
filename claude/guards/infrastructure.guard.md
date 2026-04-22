@@ -1020,3 +1020,87 @@ References:
 - `src/runtime/control-plane/admin/OperatorActionAuditRecorder.cs`
 - `infrastructure/observability/grafana/dashboards/runtime-control-plane.json` — panel "Operator actions (R4.B)"
 - `infrastructure/observability/grafana/dashboards/dlq-retry.json` — panel "Operator re-drive activity"
+
+---
+
+## Rules Promoted from new-rules/ (2026-04-21) — Config Safety Violation Backlog
+
+Rules below were captured in `claude/new-rules/20260421-000001-infrastructure.md` per CLAUDE.md $1c. These are violation-backlog tracking entries for existing canonical rules R-CFG-R1 and R-CFG-R2 discovered during the 2026-04-21 full system audit. No new rule IDs are introduced; the entries track outstanding remediation.
+
+### R-CFG-R1 Violation Backlog — Plaintext Passwords in appsettings.Development.json
+
+Existing rule R-CFG-R1 applies. Outstanding violation (S0):
+
+`src/platform/host/appsettings.Development.json` (lines 23–28) contains 4 connection strings with literal `Password=change_me_securely` values committed to source control. `Password=` in any committed config file is S0 per R-CFG-R1 regardless of the literal value.
+
+Remediation required:
+- Replace all `Password=...` literals in `appsettings.Development.json` with empty string or `${POSTGRES_PASSWORD}` environment-variable references.
+- Document that actual credentials come from `.env.local` (gitignored) or environment variables injected at runtime.
+- CI architecture test MUST scan `appsettings.Development.json` in addition to `appsettings.json` for `Password=` literals.
+
+Severity:
+S0 — BLOCK MERGE. Resolve in next platform pass.
+
+Static check:
+`grep -n "Password=" src/platform/host/appsettings.Development.json` — must return zero hits after remediation.
+
+### R-CFG-R2 Violation Backlog — Hardcoded localhost/Port Literals in appsettings.Development.json
+
+Existing rule R-CFG-R2 applies. Outstanding violation (S1):
+
+`src/platform/host/appsettings.Development.json` contains hardcoded localhost endpoints and port literals for all infrastructure dependencies:
+
+- Line 4: `"BootstrapServers": "localhost:29092"` (Kafka)
+- Line 7: `"ConnectionString": "localhost:6379"` (Redis)
+- Line 10: `"Endpoint": "http://localhost:8181"` (OPA)
+- Line 14: `"Endpoint": "localhost:9000"` (MinIO/S3)
+- Lines 23–28: `Host=localhost;Port=5432/5433/5434` (Postgres ×3)
+
+Per R-CFG-R2, endpoints must be sourced from environment variables at startup. The composition root MUST throw `InvalidOperationException` when missing, with no `??` fallback.
+
+Remediation required:
+- Strip all literal endpoint values from `appsettings.Development.json`.
+- Supply via `.env.local` (gitignored) and `docker-compose.override.yml`.
+- The committed `appsettings.Development.json` MUST contain only key stubs with empty/null values.
+
+Severity:
+S1 — BLOCK MERGE. Resolve in same platform pass as R-CFG-R1 violation above.
+
+Static check:
+`grep -n "localhost" src/platform/host/appsettings.Development.json` — must return zero hits after remediation.
+
+---
+
+## Phase 2.8 — Trust-System Security and Observability Guards
+
+### R-TRUST-SEC-01: Credential Hash Enforcement
+
+Any domain value object carrying a credential secret MUST be typed as a domain value object (not `string`) that enforces a minimum-length invariant. Direct `string` fields named `*Hash`, `*Secret`, or `*Password` on trust-system domain types are forbidden.
+
+Severity: S1
+
+Static check: `grep -rn "public string.*Hash\|public string.*Secret\|public string.*Password" src/domain/trust-system/` — any hit that is not a read-only projection field is a violation.
+
+### R-TRUST-SEC-02: IIdentityThrottlePolicy Registration
+
+`TrustSystemCompositionRoot.RegisterServices` MUST register `IIdentityThrottlePolicy` as a singleton. Absence is an S2 violation.
+
+Static check: `grep "IIdentityThrottlePolicy" src/platform/host/composition/trust/TrustSystemCompositionRoot.cs` — must return at least one hit.
+
+### R-TRUST-OBS-01: ITrustMetrics Injection in Trust Engine Handlers
+
+Every `IEngine` implementation under `src/engines/T2E/trust/` that calls `context.EmitEvents(...)` MUST inject `ITrustMetrics` via constructor and call a record method after emit. Absence is an S2 observability violation.
+
+Static check: `grep -L "ITrustMetrics" src/engines/T2E/trust/**/*.cs` — any file that also contains `EmitEvents` is a violation.
+
+### R-TRUST-PROJ-01: New Trust Events Must Have Projection Registration
+
+After adding any new domain event to a trust aggregate, the following must be updated atomically: projection reducer `Apply` method, projection handler `HandleAsync` overload, and `TrustProjectionModule.RegisterProjections` call. Missing any one is an S1 violation.
+
+Static check: For each `sink.RegisterSchema("XEvent", ...)` in `TrustIdentity*SchemaModule`, verify `projection.Register("XEvent", handler)` exists in `TrustProjectionModule.cs`.
+
+### R-TRUST-RESIL-01: Cross-Domain Handler Idempotency Claim Release
+
+Every cross-domain handler that acquires an idempotency claim via `TryClaimAsync` MUST release it in a `catch` block on downstream failure. A handler that omits this release pattern is permanently non-retryable for failed events — S1.
+
+Static check: Scan `*CrossDomainHandler.cs` files for `TryClaimAsync` — each usage must have a paired `catch { await _idempotencyStore.ReleaseAsync(...); throw; }` block.

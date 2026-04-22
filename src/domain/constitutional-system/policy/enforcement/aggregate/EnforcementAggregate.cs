@@ -1,13 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.ConstitutionalSystem.Policy.Enforcement;
 
-public sealed class EnforcementAggregate
+public sealed class EnforcementAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public EnforcementId Id { get; private set; }
     public EnforcementAction Action { get; private set; }
     public EnforcementStatus Status { get; private set; }
-    public int Version { get; private set; }
 
     private EnforcementAggregate() { }
 
@@ -15,12 +14,7 @@ public sealed class EnforcementAggregate
     {
         var aggregate = new EnforcementAggregate();
         aggregate.ValidateBeforeChange();
-
-        var @event = new EnforcementRecordedEvent(id, action);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new EnforcementRecordedEvent(id, action));
         return aggregate;
     }
 
@@ -32,10 +26,7 @@ public sealed class EnforcementAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EnforcementErrors.InvalidStateTransition(Status, nameof(ApplyEnforcement));
 
-        var @event = new EnforcementAppliedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EnforcementAppliedEvent(Id));
     }
 
     public void Withdraw()
@@ -46,40 +37,28 @@ public sealed class EnforcementAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw EnforcementErrors.InvalidStateTransition(Status, nameof(Withdraw));
 
-        var @event = new EnforcementWithdrawnEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new EnforcementWithdrawnEvent(Id));
     }
 
-    private void Apply(EnforcementRecordedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.EnforcementId;
-        Action = @event.Action;
-        Status = EnforcementStatus.Pending;
-        Version++;
+        switch (domainEvent)
+        {
+            case EnforcementRecordedEvent e:
+                Id = e.EnforcementId;
+                Action = e.Action;
+                Status = EnforcementStatus.Pending;
+                break;
+            case EnforcementAppliedEvent:
+                Status = EnforcementStatus.Applied;
+                break;
+            case EnforcementWithdrawnEvent:
+                Status = EnforcementStatus.Withdrawn;
+                break;
+        }
     }
 
-    private void Apply(EnforcementAppliedEvent @event)
-    {
-        Status = EnforcementStatus.Applied;
-        Version++;
-    }
-
-    private void Apply(EnforcementWithdrawnEvent @event)
-    {
-        Status = EnforcementStatus.Withdrawn;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw EnforcementErrors.MissingId();
@@ -91,7 +70,7 @@ public sealed class EnforcementAggregate
             throw EnforcementErrors.InvalidStateTransition(Status, "validate");
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-condition gate: reserved for cross-cutting pre-change validation.
         // Currently no additional pre-conditions beyond specification checks.

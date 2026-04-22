@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.live_streaming.ingest_session.commands",
+    "whyce.content.streaming.live_streaming.ingest_session.events",
+    "whyce.content.streaming.live_streaming.ingest_session.retry",
+    "whyce.content.streaming.live_streaming.ingest_session.deadletter"
+  ]
+}

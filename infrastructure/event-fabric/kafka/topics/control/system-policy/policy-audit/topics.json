@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-policy.policy-audit.commands",
+    "whyce.control.system-policy.policy-audit.events",
+    "whyce.control.system-policy.policy-audit.retry",
+    "whyce.control.system-policy.policy-audit.deadletter"
+  ]
+}

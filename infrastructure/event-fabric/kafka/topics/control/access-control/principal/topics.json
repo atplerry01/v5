@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.access-control.principal.commands",
+    "whyce.control.access-control.principal.events",
+    "whyce.control.access-control.principal.retry",
+    "whyce.control.access-control.principal.deadletter"
+  ]
+}

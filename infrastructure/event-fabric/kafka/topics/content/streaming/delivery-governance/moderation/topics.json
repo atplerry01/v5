@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.content.streaming.delivery_governance.moderation.commands",
+    "whyce.content.streaming.delivery_governance.moderation.events",
+    "whyce.content.streaming.delivery_governance.moderation.retry",
+    "whyce.content.streaming.delivery_governance.moderation.deadletter"
+  ]
+}

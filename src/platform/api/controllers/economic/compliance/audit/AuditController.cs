@@ -18,7 +18,7 @@ public sealed class AuditController : ControllerBase
 {
     private static readonly DomainRoute AuditRoute = new("economic", "compliance", "audit");
 
-    // Domain enum AuditType (Whycespace.Domain.EconomicSystem.Compliance.Audit.AuditType).
+    // Domain enum AuditType (Whycespace.Domain.DecisionSystem.Compliance.Audit.AuditType).
     // Mirrored here as a string whitelist to keep the API layer free of a domain reference
     // while still rejecting invalid enum values with 400 BadRequest at the controller boundary
     // rather than letting InvalidOperationException surface to the global exception handler.

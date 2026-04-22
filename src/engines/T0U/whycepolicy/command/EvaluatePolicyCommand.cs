@@ -7,4 +7,6 @@ public sealed record EvaluatePolicyCommand(
     int TrustScore,
     string CommandType,
     string TenantId,
-    string? ResourceId);
+    string? ResourceId,
+    string[]? ActiveConsentScopes = null,
+    string? ContextHash = null);

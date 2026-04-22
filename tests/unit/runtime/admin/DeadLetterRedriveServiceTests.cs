@@ -216,6 +216,8 @@ public sealed class DeadLetterRedriveServiceTests
         public string GetTenantId() => _tenant;
         public string[] GetRoles() => new[] { "admin" };
         public IReadOnlyDictionary<string, object> GetSubjectAttributes() => new Dictionary<string, object>();
+        public string? GetSessionId() => null;
+        public string? GetTokenFingerprint() => null;
     }
 
     private sealed class FixedCorrelation : IRequestCorrelationAccessor

@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Stewardship;
+using Whycespace.Domain.BusinessSystem.Workforce.Stewardship;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Stewardship;
 

@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.observability.system-metric.commands",
+    "whyce.control.observability.system-metric.events",
+    "whyce.control.observability.system-metric.retry",
+    "whyce.control.observability.system-metric.deadletter"
+  ]
+}

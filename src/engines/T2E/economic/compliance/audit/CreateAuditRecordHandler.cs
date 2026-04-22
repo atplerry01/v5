@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Compliance.Audit;
+using Whycespace.Domain.DecisionSystem.Compliance.Audit;
 using Whycespace.Domain.SharedKernel.Primitive.Identity;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Compliance.Audit;

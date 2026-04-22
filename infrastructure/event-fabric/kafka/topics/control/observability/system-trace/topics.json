@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.observability.system-trace.commands",
+    "whyce.control.observability.system-trace.events",
+    "whyce.control.observability.system-trace.retry",
+    "whyce.control.observability.system-trace.deadletter"
+  ]
+}

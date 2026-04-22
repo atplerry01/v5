@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Workforce;
+using Whycespace.Domain.BusinessSystem.Workforce.Workforce;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Workforce;
 

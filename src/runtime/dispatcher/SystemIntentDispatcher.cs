@@ -88,6 +88,10 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
         var actorId = _callerIdentity.GetActorId();
         var tenantId = _callerIdentity.GetTenantId();
 
+        // R1 §7 — session + token fingerprint are optional; never throw.
+        var sessionId = _callerIdentity.GetSessionId();
+        var tokenFingerprint = _callerIdentity.GetTokenFingerprint();
+
         // phase1.6-S1.1 (DET-SEED-DERIVATION-01): correlation/causation/command
         // ids derive ONLY from stable command coordinates — never from the
         // clock. The command's record ToString includes every init property,
@@ -120,6 +124,11 @@ public sealed class SystemIntentDispatcher : ISystemIntentDispatcher
             // promote a user command to system after construction.
             IsSystem = isSystem
         };
+
+        // R1 §7 — propagate session + token fingerprint when available.
+        // Both are write-once on CommandContext; null means absent/background.
+        if (sessionId is not null) context.SessionId = sessionId;
+        if (tokenFingerprint is not null) context.TokenFingerprint = tokenFingerprint;
 
         // R5.A / R-TRACE-DISPATCH-SPAN-01 — wrap the control-plane execution
         // in a canonical runtime.command.dispatch span. The span carries the

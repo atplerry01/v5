@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.DecisionSystem.Compliance.Regulation;
 
-public sealed class RegulationAggregate
+public sealed class RegulationAggregate : AggregateRoot
 {
     public static RegulationAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class RegulationAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

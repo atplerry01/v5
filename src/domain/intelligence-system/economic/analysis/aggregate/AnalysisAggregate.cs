@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Economic.Analysis;
 
-public sealed class AnalysisAggregate
+public sealed class AnalysisAggregate : AggregateRoot
 {
     public static AnalysisAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AnalysisAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

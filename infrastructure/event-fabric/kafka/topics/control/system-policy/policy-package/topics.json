@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.system-policy.policy-package.commands",
+    "whyce.control.system-policy.policy-package.events",
+    "whyce.control.system-policy.policy-package.retry",
+    "whyce.control.system-policy.policy-package.deadletter"
+  ]
+}

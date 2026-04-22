@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
+using Whycespace.Runtime.Security;
 using Microsoft.Extensions.Logging;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Shared.Contracts.Infrastructure.Messaging;

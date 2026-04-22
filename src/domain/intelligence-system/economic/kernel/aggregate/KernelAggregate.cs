@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Economic.Kernel;
 
-public sealed class KernelAggregate
+public sealed class KernelAggregate : AggregateRoot
 {
     public static KernelAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class KernelAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

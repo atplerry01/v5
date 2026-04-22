@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Simulation.Assumption;
 
-public sealed class AssumptionAggregate
+public sealed class AssumptionAggregate : AggregateRoot
 {
     public static AssumptionAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AssumptionAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

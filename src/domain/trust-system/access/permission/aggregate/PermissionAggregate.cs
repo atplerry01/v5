@@ -1,13 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.TrustSystem.Access.Permission;
 
-public sealed class PermissionAggregate
+public sealed class PermissionAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public PermissionId Id { get; private set; }
     public PermissionDescriptor Descriptor { get; private set; }
     public PermissionStatus Status { get; private set; }
-    public int Version { get; private set; }
 
     private PermissionAggregate() { }
 
@@ -18,12 +17,7 @@ public sealed class PermissionAggregate
         PermissionDescriptor descriptor)
     {
         var aggregate = new PermissionAggregate();
-
-        var @event = new PermissionDefinedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new PermissionDefinedEvent(id, descriptor));
         return aggregate;
     }
 
@@ -35,10 +29,7 @@ public sealed class PermissionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PermissionErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new PermissionActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PermissionActivatedEvent(Id));
     }
 
     // ── Deprecate ────────────────────────────────────────────────
@@ -49,38 +40,30 @@ public sealed class PermissionAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw PermissionErrors.InvalidStateTransition(Status, nameof(Deprecate));
 
-        var @event = new PermissionDeprecatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new PermissionDeprecatedEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(PermissionDefinedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.PermissionId;
-        Descriptor = @event.Descriptor;
-        Status = PermissionStatus.Defined;
-        Version++;
+        switch (domainEvent)
+        {
+            case PermissionDefinedEvent e:
+                Id = e.PermissionId;
+                Descriptor = e.Descriptor;
+                Status = PermissionStatus.Defined;
+                break;
+            case PermissionActivatedEvent:
+                Status = PermissionStatus.Active;
+                break;
+            case PermissionDeprecatedEvent:
+                Status = PermissionStatus.Deprecated;
+                break;
+        }
     }
 
-    private void Apply(PermissionActivatedEvent @event)
-    {
-        Status = PermissionStatus.Active;
-        Version++;
-    }
-
-    private void Apply(PermissionDeprecatedEvent @event)
-    {
-        Status = PermissionStatus.Deprecated;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw PermissionErrors.MissingId();

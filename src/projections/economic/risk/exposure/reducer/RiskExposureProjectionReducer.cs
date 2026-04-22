@@ -5,7 +5,7 @@ namespace Whycespace.Projections.Economic.Risk.Exposure.Reducer;
 
 public static class RiskExposureProjectionReducer
 {
-    // Status codes mirror Whycespace.Domain.EconomicSystem.Risk.Exposure.ExposureStatus.
+    // Status codes mirror Whycespace.Domain.DecisionSystem.Risk.Exposure.ExposureStatus.
     // Active=0, Reduced=1, Closed=2.
     private const int StatusActive  = 0;
     private const int StatusReduced = 1;

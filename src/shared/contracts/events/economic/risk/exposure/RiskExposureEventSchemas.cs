@@ -23,7 +23,7 @@ public sealed record RiskExposureClosedEventSchema(
 
 /// <summary>
 /// Phase 6 Final Patch — on-wire shape of
-/// <c>Whycespace.Domain.EconomicSystem.Risk.Exposure.ExposureBreachedEvent</c>.
+/// <c>Whycespace.Domain.DecisionSystem.Risk.Exposure.ExposureBreachedEvent</c>.
 /// Primitives only so the deserialization path stays symmetric with every
 /// other domain event in the economic schema catalog. Consumed by
 /// <c>RiskExposureEnforcementHandler</c> via the Kafka event fabric to

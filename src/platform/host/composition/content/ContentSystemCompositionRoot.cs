@@ -27,6 +27,11 @@ using Whycespace.Platform.Host.Composition.Content.Streaming.LiveStreaming.Archi
 using Whycespace.Platform.Host.Composition.Content.Streaming.PlaybackConsumption.Session.Application;
 using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.Access.Application;
 using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.Observability.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.EntitlementHook.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.DeliveryGovernance.Moderation.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.LiveStreaming.IngestSession.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.PlaybackConsumption.Progress.Application;
+using Whycespace.Platform.Host.Composition.Content.Streaming.PlaybackConsumption.Replay.Application;
 using Whycespace.Projections.Content.Document.CoreObject.Bundle;
 using Whycespace.Projections.Content.Document.CoreObject.Document;
 using Whycespace.Projections.Content.Document.CoreObject.File;
@@ -53,6 +58,11 @@ using Whycespace.Projections.Content.Streaming.LiveStreaming.Archive;
 using Whycespace.Projections.Content.Streaming.PlaybackConsumption.Session;
 using Whycespace.Projections.Content.Streaming.DeliveryGovernance.Access;
 using Whycespace.Projections.Content.Streaming.DeliveryGovernance.Observability;
+using Whycespace.Projections.Content.Streaming.DeliveryGovernance.EntitlementHook;
+using Whycespace.Projections.Content.Streaming.DeliveryGovernance.Moderation;
+using Whycespace.Projections.Content.Streaming.LiveStreaming.IngestSession;
+using Whycespace.Projections.Content.Streaming.PlaybackConsumption.Progress;
+using Whycespace.Projections.Content.Streaming.PlaybackConsumption.Replay;
 using Whycespace.Projections.Shared;
 using Whycespace.Runtime.EventFabric;
 using Whycespace.Runtime.EventFabric.DomainSchemas;
@@ -83,6 +93,11 @@ using Whycespace.Shared.Contracts.Content.Streaming.LiveStreaming.Archive;
 using Whycespace.Shared.Contracts.Content.Streaming.PlaybackConsumption.Session;
 using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.Access;
 using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.Observability;
+using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.EntitlementHook;
+using Whycespace.Shared.Contracts.Content.Streaming.DeliveryGovernance.Moderation;
+using Whycespace.Shared.Contracts.Content.Streaming.LiveStreaming.IngestSession;
+using Whycespace.Shared.Contracts.Content.Streaming.PlaybackConsumption.Progress;
+using Whycespace.Shared.Contracts.Content.Streaming.PlaybackConsumption.Replay;
 using Whycespace.Domain.ContentSystem.Invariant.BroadcastStreamBinding;
 using Whycespace.Domain.ContentSystem.Invariant.SessionStreamAccess;
 using Whycespace.Shared.Contracts.Engine;
@@ -231,6 +246,11 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         services.AddSessionApplication();
         services.AddStreamAccessApplication();
         services.AddObservabilityApplication();
+        services.AddEntitlementHookApplication();
+        services.AddModerationApplication();
+        services.AddIngestSessionApplication();
+        services.AddProgressApplication();
+        services.AddReplayApplication();
 
         // streaming projection stores
         services.AddSingleton(sp =>
@@ -260,6 +280,21 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         services.AddSingleton(sp =>
             sp.GetRequiredService<ProjectionStoreFactory>()
                 .Create<ObservabilityReadModel>("projection_content_streaming_delivery_governance_observability", "observability_read_model", "Observability"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<EntitlementHookReadModel>("projection_content_streaming_delivery_governance_entitlement_hook", "entitlement_hook_read_model", "EntitlementHook"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ModerationReadModel>("projection_content_streaming_delivery_governance_moderation", "moderation_read_model", "Moderation"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<IngestSessionReadModel>("projection_content_streaming_live_streaming_ingest_session", "ingest_session_read_model", "IngestSession"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ProgressReadModel>("projection_content_streaming_playback_consumption_progress", "progress_read_model", "Progress"));
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ProjectionStoreFactory>()
+                .Create<ReplayReadModel>("projection_content_streaming_playback_consumption_replay", "replay_read_model", "Replay"));
 
         // streaming projection handlers
         services.AddSingleton(sp => new StreamProjectionHandler(
@@ -280,6 +315,16 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
             sp.GetRequiredService<PostgresProjectionStore<StreamAccessReadModel>>()));
         services.AddSingleton(sp => new ObservabilityProjectionHandler(
             sp.GetRequiredService<PostgresProjectionStore<ObservabilityReadModel>>()));
+        services.AddSingleton(sp => new EntitlementHookProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<EntitlementHookReadModel>>()));
+        services.AddSingleton(sp => new ModerationProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ModerationReadModel>>()));
+        services.AddSingleton(sp => new IngestSessionProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<IngestSessionReadModel>>()));
+        services.AddSingleton(sp => new ProgressProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ProgressReadModel>>()));
+        services.AddSingleton(sp => new ReplayProjectionHandler(
+            sp.GetRequiredService<PostgresProjectionStore<ReplayReadModel>>()));
 
         // Cross-system invariants (domain policies) — per
         // claude/templates/delivery-pattern/03-runtime-wiring.md § 6b.
@@ -323,6 +368,11 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         DomainSchemaCatalog.RegisterContentStreamingPlaybackConsumptionSession(schema);
         DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceAccess(schema);
         DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceObservability(schema);
+        DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceEntitlementHook(schema);
+        DomainSchemaCatalog.RegisterContentStreamingDeliveryGovernanceModeration(schema);
+        DomainSchemaCatalog.RegisterContentStreamingLiveStreamingIngestSession(schema);
+        DomainSchemaCatalog.RegisterContentStreamingPlaybackConsumptionProgress(schema);
+        DomainSchemaCatalog.RegisterContentStreamingPlaybackConsumptionReplay(schema);
     }
 
     public void RegisterProjections(IServiceProvider provider, ProjectionRegistry projection)
@@ -516,6 +566,42 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         projection.Register("ObservabilityUpdatedEvent", observabilityHandler);
         projection.Register("ObservabilityFinalizedEvent", observabilityHandler);
         projection.Register("ObservabilityArchivedEvent", observabilityHandler);
+
+        var entitlementHookHandler = provider.GetRequiredService<EntitlementHookProjectionHandler>();
+        projection.Register("EntitlementHookRegisteredEvent", entitlementHookHandler);
+        projection.Register("EntitlementQueriedEvent", entitlementHookHandler);
+        projection.Register("EntitlementRefreshedEvent", entitlementHookHandler);
+        projection.Register("EntitlementInvalidatedEvent", entitlementHookHandler);
+        projection.Register("EntitlementFailureRecordedEvent", entitlementHookHandler);
+
+        var moderationHandler = provider.GetRequiredService<ModerationProjectionHandler>();
+        projection.Register("StreamFlaggedEvent", moderationHandler);
+        projection.Register("ModerationAssignedEvent", moderationHandler);
+        projection.Register("ModerationDecidedEvent", moderationHandler);
+        projection.Register("ModerationOverturnedEvent", moderationHandler);
+
+        var ingestSessionHandler = provider.GetRequiredService<IngestSessionProjectionHandler>();
+        projection.Register("IngestSessionAuthenticatedEvent", ingestSessionHandler);
+        projection.Register("IngestStreamingStartedEvent", ingestSessionHandler);
+        projection.Register("IngestSessionStalledEvent", ingestSessionHandler);
+        projection.Register("IngestSessionResumedEvent", ingestSessionHandler);
+        projection.Register("IngestSessionEndedEvent", ingestSessionHandler);
+        projection.Register("IngestSessionFailedEvent", ingestSessionHandler);
+
+        var progressHandler = provider.GetRequiredService<ProgressProjectionHandler>();
+        projection.Register("ProgressTrackedEvent", progressHandler);
+        projection.Register("PlaybackPositionUpdatedEvent", progressHandler);
+        projection.Register("PlaybackPausedEvent", progressHandler);
+        projection.Register("PlaybackResumedEvent", progressHandler);
+        projection.Register("ProgressTerminatedEvent", progressHandler);
+
+        var replayHandler = provider.GetRequiredService<ReplayProjectionHandler>();
+        projection.Register("ReplayRequestedEvent", replayHandler);
+        projection.Register("ReplayStartedEvent", replayHandler);
+        projection.Register("ReplayPausedEvent", replayHandler);
+        projection.Register("ReplayResumedEvent", replayHandler);
+        projection.Register("ReplayCompletedEvent", replayHandler);
+        projection.Register("ReplayAbandonedEvent", replayHandler);
     }
 
     public void RegisterEngines(IEngineRegistry engine)
@@ -548,6 +634,11 @@ public sealed class ContentSystemCompositionRoot : IDomainBootstrapModule
         SessionApplicationModule.RegisterEngines(engine);
         StreamAccessApplicationModule.RegisterEngines(engine);
         ObservabilityApplicationModule.RegisterEngines(engine);
+        EntitlementHookApplicationModule.RegisterEngines(engine);
+        ModerationApplicationModule.RegisterEngines(engine);
+        IngestSessionApplicationModule.RegisterEngines(engine);
+        ProgressApplicationModule.RegisterEngines(engine);
+        ReplayApplicationModule.RegisterEngines(engine);
     }
 
     public void RegisterWorkflows(IWorkflowRegistry workflow)

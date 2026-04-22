@@ -1,13 +1,12 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.ConstitutionalSystem.Policy.Rule;
 
-public sealed class RuleAggregate
+public sealed class RuleAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public RuleId Id { get; private set; }
     public RuleDefinition Definition { get; private set; }
     public RuleStatus Status { get; private set; }
-    public int Version { get; private set; }
 
     private RuleAggregate() { }
 
@@ -18,12 +17,7 @@ public sealed class RuleAggregate
         RuleDefinition definition)
     {
         var aggregate = new RuleAggregate();
-
-        var @event = new RuleDraftedEvent(id, definition);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new RuleDraftedEvent(id, definition));
         return aggregate;
     }
 
@@ -35,10 +29,7 @@ public sealed class RuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw RuleErrors.InvalidStateTransition(Status, nameof(Activate));
 
-        var @event = new RuleActivatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RuleActivatedEvent(Id));
     }
 
     // ── Retire ───────────────────────────────────────────────────
@@ -49,38 +40,30 @@ public sealed class RuleAggregate
         if (!specification.IsSatisfiedBy(Status))
             throw RuleErrors.InvalidStateTransition(Status, nameof(Retire));
 
-        var @event = new RuleRetiredEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new RuleRetiredEvent(Id));
     }
 
     // ── Apply ────────────────────────────────────────────────────
 
-    private void Apply(RuleDraftedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.RuleId;
-        Definition = @event.Definition;
-        Status = RuleStatus.Draft;
-        Version++;
+        switch (domainEvent)
+        {
+            case RuleDraftedEvent e:
+                Id = e.RuleId;
+                Definition = e.Definition;
+                Status = RuleStatus.Draft;
+                break;
+            case RuleActivatedEvent:
+                Status = RuleStatus.Active;
+                break;
+            case RuleRetiredEvent:
+                Status = RuleStatus.Retired;
+                break;
+        }
     }
 
-    private void Apply(RuleActivatedEvent @event)
-    {
-        Status = RuleStatus.Active;
-        Version++;
-    }
-
-    private void Apply(RuleRetiredEvent @event)
-    {
-        Status = RuleStatus.Retired;
-        Version++;
-    }
-
-    private void AddEvent(object @event) => _uncommittedEvents.Add(@event);
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw RuleErrors.MissingId();

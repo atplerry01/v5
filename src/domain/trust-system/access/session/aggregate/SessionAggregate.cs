@@ -1,23 +1,58 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.TrustSystem.Access.Session;
 
-public sealed class SessionAggregate
+public sealed class SessionAggregate : AggregateRoot
 {
-    public static SessionAggregate Create()
+    public SessionId SessionId { get; private set; }
+    public SessionDescriptor Descriptor { get; private set; }
+    public SessionStatus Status { get; private set; }
+
+    private SessionAggregate() { }
+
+    public static SessionAggregate Open(SessionId id, SessionDescriptor descriptor, Timestamp openedAt)
     {
         var aggregate = new SessionAggregate();
-        aggregate.ValidateBeforeChange();
-        aggregate.EnsureInvariants();
-        // POLICY HOOK (to be enforced by runtime)
+        aggregate.RaiseDomainEvent(new SessionOpenedEvent(id, descriptor, openedAt));
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    public void Expire()
     {
-        // Domain invariant checks enforced BEFORE any event is raised
+        if (Status != SessionStatus.Active)
+            throw new DomainInvariantViolationException("Session can only be expired from Active status.");
+        RaiseDomainEvent(new SessionExpiredEvent(SessionId));
     }
 
-    private void ValidateBeforeChange()
+    public void Terminate()
     {
-        // Pre-change validation gate
+        if (Status != SessionStatus.Active)
+            throw new DomainInvariantViolationException("Session can only be terminated from Active status.");
+        RaiseDomainEvent(new SessionTerminatedEvent(SessionId));
+    }
+
+    protected override void Apply(object domainEvent)
+    {
+        switch (domainEvent)
+        {
+            case SessionOpenedEvent e:
+                SessionId = e.SessionId;
+                Descriptor = e.Descriptor;
+                Status = SessionStatus.Active;
+                break;
+            case SessionExpiredEvent:
+                Status = SessionStatus.Expired;
+                break;
+            case SessionTerminatedEvent:
+                Status = SessionStatus.Terminated;
+                break;
+        }
+    }
+
+    protected override void EnsureInvariants()
+    {
+        Guard.Against(SessionId == default, "Session identity must be established.");
+        Guard.Against(Descriptor == default, "Session descriptor must be present.");
+        Guard.Against(!Enum.IsDefined(Status), "Session status is not a defined enum value.");
     }
 }

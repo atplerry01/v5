@@ -1,5 +1,8 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Http;
+using Whycespace.Runtime.Security;
 using Whycespace.Shared.Contracts.Runtime;
 
 namespace Whycespace.Platform.Host.Adapters;
@@ -149,6 +152,39 @@ internal sealed class HttpCallerIdentityAccessor : ICallerIdentityAccessor
             }
         }
         return result;
+    }
+
+    public string? GetSessionId()
+    {
+        if (SystemIdentityScope.Current is not null)
+            return null;
+
+        var principal = _httpContextAccessor.HttpContext?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+            return null;
+
+        return principal.FindFirstValue("sid") ?? principal.FindFirstValue("jti");
+    }
+
+    public string? GetTokenFingerprint()
+    {
+        if (SystemIdentityScope.Current is not null)
+            return null;
+
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext is null)
+            return null;
+
+        var authHeader = httpContext.Request.Headers["Authorization"].ToString();
+        if (!authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var token = authHeader["Bearer ".Length..].Trim();
+        if (string.IsNullOrEmpty(token))
+            return null;
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(hash)[..16].ToLowerInvariant();
     }
 
     public string GetTenantId()

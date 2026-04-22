@@ -1,85 +1,59 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
+
 namespace Whycespace.Domain.TrustSystem.Identity.Identity;
 
-public sealed class IdentityAggregate
+public sealed class IdentityAggregate : AggregateRoot
 {
-    private readonly List<object> _uncommittedEvents = new();
-
     public IdentityId Id { get; private set; }
     public IdentityDescriptor Descriptor { get; private set; }
     public IdentityStatus Status { get; private set; }
-    public int Version { get; private set; }
 
     private IdentityAggregate() { }
 
     public static IdentityAggregate Establish(IdentityId id, IdentityDescriptor descriptor)
     {
         var aggregate = new IdentityAggregate();
-        aggregate.ValidateBeforeChange();
-
-        var @event = new IdentityEstablishedEvent(id, descriptor);
-        aggregate.Apply(@event);
-        aggregate.AddEvent(@event);
-        aggregate.EnsureInvariants();
-
+        aggregate.RaiseDomainEvent(new IdentityEstablishedEvent(id, descriptor));
         return aggregate;
     }
 
     public void Suspend()
     {
-        ValidateBeforeChange();
-
         var specification = new CanSuspendSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw IdentityErrors.InvalidStateTransition(Status, nameof(Suspend));
 
-        var @event = new IdentitySuspendedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new IdentitySuspendedEvent(Id));
     }
 
     public void Terminate()
     {
-        ValidateBeforeChange();
-
         var specification = new CanTerminateSpecification();
         if (!specification.IsSatisfiedBy(Status))
             throw IdentityErrors.InvalidStateTransition(Status, nameof(Terminate));
 
-        var @event = new IdentityTerminatedEvent(Id);
-        Apply(@event);
-        AddEvent(@event);
-        EnsureInvariants();
+        RaiseDomainEvent(new IdentityTerminatedEvent(Id));
     }
 
-    private void Apply(IdentityEstablishedEvent @event)
+    protected override void Apply(object domainEvent)
     {
-        Id = @event.IdentityId;
-        Descriptor = @event.Descriptor;
-        Status = IdentityStatus.Active;
-        Version++;
+        switch (domainEvent)
+        {
+            case IdentityEstablishedEvent e:
+                Id = e.IdentityId;
+                Descriptor = e.Descriptor;
+                Status = IdentityStatus.Active;
+                break;
+            case IdentitySuspendedEvent:
+                Status = IdentityStatus.Suspended;
+                break;
+            case IdentityTerminatedEvent:
+                Status = IdentityStatus.Terminated;
+                break;
+        }
     }
 
-    private void Apply(IdentitySuspendedEvent @event)
-    {
-        Status = IdentityStatus.Suspended;
-        Version++;
-    }
-
-    private void Apply(IdentityTerminatedEvent @event)
-    {
-        Status = IdentityStatus.Terminated;
-        Version++;
-    }
-
-    private void AddEvent(object @event)
-    {
-        _uncommittedEvents.Add(@event);
-    }
-
-    public IReadOnlyList<object> GetUncommittedEvents() => _uncommittedEvents.AsReadOnly();
-
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         if (Id == default)
             throw IdentityErrors.MissingId();
@@ -91,7 +65,7 @@ public sealed class IdentityAggregate
             throw IdentityErrors.InvalidStateTransition(Status, "validate");
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-condition gate: reserved for cross-cutting pre-change validation.
         // Currently no additional pre-conditions beyond specification checks.

@@ -1,5 +1,5 @@
 using Whycespace.Shared.Contracts.Events.Structural.Humancapital.Reputation;
-using DomainEvents = Whycespace.Domain.StructuralSystem.Humancapital.Reputation;
+using DomainEvents = Whycespace.Domain.DecisionSystem.Evaluation.Reputation;
 
 namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 

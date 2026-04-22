@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Lock;
+using Whycespace.Domain.ControlSystem.Enforcement.Lock;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Lock;
 using Whycespace.Shared.Contracts.Engine;
@@ -12,7 +12,7 @@ namespace Whycespace.Engines.T2E.Economic.Enforcement.Lock;
 ///   aggregate that already has an event stream short-circuits to
 ///   no-op.
 /// * Cause-coupling — every lock records the triggering aggregate via
-///   <see cref="Whycespace.Domain.EconomicSystem.Enforcement.Lock.EnforcementCause"/>.
+///   <see cref="Whycespace.Domain.ControlSystem.Enforcement.Lock.EnforcementCause"/>.
 /// * Optional natural-expiry — <see cref="LockSystemCommand.ExpiresAt"/>
 ///   is forwarded to the aggregate so a subsequent
 ///   <c>ExpireSystemLockCommand</c> can terminate the lock naturally.

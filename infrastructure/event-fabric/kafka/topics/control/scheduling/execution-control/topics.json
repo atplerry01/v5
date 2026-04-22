@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.scheduling.execution-control.commands",
+    "whyce.control.scheduling.execution-control.events",
+    "whyce.control.scheduling.execution-control.retry",
+    "whyce.control.scheduling.execution-control.deadletter"
+  ]
+}

@@ -1,5 +1,5 @@
 using Whycespace.Shared.Contracts.Events.Structural.Humancapital.Incentive;
-using DomainEvents = Whycespace.Domain.StructuralSystem.Humancapital.Incentive;
+using DomainEvents = Whycespace.Domain.BusinessSystem.Workforce.Incentive;
 
 namespace Whycespace.Runtime.EventFabric.DomainSchemas;
 

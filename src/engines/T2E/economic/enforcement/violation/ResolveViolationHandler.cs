@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Enforcement.Violation;
+using Whycespace.Domain.ControlSystem.Enforcement.Violation;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Enforcement.Violation;
 using Whycespace.Shared.Contracts.Engine;

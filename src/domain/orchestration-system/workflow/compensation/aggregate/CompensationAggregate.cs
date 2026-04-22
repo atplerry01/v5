@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Compensation;
 
-public sealed class CompensationAggregate
+public sealed class CompensationAggregate : AggregateRoot
 {
     public static CompensationAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class CompensationAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

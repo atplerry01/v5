@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Simulation.Optimization;
 
-public sealed class OptimizationAggregate
+public sealed class OptimizationAggregate : AggregateRoot
 {
     public static OptimizationAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class OptimizationAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

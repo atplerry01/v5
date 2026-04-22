@@ -41,6 +41,7 @@ And it should integrate with:
 * WHYCEPOLICY for decisions
 * runtime middleware for enforcement
 * structural-system for actor placement
+* business-system
 * content-system for ownership/access
 * economic-system for actor-bound transactions
 * WhyceChain for evidence integrity

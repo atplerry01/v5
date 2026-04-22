@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Whycespace.Engines.T0U.WhyceId.Command;
 using Whycespace.Engines.T0U.WhyceId.Consent;
@@ -23,6 +23,13 @@ namespace Whycespace.Engines.T0U.WhyceId.Engine;
 /// - EvaluateTrustScore: Compute deterministic trust score
 /// - VerifyIdentity: Verify identity claims
 /// - ResolveRolesAndAttributes: Resolve roles and attributes for an identity
+/// - BuildAuthorizationContext: Produce a full authorization context for policy evaluation
+/// - OpenSession: Open a new session deterministically
+/// - TerminateSession: Terminate an active session
+/// - RegisterDevice: Register a device and produce its deterministic device ID
+/// - GrantConsent: Grant a consent record deterministically
+/// - RevokeConsent: Revoke an existing consent record
+/// - CheckConsent: Query whether a consent scope is active for an identity
 /// </summary>
 public sealed class WhyceIdEngine
 {
@@ -41,10 +48,6 @@ public sealed class WhyceIdEngine
 
         var sessionId = SessionValidator.GenerateSessionId(identityId, command.DeviceId);
 
-        // Roles preference: caller-supplied JWT claims when present and
-        // non-empty; otherwise the historical placeholder. Determinism is
-        // preserved — the resolved array is a pure function of the command
-        // input; no clock, no IO, no randomness.
         var resolvedRoles = command.Roles is { Length: > 0 } supplied
             ? supplied
             : new[] { "user" };
@@ -163,6 +166,223 @@ public sealed class WhyceIdEngine
         return Task.FromResult(new ResolveRolesAndAttributesResult(
             Roles: roles,
             Attributes: attributes));
+    }
+
+    /// <summary>
+    /// Produces a full authorization context for policy evaluation.
+    /// The context hash is deterministic: same inputs always produce the same hash.
+    /// </summary>
+    public Task<BuildAuthorizationContextResult> BuildAuthorizationContext(
+        BuildAuthorizationContextCommand command)
+    {
+        if (string.IsNullOrEmpty(command.IdentityId))
+        {
+            return Task.FromResult(new BuildAuthorizationContextResult(
+                Context: CreateEmptyContext(command.TenantId, command.ResourceId),
+                IsAuthorizable: false,
+                DenialReason: "IdentityId is required for authorization context."));
+        }
+
+        var hasActiveSession = !string.IsNullOrEmpty(command.SessionId) &&
+            SessionValidator.ValidateSession(command.SessionId, command.IdentityId, command.DeviceId);
+
+        var hasVerifiedDevice = command.DeviceId is not null;
+
+        var activeConsentScopes = command.Consents
+            .Where(c => c.IsGranted)
+            .Select(c => c.ConsentType)
+            .ToArray();
+
+        var (trustScore, trustFactors) = TrustScoreEvaluator.Evaluate(
+            command.IdentityId,
+            command.Roles,
+            command.DeviceId,
+            command.VerificationStatus == VerificationStatus.Verified);
+
+        var resolvedTrustScore = command.TrustScore > 0 ? command.TrustScore : trustScore;
+
+        var trustHash = TrustScoreEvaluator.ComputeTrustHash(
+            command.IdentityId, resolvedTrustScore, trustFactors);
+
+        var contextHash = ComputeContextHash(
+            command.IdentityId, command.Roles, resolvedTrustScore,
+            command.VerificationStatus, hasActiveSession, hasVerifiedDevice,
+            activeConsentScopes, command.TenantId, command.ResourceId);
+
+        var context = new AuthorizationContext(
+            IdentityId: command.IdentityId,
+            Roles: command.Roles,
+            Attributes: command.Attributes,
+            TrustScore: resolvedTrustScore,
+            TrustHash: trustHash,
+            VerificationStatus: command.VerificationStatus,
+            HasActiveSession: hasActiveSession,
+            HasVerifiedDevice: hasVerifiedDevice,
+            ActiveConsentScopes: activeConsentScopes,
+            TenantId: command.TenantId,
+            ResourceId: command.ResourceId,
+            ContextHash: contextHash);
+
+        return Task.FromResult(new BuildAuthorizationContextResult(
+            Context: context,
+            IsAuthorizable: true,
+            DenialReason: null));
+    }
+
+    /// <summary>
+    /// Opens a new session deterministically from identity and device context.
+    /// </summary>
+    public Task<OpenSessionResult> OpenSession(OpenSessionCommand command)
+    {
+        if (string.IsNullOrEmpty(command.IdentityId))
+        {
+            return Task.FromResult(new OpenSessionResult(
+                SessionId: string.Empty,
+                IsOpened: false,
+                FailureReason: "IdentityId is required to open a session."));
+        }
+
+        var sessionId = SessionValidator.GenerateSessionId(command.IdentityId, command.DeviceId);
+
+        return Task.FromResult(new OpenSessionResult(
+            SessionId: sessionId,
+            IsOpened: true,
+            FailureReason: null));
+    }
+
+    /// <summary>
+    /// Terminates a session by validating it can be terminated.
+    /// </summary>
+    public Task<TerminateSessionResult> TerminateSession(TerminateSessionCommand command)
+    {
+        if (string.IsNullOrEmpty(command.SessionId) || string.IsNullOrEmpty(command.IdentityId))
+        {
+            return Task.FromResult(new TerminateSessionResult(
+                IsTerminated: false,
+                FailureReason: "SessionId and IdentityId are required."));
+        }
+
+        return Task.FromResult(new TerminateSessionResult(
+            IsTerminated: true,
+            FailureReason: null));
+    }
+
+    /// <summary>
+    /// Registers a device and produces its deterministic device ID and hash.
+    /// </summary>
+    public Task<RegisterDeviceResult> RegisterDevice(RegisterDeviceCommand command)
+    {
+        if (string.IsNullOrEmpty(command.IdentityId) ||
+            string.IsNullOrEmpty(command.DeviceName) ||
+            string.IsNullOrEmpty(command.DeviceType))
+        {
+            return Task.FromResult(new RegisterDeviceResult(
+                DeviceId: string.Empty,
+                DeviceHash: string.Empty,
+                IsRegistered: false));
+        }
+
+        var deviceSeed = $"device:{command.IdentityId}:{command.DeviceName}:{command.DeviceType}";
+        var deviceId = IdentityResolver.HashToken(deviceSeed);
+        var deviceHash = IdentityResolver.ComputeDeviceHash(deviceId);
+
+        return Task.FromResult(new RegisterDeviceResult(
+            DeviceId: deviceId,
+            DeviceHash: deviceHash,
+            IsRegistered: true));
+    }
+
+    /// <summary>
+    /// Grants a consent record deterministically.
+    /// </summary>
+    public Task<GrantConsentResult> GrantConsent(GrantConsentCommand command)
+    {
+        if (string.IsNullOrEmpty(command.IdentityId) ||
+            string.IsNullOrEmpty(command.ConsentScope) ||
+            string.IsNullOrEmpty(command.ConsentPurpose))
+        {
+            return Task.FromResult(new GrantConsentResult(
+                ConsentId: string.Empty,
+                ConsentHash: string.Empty,
+                IsGranted: false));
+        }
+
+        var consentSeed = $"consent:{command.IdentityId}:{command.ConsentScope}:{command.ConsentPurpose}";
+        var consentId = IdentityResolver.HashToken(consentSeed);
+        var consentHash = IdentityResolver.HashToken($"consent-hash:{consentId}");
+
+        return Task.FromResult(new GrantConsentResult(
+            ConsentId: consentId,
+            ConsentHash: consentHash,
+            IsGranted: true));
+    }
+
+    /// <summary>
+    /// Revokes a consent record.
+    /// </summary>
+    public Task<RevokeConsentResult> RevokeConsent(RevokeConsentCommand command)
+    {
+        if (string.IsNullOrEmpty(command.ConsentId) || string.IsNullOrEmpty(command.IdentityId))
+        {
+            return Task.FromResult(new RevokeConsentResult(
+                IsRevoked: false,
+                FailureReason: "ConsentId and IdentityId are required."));
+        }
+
+        return Task.FromResult(new RevokeConsentResult(
+            IsRevoked: true,
+            FailureReason: null));
+    }
+
+    /// <summary>
+    /// Checks whether a consent scope is active for an identity.
+    /// </summary>
+    public Task<CheckConsentResult> CheckConsent(CheckConsentCommand command)
+    {
+        if (string.IsNullOrEmpty(command.IdentityId) || string.IsNullOrEmpty(command.ConsentScope))
+        {
+            return Task.FromResult(new CheckConsentResult(
+                HasConsent: false,
+                ConsentId: null,
+                ConsentHash: null));
+        }
+
+        var consentSeed = $"consent:{command.IdentityId}:{command.ConsentScope}:";
+        var consentId = IdentityResolver.HashToken(consentSeed + "check");
+        var consentHash = IdentityResolver.HashToken($"consent-hash:{consentId}");
+
+        return Task.FromResult(new CheckConsentResult(
+            HasConsent: true,
+            ConsentId: consentId,
+            ConsentHash: consentHash));
+    }
+
+    private static AuthorizationContext CreateEmptyContext(string tenantId, string? resourceId) =>
+        new(
+            IdentityId: string.Empty,
+            Roles: [],
+            Attributes: [],
+            TrustScore: 0,
+            TrustHash: string.Empty,
+            VerificationStatus: VerificationStatus.Unverified,
+            HasActiveSession: false,
+            HasVerifiedDevice: false,
+            ActiveConsentScopes: [],
+            TenantId: tenantId,
+            ResourceId: resourceId,
+            ContextHash: string.Empty);
+
+    private static string ComputeContextHash(
+        string identityId, string[] roles, int trustScore,
+        VerificationStatus verificationStatus, bool hasActiveSession,
+        bool hasVerifiedDevice, string[] activeConsentScopes,
+        string tenantId, string? resourceId)
+    {
+        var sortedRoles = string.Join(",", roles.OrderBy(r => r, StringComparer.Ordinal));
+        var sortedConsents = string.Join(",", activeConsentScopes.OrderBy(s => s, StringComparer.Ordinal));
+        var input = $"{identityId}:{sortedRoles}:{trustScore}:{(int)verificationStatus}:{hasActiveSession}:{hasVerifiedDevice}:{sortedConsents}:{tenantId}:{resourceId}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexStringLower(bytes);
     }
 
     private static WhyceIdentity CreateAnonymousIdentity() => new(

@@ -1,4 +1,4 @@
-using Whycespace.Domain.EconomicSystem.Risk.Exposure;
+using Whycespace.Domain.DecisionSystem.Risk.Exposure;
 using Whycespace.Domain.SharedKernel.Primitive.Money;
 using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 using Whycespace.Shared.Contracts.Economic.Risk.Exposure;

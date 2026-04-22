@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.ConstitutionalSystem.Policy.Access;
 
-public sealed class AccessAggregate
+public sealed class AccessAggregate : AggregateRoot
 {
     public static AccessAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class AccessAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

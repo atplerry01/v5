@@ -1,4 +1,4 @@
-using Whycespace.Domain.StructuralSystem.Humancapital.Reputation;
+using Whycespace.Domain.DecisionSystem.Evaluation.Reputation;
 using Whycespace.Shared.Contracts.Engine;
 using Whycespace.Shared.Contracts.Structural.Humancapital.Reputation;
 

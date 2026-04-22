@@ -15,4 +15,5 @@
     -->
     <ProjectReference Include="..\shared\Whycespace.Shared.csproj" />
   </ItemGroup>
+
 </Project>

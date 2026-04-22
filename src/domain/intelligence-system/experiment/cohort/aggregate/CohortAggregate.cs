@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Experiment.Cohort;
 
-public sealed class CohortAggregate
+public sealed class CohortAggregate : AggregateRoot
 {
     public static CohortAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class CohortAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

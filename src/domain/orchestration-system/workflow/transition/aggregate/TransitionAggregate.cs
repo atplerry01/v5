@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.OrchestrationSystem.Workflow.Transition;
 
-public sealed class TransitionAggregate
+public sealed class TransitionAggregate : AggregateRoot
 {
     public static TransitionAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class TransitionAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

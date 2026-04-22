@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.access-control.permission.commands",
+    "whyce.control.access-control.permission.events",
+    "whyce.control.access-control.permission.retry",
+    "whyce.control.access-control.permission.deadletter"
+  ]
+}

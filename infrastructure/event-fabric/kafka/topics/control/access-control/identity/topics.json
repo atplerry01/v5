@@ -1,0 +1,8 @@
+{
+  "topics": [
+    "whyce.control.access-control.identity.commands",
+    "whyce.control.access-control.identity.events",
+    "whyce.control.access-control.identity.retry",
+    "whyce.control.access-control.identity.deadletter"
+  ]
+}

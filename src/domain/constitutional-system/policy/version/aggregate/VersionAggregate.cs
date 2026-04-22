@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.ConstitutionalSystem.Policy.Version;
 
-public sealed class VersionAggregate
+public sealed class VersionAggregate : AggregateRoot
 {
     public static VersionAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class VersionAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }

@@ -1,6 +1,7 @@
+using Whycespace.Domain.SharedKernel.Primitives.Kernel;
 namespace Whycespace.Domain.IntelligenceSystem.Relationship.Influence;
 
-public sealed class InfluenceAggregate
+public sealed class InfluenceAggregate : AggregateRoot
 {
     public static InfluenceAggregate Create()
     {
@@ -11,12 +12,12 @@ public sealed class InfluenceAggregate
         return aggregate;
     }
 
-    private void EnsureInvariants()
+    protected override void EnsureInvariants()
     {
         // Domain invariant checks enforced BEFORE any event is raised
     }
 
-    private void ValidateBeforeChange()
+    protected override void ValidateBeforeChange()
     {
         // Pre-change validation gate
     }
